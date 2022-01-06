@@ -27,22 +27,22 @@ public class RootObject
     public List<string> users_talkLinkOnly;
 }
 class Program
-{
-    static string mnumber(int number)
-    {
-        return (number.ToString().Length == 1 ? "0" + number.ToString() : number.ToString());
-    }
+{   
     static void Main()
     {
         var discussiontypes = new string[] { "К удалению", "К восстановлению" };
         var monthnames = new string[13];
-        monthnames[1] = "января"; monthnames[2] = "февраля"; monthnames[3] = "марта"; monthnames[4] = "апреля"; monthnames[5] = "мая"; monthnames[6] = "июня"; monthnames[7] = "июля"; monthnames[8] = "августа"; monthnames[9] = "сентября"; monthnames[10] = "октября"; monthnames[11] = "ноября"; monthnames[12] = "декабря";
+        monthnames[1] = "января"; monthnames[2] = "февраля"; monthnames[3] = "марта"; monthnames[4] = "апреля"; monthnames[5] = "мая"; monthnames[6] = "июня";
+        monthnames[7] = "июля"; monthnames[8] = "августа"; monthnames[9] = "сентября"; monthnames[10] = "октября"; monthnames[11] = "ноября"; monthnames[12] = "декабря";
         var botnames = new HashSet<string>();
         var statstable = new Dictionary<string, Dictionary<string, int>>();
         var now = DateTime.Now;
+        var sixmonths_earlier = now.AddMonths(-6);
+        var now_ym = now.ToString("yyyyMM");
+        var sixmonths_earlier_ym = sixmonths_earlier.ToString("yyyyMM");
 
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8;SslMode=none;");
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
@@ -50,15 +50,17 @@ class Program
         command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\";", connect) { CommandTimeout = 99999 };
         r = command.ExecuteReader();
         while (r.Read())
-            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0},
-                { "renameuser", 0}, { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "massmessage", 0}, { "checkuser", 0}, { "tag", 0}, { "import", 0 }, { "growthexperiments", 0 } });
+            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0},
+                { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "massmessage", 0}, { "checkuser", 0}, { "tag", 0}, { "import", 0 },
+                { "growthexperiments", 0 } });
         r.Close();
 
         command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"closer\";";
         r = command.ExecuteReader();
         while (r.Read())
-            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0},
-                { "renameuser", 0}, { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "massmessage", 0}, { "checkuser", 0}, { "tag", 0}, { "import", 0 }, { "growthexperiments", 0 } });
+            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0},
+                { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "massmessage", 0}, { "checkuser", 0}, { "tag", 0}, { "import", 0 },
+                { "growthexperiments", 0 } });
         r.Close();
 
         command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
@@ -67,8 +69,8 @@ class Program
             botnames.Add(r.GetString(0));
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + now.AddMonths(-6).Year + mnumber(now.AddMonths(-6).Month) + "01000000 AND " +
-            now.Year + mnumber(now.Month) + "01000000 and log_type = 'delete' and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND " +
+            "log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type = 'delete' and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
         r = command.ExecuteReader();
         while (r.Read())
         {
@@ -89,8 +91,9 @@ class Program
         }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " + "logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + now.AddMonths(-6).Year + mnumber(now.AddMonths(-6).Month) + "01000000 AND " +
-            now.Year + mnumber(now.Month) + "01000000 and log_action not like 'move_%' and log_action not like '%-a' and log_action not like '%-ia' and log_type <> 'spamblacklist' and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' GROUP BY actor_name, log_type;";
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " + "logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp " +
+            "BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_action not like 'move_%' and log_action not like '%-a' and log_action not like '%-ia' and log_type <> 'spamblacklist' and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' " +
+            "and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' GROUP BY actor_name, log_type;";
         r = command.ExecuteReader();
         while (r.Read())
             if (r.GetString("log_type") == "review")
@@ -102,8 +105,8 @@ class Program
             }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN ('sysop', 'closer') AND rev_timestamp BETWEEN " + now.AddMonths(-6).Year + mnumber(now.AddMonths(-6).Month) +
-            "01000000 AND " + now.Year + mnumber(now.Month) + "01000000 GROUP BY actor_name, page_namespace;";
+        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN " +
+            "('sysop', 'closer') AND rev_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 GROUP BY actor_name, page_namespace;";
         r = command.ExecuteReader();
         while (r.Read())
         {
@@ -183,11 +186,13 @@ class Program
                 statstable[data[0]]["totalactions"] += Convert.ToInt32(data[1]);
             }
 
-        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{shortcut|ВП:АДА}}<center>{{Самые активные участники}}\nСтатистика активности администраторов и подводящих итоги Русской Википедии за период с 1 " + monthnames[now.AddMonths(-6).Month] + " " + now.AddMonths(-6).Year + " по 1 " + monthnames[now.Month] + " " + now.Year + " года. " +
-            "Первично отсортирована по сумме числа правок и админдействий.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в содержательных пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] " +
-            "должны совершить 10 действий (итоги плюс удаления), из которых не менее двух - именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable\"\n!rowspan=2|Участник!!colspan=3|Правки!!colspan=14|Админдействия\n|-\n!{{abbr|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> " +
-            "(📝)|удаление (итоги на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и" +
-            " контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨⇦</big>|слияние историй статей|0}}!!{{abbr|<big>📢</big>|рассылка массовых уведомлений|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
+        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{shortcut|ВП:АДА}}<center>{{Самые активные участники}}\nСтатистика активности администраторов и подводящих итоги Русской Википедии за период с 1 " + monthnames[sixmonths_earlier.Month] + 
+            " " + sixmonths_earlier.Year + " по 1 " + monthnames[now.Month] + " " + now.Year + " года. Первично отсортирована по сумме числа правок и админдействий.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 " +
+            "правок, из них 50 — в содержательных пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий (итоги плюс удаления), из которых не менее двух - именно " +
+            "итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable\"\n!rowspan=2|Участник!!colspan=3|Правки!!colspan=14|Админдействия\n|-\n!{{abbr|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|" +
+            "<big>🗑</big> (📝)|удаление (итоги на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=" +
+            "(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨⇦</big>|" +
+            "слияние историй статей|0}}!!{{abbr|<big>📢</big>|рассылка массовых уведомлений|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
         {
             bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
