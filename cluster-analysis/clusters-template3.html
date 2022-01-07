@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>%axisxuser% / %axisyuser% - кластерный анализ сообщества рувики</title>
+</head><body>
+<a href="/clusters.html">Другие инструменты</a><center>
+<form action="https://mbh.toolforge.org/clusters3.cgi">
+<textarea name="users" placeholder="Введите ники участников, каждый на новой строке" wrap="soft" rows="30" cols="30" required>%users%</textarea>
+<br>
+<br>
+<label for="axisxuser">Ось 1: индикаторный участник </label><input type="text" name="axisxuser" value="%axisxuser%" required>
+<label for="axisyuser">Ось 2: индикаторный участник </label><input type="text" name="axisyuser" value="%axisyuser%" required>
+<br>
+<br>
+<label for="earlieryear">С года </label><input type="number" name="earlieryear" value="%earlieryear%" style="width:5em" required>
+<label for="lateryear">по год </label><input type="number" name="lateryear" value="%lateryear%" style="width:5em" required>
+<label for="square">Рисовать график со стороной </label><input type="text" name="square" value="%square%" style="width:5em" required> px
+<button type="submit">Пуск</button>
+</form>
+<br><div style="position:relative;">
+%result%</div>
+</center></body></html>
