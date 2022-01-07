@@ -60,7 +60,6 @@ class Program
             result1 = result1.Replace("%checked_db%", "checked");
         else if (type == "api")
             result1 = result1.Replace("%checked_api%", "checked");
-
         if (sort == "all")
             result1 = result1.Replace("%checked_all%", "checked");
         else if (sort == "main")
@@ -83,13 +82,13 @@ class Program
     {
         var cl = new WebClient();
         //Environment.SetEnvironmentVariable("QUERY_STRING", "project=ru.wikipedia&startdate=2020-01-01&enddate=2020-12-31&sort=all");
-        string get = Environment.GetEnvironmentVariable("QUERY_STRING");
-        if (get == "")
+        string input = Environment.GetEnvironmentVariable("QUERY_STRING");
+        if (input == "" || input == null)
         {
             Sendresponse("db", "ru.wikipedia", DateTime.Now.ToString("yyyy-MM-dd"), DateTime.Now.ToString("yyyy-MM-dd"), "all", "");
             return;
         }
-        var parameters = HttpUtility.ParseQueryString(get);
+        var parameters = HttpUtility.ParseQueryString(input);
         string type = parameters["type"];
         string project = parameters["project"];
         string startdate = parameters["startdate"];
@@ -103,7 +102,7 @@ class Program
             var connect = new MySqlConnection("Server=" + url2db(project) + ".labsdb;Database=" + url2db(project) + "_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
             connect.Open();
             var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and log_timestamp >" + startdate.Replace("-", "") +
-                "000000 and log_timestamp<" + enddate.Replace("-", "") + "000000", connect);
+                "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect);
             var r = squery.ExecuteReader();
             while (r.Read())
             {
