@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>%user% - кластерный анализ сообщества рувики</title>
+<style> a { text-decoration: none; }</style>
+</head><body>
+<a href="/clusters.html">Другие инструменты</a><center>
+<form action="https://mbh.toolforge.org/clusters1.cgi">
+Участник <input type="text" name="user" value="%user%" required>
+С года <input type="number" name="earlieryear" value="%earlieryear%" style="width:5em" required>
+по год <input type="number" name="lateryear" value="%lateryear%" style="width:5em" required>
+<br><br>
+Выводить, если D больше <input type="number" name="highlimit" value="%highlimit%" style="width:3em" required>
+или меньше <input type="number" name="lowlimit" value="%lowlimit%" style="width:3em" required>
+<br><br>
+Или если D<sub>N</sub> больше <input type="text" name="highlimitdn" style="width:3em" value="%highlimitdn%" required>
+или меньше </label><input type="text" name="lowlimitdn" value="%lowlimitdn%" style="width:3em" required>
+и ∑ не менее <input type="number" name="commonvotings" value="%commonvotings%" style="width:3em" required>
+<br><br>
+Отсортировать по 
+<select size="1" name="sort">
+<option value="d" %selected_d%>абсолютному сходству (D)</option>
+<option value="dn" %selected_dn%>относительному сходству (D / ⋂)</option>
+<option value="wkdm" %selected_wkdm%>относительному сходству по Викидиму (D / ∪)</option>
+</select>
+<button type="submit">Пуск</button>
+</form>
+<br>Таблица ниже содержит список участников, голосовавших в заданный период на тех же выборах, что и заданный участник. Обозначения:<ul><li>⇈ - число совпавших 
+голосов (оба проголосовали "за" или "против")</li><li>⇅ - число противоположных голосов (один проголосовал "за", а другой "против")</li><li>⋂ - число голосований, 
+где проголосовали оба участника</li><li>∪ - число голосований, где проголосовал хотя бы один участник из пары</li><li>D = ⇈ минус ⇅</li></ul>D / ⋂ и D / ∪ 
+принимают значения от -1 до 1. Поскольку у большинства пар участников эти значения невелики по модулю, можно вывести только участников, у которых оно наиболее сильно 
+отклоняется в плюс или в минус. Раскрашено по значению D / ⋂ или D / ∪ (в зависимости от сортировки).
+<br><br>
+%result%
+</center></body></html>
