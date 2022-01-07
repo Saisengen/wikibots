@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Кластерный анализ сообщества рувики</title>
+<style>a, abbr { text-decoration: none; }
+td { text-align: center }
+th { width:1em; writing-mode:vertical-lr; transform:rotate(180deg) }</style>
+</head><body>
+<a href="/clusters.html">Другие инструменты</a><center>
+<form action="https://mbh.toolforge.org/clusters4.cgi">
+<label for="elections">Выборы: </label>
+<select size="1" name="elections">
+%elections%
+</select>
+Выводить значения <input type="radio" name="type" value="d" required %checked_d%>абсолютные 
+<input type="radio" name="type" value="dn" required %checked_dn%>относительные
+<button type="submit">Пуск</button>
+</form><br>
+%result%
+</center></body></html>
