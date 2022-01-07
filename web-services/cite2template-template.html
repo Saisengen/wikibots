@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Шаблонизатор библиографии</title>
+</head><body><center>
+<form action="https://mbh.toolforge.org/cite2template.cgi" method="post">
+<textarea name="source" placeholder="Введите ссылки на источники, по одной на строку" wrap="soft" rows="20" cols="120" required>%source%</textarea>
+<br>
+<br> 
+<label>Добавить общего автора? <input type="checkbox" name="addauthor" %checked_author%></label>
+<input type="text" name="author" value="%author%">
+<button type="submit">Пуск</button>
+</center></form><br>
+%result%
+</body></html>
