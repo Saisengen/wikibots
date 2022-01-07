@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Кластерный анализ сообщества рувики</title>
+<style>a, abbr { text-decoration: none; }
+td { text-align: center; white-space: nowrap; }
+th { width:1em; writing-mode:vertical-lr; transform:rotate(180deg); }</style>
+</head><body>
+<a href="/clusters.html">Другие инструменты</a><center>
+<form action="https://mbh.toolforge.org/clusters5.cgi">
+Голоса 
+<input type="radio" name="mode" value="varb" required %checked_varb%>на выборах
+<select size="1" name="elections">
+%elections%
+</select>
+<label>Включить всех проголосовавших на этих выборах <input type="checkbox" name="allvoters" %checked_allvoters%></label>
+<br><br>
+<input type="radio" name="mode" value="years" required %checked_years%>за годы
+с <input type="number" name="earlieryear" value="%earlieryear%" style="width:5em" required>
+по <input type="number" name="lateryear" value="%lateryear%" style="width:5em" required>
+<button type="submit">Пуск</button><br><br>
+<textarea name="users" placeholder="Введите ники участников, каждый на новой строке" wrap="soft" rows="30" cols="30">%users%</textarea>
+<br><br>
+Сортировать <select size="1" name="sort">
+<option value="no" %selected_no%>никак</option>
+<option value="reg" %selected_reg%>по дате регистрации</option>
+<option value="first" %selected_first%>по дате первой правки</option>
+<option value="last" %selected_last%>по дате последней правки</option>
+<option value="edits" %selected_edits%>по числу правок</option>
+<option value="flags" %selected_flags%>по флагам</option>
+<option value="block" %selected_block%>по заблокированности</option>
+</select>
+</form><br>Если вы ввели очень много ников и получили ошибку 431 - используйте <a href="/clusters5.5.cgi">эту версию инструмента</a>. 
+Она не сохраняет параметры запроса в URL-адресе.<br><br>
+%result%
+</center></body></html>
