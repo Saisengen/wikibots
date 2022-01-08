@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style> a, abbr { text-decoration: none; } </style>
+<title>Страницы без интервик%title%</title>
+</head><body>
+<center>
+<form action="https://mbh.toolforge.org/pages-wo-iwiki.cgi">
+Страницы в проекте <input type="text" name="sourcewiki" value="%sourcewiki%" size="11" required>
+Из категории <input type="text" name="category" value="%category%" placeholder="без префикса Категория:">
+с подкатегориями на глубину <input type="number" name="depth" value="%depth%" style="width:2em">
+С шаблоном <input type="text" name="template" value="%template%" placeholder="с префиксом Шаблон:">
+<br><br>
+<select size="1" name="pagetype">
+<option value="articles" %selected_articles%>статьи</option>
+<option value="allpages" %selected_allpages%>все страницы</option>
+</select>
+<select size="1" name="type">
+<option value="nonexist" %selected_nonexist%>без интервики</option>
+<option value="exist" %selected_exist%>с интервикой</option>
+</select>
+ на <input type="text" name="targetwiki" value="%targetwiki%" size="11" required>
+имеющие не менее <input type="number" name="miniwiki" value="%miniwiki%" style="width:3em"> интервик
+<br><br>
+Сортировать по 
+<select size="1" name="sort">
+<option value="iwiki" %selected_iwiki%>числу интервик</option>
+<option value="status" %selected_status%>статусу</option>
+</select>
+<label><input type="checkbox" name="wikilist" %checked_wikilist%>Выгрузить список в викиразметке</label>
+<button type="submit">Пуск</button>
+</form><br>
+%result%
+</body></html>
