@@ -42,7 +42,7 @@ class Program
         var sixmonths_earlier_ym = sixmonths_earlier.ToString("yyyyMM");
 
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8;SslMode=none;");
+        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
