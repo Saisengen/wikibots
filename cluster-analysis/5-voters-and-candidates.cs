@@ -263,6 +263,6 @@ class Program
                 writerow(voter);
 
         result += "</table>";
-        Sendresponse(result, electionsstring, parameters[1], sort, showallvoters, mode, earlieryear, lateryear);
+        Sendresponse(result, electionsstring, parameters["users"], sort, showallvoters, mode, earlieryear, lateryear);
     }
 }
