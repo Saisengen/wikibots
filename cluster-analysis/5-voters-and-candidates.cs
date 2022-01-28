@@ -9,7 +9,7 @@ using System.Xml;
 using System.Text.RegularExpressions;
 public class User
 {
-    public int userid, editcount, blockid, blockedbyid;
+    public int userid, editcount, blockid, blockedbyid, wpedits;
     public string name, registration, firstedit, lastedit, blockedby, blockreason, blockexpiry;
     public List<string> groups;
     public DateTime blockedtimestamp;
@@ -30,19 +30,18 @@ class voterspercandidate
 }
 class Program
 {
-    static bool method_is_post = false;
+    static bool method_is_post = true;
     static Dictionary<string, voterspercandidate> candidates = new Dictionary<string, voterspercandidate>();
     static HashSet<string> unimportant_flags = new HashSet<string>() { "*", "user", "autoconfirmed", "rollbacker", "suppressredirect", "uploader" };
     static string result = "<table border=\"1\" cellspacing=\"0\"><tr><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Голосующий</th><th style=\"writing-mode:horizontal-tb;transform:rotate(0);\">Регистрация</th>" +
         "<th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Первая правка</th><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Последняя правка</th><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Правок</th>" +
-        "<th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Флаги</th><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Блок</th>";
+        "<th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Из них в ВП:</th><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Флаги</th><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Блок</th>";
     static HashSet<string> allvoters = new HashSet<string>();
     static Root usersinfo = new Root();
     static WebClient cl = new WebClient();
     static HashSet<string> requeststrings = new HashSet<string>();
     static StreamReader rdr;
     static Regex yearrgx = new Regex(@"\d{4}");
-
     static void Sendresponse(string result, string elections, string users, string sort, bool allvoters, string mode, int earlieryear, int lateryear)
     {
         var sr = new StreamReader(method_is_post ? "clusters-template5.5.txt" : "clusters-template5.txt");
@@ -59,6 +58,8 @@ class Program
             output = output.Replace("%selected_last%", "selected");
         else if (sort == "edits")
             output = output.Replace("%selected_edits%", "selected");
+        else if (sort == "wpedits")
+            output = output.Replace("%selected_wpedits%", "selected");
         else if (sort == "flags")
             output = output.Replace("%selected_flags%", "selected");
         else if (sort == "block")
@@ -68,7 +69,6 @@ class Program
         if (allvoters)
             output = output.Replace("%checked_allvoters%", "checked");
         Console.WriteLine(output);
-        Console.WriteLine();
     }
     static void writerow(User voter)
     {
@@ -79,13 +79,15 @@ class Program
                     flags += ',' + flag;
         if (flags != "")
             flags = flags.Substring(1);
+        string wpedits_s = voter.wpedits == 500 ? ">500" : voter.wpedits.ToString();
         string regdate = (voter.registration == null ? "" : voter.registration.Substring(0, 10));
         string editdate = (voter.firstedit == null ? "" : voter.firstedit.Substring(0, 10));
         string blockexpiry = (voter.blockexpiry == null ? "" : voter.blockexpiry == "infinite" ? "∞" : "<abbr title=\"" + voter.blockexpiry + "\">⏱</abbr>");
         string blockpartial = (voter.blockpartial == true ? "<abbr title=\"частичная\">🧩</abbr>" : "");
         string startdates = (regdate == editdate ? "<td colspan=\"2\">" + regdate + "</td>" : "<td>" + regdate + "</td><td>" + editdate + "</td>") + "</td>";
-        result += "\n<tr><td><a href=\"https://ru.wikipedia.org/wiki/special:centralauth/" + Uri.EscapeDataString(voter.name) + "\">" + voter.name + "</a></td>" + startdates + "<td>" +
-            (voter.lastedit == null ? "" : voter.lastedit.Substring(0, 10)) + "</td><td>" + voter.editcount + "</td><td>" + flags + "</td><td>" + blockexpiry + blockpartial + "</td>\n";
+        result += "\n<tr><td><a href=\"https://ru.wikipedia.org/wiki/special:centralauth/" + Uri.EscapeDataString(voter.name) + "\">" + voter.name + "</a></td>" + startdates + "<td>" + (voter.lastedit == null ? "" : voter.lastedit.Substring(0, 10)) +
+            "</td><td>" + voter.editcount + "</td><td><a href=\"https://ru.wikipedia.org/w/index.php?title=Special:Contributions&target=" + Uri.EscapeDataString(voter.name) + "&namespace=4\">" + wpedits_s + "</a></td><td>" + flags + "</td><td>" +
+            blockexpiry + blockpartial + "</td>\n";
         foreach (var c in candidates.Keys)
         {
             string color = (candidates[c].yes.Contains(voter.name) ? "0f0" : candidates[c].no.Contains(voter.name) ? "f00" : "fff");
@@ -235,6 +237,15 @@ class Program
                         for (int n = 0; n < usersinfo.query.users.Count; n++)
                             if (usersinfo.query.users[n].name == user)
                                 usersinfo.query.users[n].lastedit = r.GetAttribute("timestamp");
+
+            int wpedits = 0;
+            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=500&ucnamespace=4&ucprop=&ucuser=" + user))))
+                while (r.Read())
+                    if (r.Name == "item" && r.NodeType == XmlNodeType.Element)
+                        wpedits++;
+            for (int n = 0; n < usersinfo.query.users.Count; n++)
+                if (usersinfo.query.users[n].name == user)
+                    usersinfo.query.users[n].wpedits = wpedits;
         }
 
         foreach (var c in candidates)
@@ -251,6 +262,9 @@ class Program
                 writerow(voter);
         else if (sort == "edits")
             foreach (var voter in usersinfo.query.users.OrderByDescending(u => u.editcount))
+                writerow(voter);
+        else if (sort == "wpedits")
+            foreach (var voter in usersinfo.query.users.OrderByDescending(u => u.wpedits))
                 writerow(voter);
         else if (sort == "flags")
             foreach (var voter in usersinfo.query.users.OrderByDescending(u => u.groups.Count))
