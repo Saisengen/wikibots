@@ -19,8 +19,10 @@ class Program // с лабса работает медленнее, пускай
 {
     static WebClient cl = new WebClient();
     static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Victoria old", "Victoria" }, { "D.bratchuk", "Good Will Hunting" }, { "Wanderer", "Wanderer777" }, { "Wikisaurus (old)", "Wikisaurus" },
-        { "VladXe", "Qh13"}, {"VasilievVV (old)", "VasilievVV" }, { "Vlsergey-at-work", "Vlsergey"}, { "Грей2010", "Ouaf-ouaf2021"}, { "Ouaf-ouaf2010", "Ouaf-ouaf2021"}, { "Гав-Гав2010", "Ouaf-ouaf2021"}, { "Гав-Гав2020", "Ouaf-ouaf2021"},
-            { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "User239", "Dimetr"}, { "Borealis55", "Daphne mesereum"} };
+        { "VladXe", "Qh13"}, {"VasilievVV (old)", "VasilievVV" }, { "Vlsergey-at-work", "Vlsergey"}, { "Грей2010", "Ouaf-ouaf2021"}, { "Ouaf-ouaf2010", "Ouaf-ouaf2021"}, { "Гав-Гав2010", "Ouaf-ouaf2021"}, { "Ashik-old", "Ashik" },
+        { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "User239", "Dimetr"}, { "Borealis55", "Daphne mesereum"}, { "Dmitriy-old", "Dmitriy" }, { "ИкИлевап", "Pikryukov" }, { "Emin Bashirov", "Abu Zarr" }, 
+        { "Kor!An", "Andrey Korzun" }, { "Алексей Глушков", "Gajmar" }, { "Otria1", "Otria" }, { "Makakaaaa", "Lpi4635" }, { "Microcell", "TheStrayCat" }, { "Evil Russian", "Well-Informed Optimist"}, { "Temirov1960", "Игорь Темиров" },
+        { "Shanghainese.ua--", "Shanghainese.ua" }, { "Morrfeux", "Meiræ" }, { "Nоvа", "Andrey" }, { "Drakosha999", "Quaerite" }, { "Kf8", "Ле Лой" }, { "Alexei Pechko", "TheCureMan" } };
     static Dictionary<string, string> processed_users = new Dictionary<string, string>();
     static Dictionary<string, HashSet<string>> yes = new Dictionary<string, HashSet<string>>();
     static Dictionary<string, HashSet<string>> no = new Dictionary<string, HashSet<string>>();
@@ -57,7 +59,7 @@ class Program // с лабса работает медленнее, пускай
     }
     static void Addvoter(string voter, string election_id, bool support)
     {
-        voter = voter.First().ToString().ToUpper() + voter.Substring(1);
+        voter = voter.First().ToString().ToUpper() + voter.Substring(1).Replace('_', ' ');
         if (voter.Contains('/'))
             voter = voter.Substring(0, voter.IndexOf('/'));
 
