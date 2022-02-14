@@ -30,7 +30,7 @@ class voterspercandidate
 }
 class Program
 {
-    static bool method_is_post = true;
+    static bool method_is_post = false;
     static Dictionary<string, voterspercandidate> candidates = new Dictionary<string, voterspercandidate>();
     static HashSet<string> unimportant_flags = new HashSet<string>() { "*", "user", "autoconfirmed", "rollbacker", "suppressredirect", "uploader" };
     static string result = "<table border=\"1\" cellspacing=\"0\"><tr><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Голосующий</th><th style=\"writing-mode:horizontal-tb;transform:rotate(0);\">Регистрация</th>" +
@@ -39,7 +39,6 @@ class Program
     static HashSet<string> allvoters = new HashSet<string>();
     static Root usersinfo = new Root();
     static WebClient cl = new WebClient();
-    static HashSet<string> requeststrings = new HashSet<string>();
     static StreamReader rdr;
     static Regex yearrgx = new Regex(@"\d{4}");
     static void Sendresponse(string result, string elections, string users, string sort, bool allvoters, string mode, int earlieryear, int lateryear)
@@ -143,7 +142,7 @@ class Program
         var electionsstring = "";
         foreach (var e in electionslist.OrderByDescending(e => e.Value))
             electionsstring += "<option value=\"" + e.Key + "\" s" + e.Key + ">АК " + e.Value + ": " + e.Key + "</option>\n";
-        //Environment.SetEnvironmentVariable("QUERY_STRING", "elections=Лето+2021&users=nefedechev%0D%0Afleor%0D%0Atarkhil%0D%0Awiki.wiki1919&sort=no");
+        //Environment.SetEnvironmentVariable("QUERY_STRING", "mode=varb&elections=Весна+2013&allvoters=on&earlieryear=2020&lateryear=2021&users=&sort=no");
         string input = method_is_post ? Console.ReadLine() : Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == null || input == "")
         {
@@ -162,7 +161,7 @@ class Program
         var voterslist = new HashSet<string>();
         foreach(var voter in rawvoterslist)
             if (voter != "")
-                try { voterslist.Add(voter[0].ToString().ToUpper() + voter.Substring(1)); } catch { }
+                try { voterslist.Add(voter[0].ToString().ToUpper() + voter.Substring(1).Replace('_', ' ')); } catch { }
         string sort = parameters["sort"];
         bool showallvoters = parameters["allvoters"] != null;
 
@@ -202,6 +201,7 @@ class Program
             }
 
         string idset = ""; int cntr = 0;
+        var requeststrings = new HashSet<string>();
         foreach (var user in showallvoters ? allvoters : voterslist)
         {
             idset += "|" + user;
@@ -218,20 +218,20 @@ class Program
         usersinfo.query.users.Clear();//чтобы создать структуру внутри объекта
         foreach (var requeststring in requeststrings)
         {
-            var partusersinfo = JsonConvert.DeserializeObject<Root>(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=latest&list=users&usprop=blockinfo%7Ceditcount%7Cgroups%7Cregistration&ususers=" + requeststring));
+            var partusersinfo = JsonConvert.DeserializeObject<Root>(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=latest&list=users&usprop=blockinfo%7Ceditcount%7Cgroups%7Cregistration&ususers=" + Uri.EscapeDataString(requeststring)));
             foreach (var u in partusersinfo.query.users)
                 usersinfo.query.users.Add(u);
         }
         
         foreach (var user in showallvoters ? allvoters : voterslist)
         {
-            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucdir=newer&ucprop=timestamp&ucuser=" + user))))
+            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucdir=newer&ucprop=timestamp&ucuser=" + Uri.EscapeDataString(user)))))
                 while (r.Read())
                     if (r.Name == "item")
                         for (int n = 0; n < usersinfo.query.users.Count; n++)
                             if (usersinfo.query.users[n].name == user)
                                 usersinfo.query.users[n].firstedit = r.GetAttribute("timestamp");
-            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucdir=older&ucprop=timestamp&ucuser=" + user))))
+            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucdir=older&ucprop=timestamp&ucuser=" + Uri.EscapeDataString(user)))))
                 while (r.Read())
                     if (r.Name == "item")
                         for (int n = 0; n < usersinfo.query.users.Count; n++)
@@ -239,7 +239,7 @@ class Program
                                 usersinfo.query.users[n].lastedit = r.GetAttribute("timestamp");
 
             int wpedits = 0;
-            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=500&ucnamespace=4&ucprop=&ucuser=" + user))))
+            using (var r = new XmlTextReader(new StringReader(cl.DownloadString("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=500&ucnamespace=4&ucprop=&ucuser=" + Uri.EscapeDataString(user)))))
                 while (r.Read())
                     if (r.Name == "item" && r.NodeType == XmlNodeType.Element)
                         wpedits++;
