@@ -10,9 +10,11 @@ class Program
     static void Main()
     {
         var monthname = new string[13];
-        monthname[1] = "январь"; monthname[2] = "февраль"; monthname[3] = "март"; monthname[4] = "апрель"; monthname[5] = "май"; monthname[6] = "июнь"; monthname[7] = "июль"; monthname[8] = "август"; monthname[9] = "сентябрь"; monthname[10] = "октябрь"; monthname[11] = "ноябрь"; monthname[12] = "декабрь";
+        monthname[1] = "январь"; monthname[2] = "февраль"; monthname[3] = "март"; monthname[4] = "апрель"; monthname[5] = "май"; monthname[6] = "июнь";
+        monthname[7] = "июль"; monthname[8] = "август"; monthname[9] = "сентябрь"; monthname[10] = "октябрь"; monthname[11] = "ноябрь"; monthname[12] = "декабрь";
         var prepositional = new string[13];
-        monthname[1] = "января"; monthname[2] = "февраля"; monthname[3] = "марта"; monthname[4] = "апреля"; monthname[5] = "мая"; monthname[6] = "июня"; monthname[7] = "июля"; monthname[8] = "августа"; monthname[9] = "сентября"; monthname[10] = "октября"; monthname[11] = "ноября"; monthname[12] = "декабря";
+        prepositional[1] = "январе"; prepositional[2] = "феврале"; prepositional[3] = "марте"; prepositional[4] = "апреле"; prepositional[5] = "мае"; prepositional[6] = "июне";
+        prepositional[7] = "июле"; prepositional[8] = "августе"; prepositional[9] = "сентябре"; prepositional[10] = "октябре"; prepositional[11] = "ноябре"; prepositional[12] = "декабре";
         var newfromabove = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
