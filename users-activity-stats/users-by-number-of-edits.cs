@@ -2,18 +2,47 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using DotNetWikiBot;
 using System.Xml;
 using MySql.Data.MySqlClient;
 using System.Web.UI;
+using System.Net;
+using System.Net.Http;
 
 class record
 {
     public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index;
     public bool globalbot;
 }
+
 class Program
-{    static void Main(string[] args)
+{
+    static HttpClient Site(string lang, string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, {"lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string lang, string title, string text)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "edit" }, { "title", title }, { "text", text }, { "token", token }, { "format", "xml" } })).Result.Content.ToString();
+        Console.WriteLine("writing " + lang + ":" + title);
+    }
+    static void Main()
     {
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
         var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "be", new string[] { "Maksim L.", "Artsiom91" } },
@@ -32,9 +61,7 @@ class Program
             { "be", new Pair() { First = "[[Катэгорыя:Вікіпедыя:Боты]][[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]", Second = "[[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]" } },
             { "kk", new Pair() { First = "{{Wikistats}}[[Санат:Уикипедия:Боттар]]", Second = "{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } } };
 
-        var shortcuts = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } },
-            { "be", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } },
-            { "kk", new Pair() { First = "УП:ӨСБ", Second = "УП:ӨСҚ" } } };
+        var shortcuts = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } }, { "be", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } }, { "kk", new Pair() { First = "УП:ӨСБ", Second = "УП:ӨСҚ" } } };
 
         foreach (var lang in new string[] { "ru", "be", "kk" })
         {
@@ -46,8 +73,7 @@ class Program
             var bots = new Dictionary<string, record>();
             var connect = new MySqlConnection("Server=" + lang + "wiki.labsdb;Database=" + lang + "wiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
             connect.Open();
-            var command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect);
-            command.CommandTimeout = 9999;
+            var command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             var reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -70,8 +96,7 @@ class Program
 
             connect = new MySqlConnection("Server=metawiki.labsdb;Database=metawiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
             connect.Open();
-            command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type='gblrights' and (log_params like '%lobal-bot%' or log_params like '%lobal_bot%');", connect);
-            command.CommandTimeout = 9999;
+            command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type='gblrights' and (log_params like '%lobal-bot%' or log_params like '%lobal_bot%');", connect) { CommandTimeout = 9999 };
             reader = command.ExecuteReader();
             while (reader.Read())
             {
@@ -85,15 +110,15 @@ class Program
             reader.Close();
             connect.Close();
 
-            var site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
+            var site = Site(lang, creds[0], creds[1]);
             foreach (var type in new Dictionary<string, record>[] { users, bots })
             {
                 foreach (var k in type.Keys)
                 {
-                    string cont = "", query = "/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucprop=title&ucuser=" + Uri.EscapeDataString(k);
+                    string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucprop=title&ucuser=" + Uri.EscapeDataString(k);
                     while (cont != null)
                     {
-                        string apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&uccontinue=" + Uri.EscapeDataString(cont)));
+                        string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&uccontinue=" + Uri.EscapeDataString(cont)).Result);
                         using (var r = new XmlTextReader(new StringReader(apiout)))
                         {
                             r.WhitespaceHandling = WhitespaceHandling.None;
@@ -124,7 +149,7 @@ class Program
                     }
                 }
             }
-
+            
             string result = "{{shortcut|" + shortcuts[lang].First + "}}" + headers[lang].Replace("%specific_text%", hdr_modifications[lang].First.ToString());
 
             int main_edits_index = 0;
@@ -147,16 +172,14 @@ class Program
                 result += "\n|-" + color + "\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + s.Value.file + "||" + s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
             }
             result += "\n|}" + footers[lang].First;
-            var page = new DotNetWikiBot.Page(resultpages[lang].First.ToString());
-            page.Save(result);
+            Save(site, lang, resultpages[lang].First.ToString(), result);
 
             all_edits_index = 0;
             result = "{{shortcut|" + shortcuts[lang].Second + "}}" + headers[lang].Replace("%specific_text%", hdr_modifications[lang].Second.ToString());
             foreach (var s in users.OrderByDescending(s => s.Value.all))
                 result += "\n|-\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + s.Value.file + "||" + s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
             result += "\n|}" + footers[lang].Second;
-            page = new DotNetWikiBot.Page(resultpages[lang].Second.ToString());
-            page.Save(result);
+            Save(site, lang, resultpages[lang].Second.ToString(), result);
         }
     }
 }
