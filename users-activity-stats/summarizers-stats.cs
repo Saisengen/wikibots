@@ -55,7 +55,7 @@ class Program
         monthnumbers.Add("июля", 7); monthnumbers.Add("августа", 8); monthnumbers.Add("сентября", 9); monthnumbers.Add("октября", 10); monthnumbers.Add("ноября", 11); monthnumbers.Add("декабря", 12);
         var stats_per_year = new Dictionary<string, Dictionary<string, int>>();
         var stats_per_month = new Dictionary<string, Dictionary<string, int>>();
-        var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (" + lastmonthdate.Year + @") \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         foreach (var t in archivationtype.Keys)
