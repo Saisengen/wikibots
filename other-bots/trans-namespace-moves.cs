@@ -36,6 +36,8 @@ class Program
                     string oldtitle = r.GetAttribute("title");
                     string date = r.GetAttribute("timestamp").Substring(5, 5);
                     string comment = r.GetAttribute("comment");
+                    if (comment != null)
+                        comment = Uri.UnescapeDataString(comment);
                     r.Read();
                     string newns = r.GetAttribute("target_ns");
                     if (newns != "0")
@@ -44,7 +46,7 @@ class Program
                     table.Add(new record() { oldtitle = oldtitle, oldns = oldns, newtitle = newtitle, user = user, date = date, comment = comment });
                 }
         }
-        string result = "<center>{{Плавающая шапка таблицы}}Красным выделены неавтопатрулируемые.{{shortcut|ВП:TRANSMOVE}}{{clear}}\n{|class=\"standard sortable ts-stickytableheader\"\n!Дата!!Источник!!Название в ОП!!Переносчик!!Коммент";
+        string result = "<center>{{Плавающая шапка таблицы}}{{shortcut|ВП:TRANSMOVE}}Красным выделены неавтопатрулируемые.{{clear}}\n{|class=\"standard sortable ts-stickytableheader\"\n!Дата!!Источник!!Название в ОП!!Переносчик!!Коммент";
         foreach (var t in table)
         {
             string comment;
