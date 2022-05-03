@@ -22,13 +22,13 @@ class Program
         var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
         int status_update_freq = 100000;
-        var disambs = new HashSet<string>();
-        var users = new Dictionary<string, Record>();
-        var bestusers = new Dictionary<string, Record>();
-        var bots = new HashSet<string>();
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
         foreach (var lang in new string[] { "ru", "kk" })
         {
+            var disambs = new HashSet<string>();
+            var users = new Dictionary<string, Record>();
+            var bestusers = new Dictionary<string, Record>();
+            var bots = new HashSet<string>();
             var connect = new MySqlConnection("Server=" + lang + "wiki.labsdb;Database=" + lang + "wiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
             connect.Open();
             MySqlCommand command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
@@ -37,7 +37,7 @@ class Program
             while (rdr.Read())
             {
                 string bot = rdr.GetString("title");
-                if (!falsebots[lang].Contains(bot))
+                if (!falsebots[lang].Contains(bot) && !bots.Contains(bot))
                     bots.Add(bot.Replace("_", " "));
             }
             rdr.Close();
