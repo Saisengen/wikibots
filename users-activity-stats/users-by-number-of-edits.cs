@@ -39,8 +39,15 @@ class Program
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "edit" }, { "title", title }, { "text", text }, { "token", token }, { "format", "xml" } })).Result.Content.ToString();
-        Console.WriteLine("writing " + lang + ":" + title);
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
+        //site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "edit" }, { "title", title }, { "text", text }, { "token", token }, { "format", "xml" } }));
+        Console.WriteLine(DateTime.Now.ToString() + " writing " + lang + ":" + title);
     }
     static void Main()
     {
@@ -173,7 +180,7 @@ class Program
             }
             result += "\n|}" + footers[lang].First;
             Save(site, lang, resultpages[lang].First.ToString(), result);
-
+            
             all_edits_index = 0;
             result = "{{shortcut|" + shortcuts[lang].Second + "}}" + headers[lang].Replace("%specific_text%", hdr_modifications[lang].Second.ToString());
             foreach (var s in users.OrderByDescending(s => s.Value.all))
