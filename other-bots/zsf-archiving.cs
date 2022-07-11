@@ -13,7 +13,7 @@ class Program
         var page = new Page("Википедия:Заявки на снятие флагов");
         page.Load();
         string zsftext = page.text;
-        var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
+        var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж|АИ|бот)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
         var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)");
         var threads = threadrgx.Matches(page.text);
         foreach (Match thread in threads)
