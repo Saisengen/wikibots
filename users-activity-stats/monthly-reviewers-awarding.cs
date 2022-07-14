@@ -68,7 +68,7 @@ class Program
                 try
                 {
                     user.Save(user.text + "\n\n==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year +
-                    ")==\n{{subst:u:Орденоносец/Заслуженному патрульному " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year +
+                    ")==\n{{subst:u:Орденоносец/Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year +
                     " года. Поздравляем! ~~~~}}", "орден заслуженному патрулирующему за " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года", false);
                 }
                 catch (Exception e)
@@ -83,7 +83,7 @@ class Program
                 try
                 {
                     user.Save(header + "==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year +
-                    ")==\n{{subst:u:Орденоносец/Заслуженному патрульному " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year +
+                    ")==\n{{subst:u:Орденоносец/Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year +
                     " года. Поздравляем! ~~~~}}\n\n" + pagebody, "орден заслуженному патрулирующему за " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года", false);
                 }
                 catch (Exception e)
@@ -92,7 +92,7 @@ class Program
                 }
             }
         }
-        var pg = new Page("Википедия:Ордена/Заслуженному патрульному");
+        var pg = new Page("Википедия:Ордена/Заслуженному патрулирующему");
         pg.Load();
         pg.Save(pg.text + addition, "ордена за " + monthname[lastmonth.Month], false);
     }
