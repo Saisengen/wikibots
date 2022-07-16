@@ -8,7 +8,7 @@ class Program
 {
     static void Main()
     {
-        var rgx = new Regex(@"\{\{\s*([Тт]екущие события|[Рр]едактирую)[^{}]*\}\}");
+        var rgx = new Regex(@"\{\{\s*([Тт]екущие события|[Рр]едактирую|[Сс]вязь с текущим событием)[^{}]*\}\}");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         foreach (string cat in new string[] { "Категория:Википедия:Статьи с просроченным шаблоном текущих событий", "Категория:Википедия:Просроченные статьи, редактируемые прямо сейчас" })
