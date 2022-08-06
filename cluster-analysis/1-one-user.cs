@@ -11,8 +11,9 @@ class votes_on_election
 }
 class voterdata
 {
-    public int samevotes, opposevotes, diff, commonvotings, wkdmtotal;
+    public int samevotes, oppositevotes, diff, commonvotings, wkdmtotal;
     public float normalized_diff, wkdm_normal;
+    public string coinciding_votings_list, opposite_votings_list;
 }
 class Program
 {
@@ -43,10 +44,10 @@ class Program
                 float dn_for_color = (sort == "wkdm" ? voter.Value.wkdm_normal : voter.Value.normalized_diff);
                 string antisaturation = Convert.ToInt32(Math.Round(255 * (1 - Math.Abs(dn_for_color)))).ToString("X2");
                 string color = (dn_for_color < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation);
-                result += "<tr style=\"background-color:#" + color + "\"><td><a href=\"https://mbh.toolforge.org/clusters1.cgi?user=" + Uri.EscapeDataString(voter.Key) + "&earlieryear=" + earlieryear +
-                    "&lateryear=" + lateryear + "&highlimit=" + highlimit + "&lowlimit=" + lowlimit + "&highlimitdn=" + highlimitdn + "&lowlimitdn=" + lowlimitdn + "&commonvotings=" + commonvotings +
-                    "&sort=" + sort + "\">" + voter.Key + "</a></td><td>" + voter.Value.samevotes + "</td><td>" + voter.Value.opposevotes + "</td><td>" + voter.Value.diff.ToString().Replace('-', '−') +
-                    "</td><td>" + voter.Value.commonvotings + "</td><td>" + voter.Value.wkdmtotal + "</td><td>" + voter.Value.normalized_diff.ToString("G2").Replace('-', '−') + "</td><td>" +
+                result += "<tr style=\"background-color:#" + color + "\"><td><a href=\"https://mbh.toolforge.org/clusters1.cgi?user=" + Uri.EscapeDataString(voter.Key) + "&earlieryear=" + earlieryear + "&lateryear=" + lateryear + "&highlimit=" + 
+                    highlimit + "&lowlimit=" + lowlimit + "&highlimitdn=" + highlimitdn + "&lowlimitdn=" + lowlimitdn + "&commonvotings=" + commonvotings + "&sort=" + sort + "\">" + voter.Key + "</a></td><td><abbr title=\"" + 
+                    voter.Value.coinciding_votings_list + "\">" + voter.Value.samevotes + "</abbr></td><td><abbr title=\"" + voter.Value.opposite_votings_list + "\">" + voter.Value.oppositevotes + "</abbr></td><td>" + 
+                    voter.Value.diff.ToString().Replace('-', '−') + "</td><td>" + voter.Value.commonvotings + "</td><td>" + voter.Value.wkdmtotal + "</td><td>" + voter.Value.normalized_diff.ToString("G2").Replace('-', '−') + "</td><td>" +
                     voter.Value.wkdm_normal.ToString("G2").Replace('-', '−') + "</td></tr>\n";
             }
         }
@@ -138,12 +139,14 @@ class Program
                         results[voter].samevotes++;
                         results[voter].commonvotings++;
                         results[voter].wkdmtotal++;
+                        results[voter].coinciding_votings_list += voting.Key + '\n';
                     }
                     if ((voting.Value.yes.Contains(searcheduser) && voting.Value.no.Contains(voter)) || (voting.Value.no.Contains(searcheduser) && voting.Value.yes.Contains(voter)))
                     {
-                        results[voter].opposevotes++;
+                        results[voter].oppositevotes++;
                         results[voter].commonvotings++;
                         results[voter].wkdmtotal++;
+                        results[voter].opposite_votings_list += voting.Key + '\n';
                     }
                 }
                 else if (voting.Value.yes.Contains(voter) || voting.Value.no.Contains(voter))
@@ -151,7 +154,7 @@ class Program
 
         foreach(var r in results)
         {
-            r.Value.diff = r.Value.samevotes - r.Value.opposevotes;
+            r.Value.diff = r.Value.samevotes - r.Value.oppositevotes;
             r.Value.normalized_diff = (float)r.Value.diff / r.Value.commonvotings;
             r.Value.wkdm_normal = (float)r.Value.diff / r.Value.wkdmtotal;
         }
