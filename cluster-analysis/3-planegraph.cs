@@ -3,16 +3,17 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.IO;
 using System.Web;
-
+using System.Linq;
 class Result
 {
     public int equal, differ;
 }
 class Program
 {
+    static bool method_is_post = false;
     static void Sendresponse(string result, string users, string axisxuser, string axisyuser, int earlieryear, int lateryear, int square)
     {
-        var sr = new StreamReader("clusters-template3.txt");
+        var sr = new StreamReader(method_is_post ? "clusters-template3.5.txt" : "clusters-template3.txt");
         Console.WriteLine(sr.ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString())
             .Replace("%axisxuser%", axisxuser).Replace("%axisyuser%", axisyuser).Replace("%square%", square.ToString()));
     }
@@ -21,13 +22,13 @@ class Program
         var yes = new Dictionary<string, HashSet<string>>();
         var no = new Dictionary<string, HashSet<string>>();
         //Environment.SetEnvironmentVariable("QUERY_STRING", "users=Jack+who+built+the+house%0D%0AVetrov69%0D%0ASleeps-Darkly%0D%0AStjn%0D%0AMeiræ%0D%0APutnik%0D%0AFacenapalm%0D%0AДжекалоп%0D%0ASerhio+Magpie%0D%0AIniquity%0D%0AЛе+Лой%0D%0AWikisaurus%0D%0AMBH%0D%0AGrain+of+sand%0D%0AЗемлеройкин%0D%0AVenzz%0D%0ADraa+kul%0D%0AMichgrig%0D%0AМиша+Карелин%0D%0AAlex+fand%0D%0ASir+Shurf%0D%0AHelgo13%0D%0ADeltahead%0D%0AIgrek%0D%0AShamash%0D%0AMorihei+Tsunemori%0D%0ATenBaseT%0D%0AWulfson%0D%0ATempus%0D%0ASaramag%0D%0ALuterr%0D%0AFedor+Babkin%0D%0ADaphne+mesereum%0D%0AA.Vajrapani&axisxuser=A.Vajrapani&axisyuser=Arsenal.UC&earlieryear=2014&lateryear=2020&square=1000");
-        string get = Environment.GetEnvironmentVariable("QUERY_STRING");
-        if (get == "" || get == null)
+        string input = method_is_post ? Console.ReadLine() : Environment.GetEnvironmentVariable("QUERY_STRING");
+        if (input == "" || input == null)
         {
-            Sendresponse("", "", "", "", 20, DateTime.Now.Year, 1000);
+            Sendresponse("", "", "", "", DateTime.Now.Year, DateTime.Now.Year, 1200);
             return;
         }
-        var parameters = HttpUtility.ParseQueryString(get);
+        var parameters = HttpUtility.ParseQueryString(input);
         var users = parameters[0].Replace("\u200E", "").Replace("\r\n", "\t").Replace("\n", "\t").Replace("\r", "\t").Split('\t');
         string axisxuser = parameters[1];
         string axisyuser = parameters[2];
@@ -202,7 +203,7 @@ class Program
                 result += "<div style=\"position:absolute;left:" + coord1 + "px;top:" + coord2 + "px;\">• " + u + "</div>\n";
             }
         string usersstring = "";
-        foreach (var u in users)
+        foreach (var u in users.OrderBy(u => u))
             usersstring += u + "\n";
         Sendresponse(result, usersstring.Substring(0, usersstring.Length - 1), axisxuser, axisyuser, earlieryear, lateryear, square);
     }
