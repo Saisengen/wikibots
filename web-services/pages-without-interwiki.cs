@@ -16,7 +16,7 @@ class pageinfo
 class Program
 {
     static string sourcewiki, category, template, pagetype, type, targetwiki, sort, requestedwiki;
-    static bool wikilist;
+    static bool wikilist, wikitable;
     static int requireddepth = 0, miniwiki = 0;
     static WebClient cl = new WebClient();
     static List<string> iterationlist = new List<string>();
@@ -48,7 +48,7 @@ class Program
             }
         }
     }
-    static void sendresponse(string sourcewiki, string category, string template, string targetwiki, string type, string pagetype, string sort, bool wikilist, int depth, int miniwiki, string result)
+    static void sendresponse(string sourcewiki, string category, string template, string targetwiki, string type, string pagetype, string sort, bool wikilist, bool wikitable, int depth, int miniwiki, string result)
     {
         var sr = new StreamReader("pages-wo-iwiki-template.txt");
         string resulttext;
@@ -70,6 +70,8 @@ class Program
 
         if (wikilist)
             resulttext = resulttext.Replace("%checked_wikilist%", "checked");
+        if (wikitable)
+            resulttext = resulttext.Replace("%checked_wikitable%", "checked");
 
         string title = "";
         if (category != "" && template != "")
@@ -78,8 +80,7 @@ class Program
             title = " (" + category + ")";
         else if (template != "")
             title = " (" + template + ")";
-        resulttext = resulttext.Replace("%result%", result).Replace("%sourcewiki%", sourcewiki).Replace("%category%", category).Replace("%template%", template).Replace("%targetwiki%", targetwiki)
-            .Replace("%title%", title).Replace("%depth%", depth.ToString()).Replace("%miniwiki%", miniwiki.ToString());
+        resulttext = resulttext.Replace("%result%", result).Replace("%sourcewiki%", sourcewiki).Replace("%category%", category).Replace("%template%", template).Replace("%targetwiki%", targetwiki).Replace("%title%", title).Replace("%depth%", depth.ToString()).Replace("%miniwiki%", miniwiki.ToString());
         Console.WriteLine(resulttext);
         Console.WriteLine();
     }
@@ -147,7 +148,7 @@ class Program
         //get = "sourcewiki=ru.wikipedia&category=NEC&subcats=on&template=&pagetype=articles&type=exist&targetwiki=ru.wikipedia&sort=iwiki";
         if (input == "" || input == null)
         {
-            sendresponse("en.wikipedia", "", "", "ru.wikipedia", "nonexist", "articles", "iwiki", false, 0, 5, "");
+            sendresponse("en.wikipedia", "", "", "ru.wikipedia", "nonexist", "articles", "iwiki", false, false, 0, 5, "");
             return;
         }
         var parameters = HttpUtility.ParseQueryString(input);
@@ -159,16 +160,17 @@ class Program
         targetwiki = parameters["targetwiki"];
         sort = parameters["sort"];
         wikilist = parameters["wikilist"] == "on";
+        wikitable = parameters["wikitable"] == "on";
         requireddepth = Convert.ToInt16(parameters["depth"]);
         miniwiki = Convert.ToInt16(parameters["miniwiki"]);
         if (requireddepth < 0)
         {
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, requireddepth, miniwiki, "Введите неотрицательную глубину");
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, "Введите неотрицательную глубину");
             return;
         }
         if (category == "" && template == "")
         {
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, requireddepth, miniwiki, "Укажите категорию, шаблон или оба значения");
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, "Укажите категорию, шаблон или оба значения");
             return;
         }
         var targetpages = new Dictionary<string, pageinfo>();
@@ -201,7 +203,7 @@ class Program
 
         if (iterationlist.Count == 0)
         {
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, requireddepth, miniwiki, "Нет страниц в такой категории или с таким шаблоном");
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, "Нет страниц в такой категории или с таким шаблоном");
             return;
         }
         else
@@ -284,8 +286,16 @@ class Program
                 foreach (var p in sort == "iwiki" ? processedpages.OrderByDescending(p => p.Value.numofiwiki) : processedpages.OrderByDescending(p => p.Value.status))
                     if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
                         result += "\n<br>#{{iw|||" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + "|" + p.Key + "}}";
+            if (wikitable)
+            {
+                result += "\n<br>{|class=\"standard sortable\"<br>! Страница !! Интервик !! Статус";
+                foreach (var p in sort == "iwiki" ? processedpages.OrderByDescending(p => p.Value.numofiwiki) : processedpages.OrderByDescending(p => p.Value.status))
+                    if (!existentpageids.Contains(p.Value.id) && p.Value.numofiwiki >= miniwiki)
+                        result += "<br>|-<br>| [[:" + sourcewiki.Substring(0, sourcewiki.IndexOf('.')) + ":" + p.Key + "|]] || " + p.Value.numofiwiki + " || " + p.Value.status;
+                result += "<br>|}";
+            }
 
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, requireddepth, miniwiki, result);
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, result);
         }
     }
 }
