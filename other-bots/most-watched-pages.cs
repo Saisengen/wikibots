@@ -4,6 +4,7 @@ using System.Linq;
 using System.Xml;
 using System.IO;
 using DotNetWikiBot;
+using System.Web.UI;
 
 class Program
 {
@@ -35,7 +36,7 @@ class Program
         foreach (var n in nss.Keys)
         {
             var pageids = new HashSet<string>();
-            var pagecounts = new Dictionary<string, int>();
+            var pagecounts = new Dictionary<string, Pair>();
             cont = ""; query = "/w/api.php?action=query&list=allpages&format=xml&aplimit=max&apfilterredir=nonredirects&apnamespace=";
             while (cont != null)
             {
@@ -65,15 +66,12 @@ class Program
                 requeststrings.Add(idset.Substring(1));
 
             foreach (var q in requeststrings)
-            {
-                apiout = site.GetWebPage("/w/api.php?action=query&prop=info&format=xml&inprop=watchers&pageids=" + q);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
+                using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&prop=info&format=xml&inprop=visitingwatchers%7Cwatchers&pageids=" + q))))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
                     while (r.Read())
                         if (r.GetAttribute("watchers") != null)
                         {
-                            int watchers = Convert.ToInt16(r.GetAttribute("watchers"));
                             string title = r.GetAttribute("title");
                             if (n == 3)
                             {
@@ -81,21 +79,26 @@ class Program
                                     continue;
                                 title = title.Replace("Обсуждение участника:", "Участник:").Replace("Обсуждение участницы:", "Участница:");
                             }
+                            int watchers = Convert.ToInt16(r.GetAttribute("watchers"));
+                            string activewatchers;
+                            if (r.GetAttribute("visitingwatchers") != null)
+                                activewatchers = r.GetAttribute("visitingwatchers");
+                            else
+                                activewatchers = "";
                             if (n == 0 && watchers >= 50 || n != 0)
-                                pagecounts.Add(title, watchers);
+                                pagecounts.Add(title, new Pair() { First = watchers, Second = activewatchers});
                         }
                 }
-            }
             
             if (pagecounts.Count != 0)
             {
-                result += "==" + (nss[n] == "" ? "Статьи" : (nss[n] == "Обсуждение участника" ? "Участник" : nss[n])) + "==\n{|class=\"standard\"\n!Страница!!Следящих\n";
-                foreach (var p in pagecounts.OrderByDescending(p => p.Value))
-                    result += "|-\n|[[:" + p.Key + "]]||" + p.Value + "\n";
+                result += "==" + (nss[n] == "" ? "Статьи" : (nss[n] == "Обсуждение участника" ? "Участник" : nss[n])) + "==\n{|class=\"standard sortable\"\n!Страница!!Всего следящих!!Активных\n";
+                foreach (var p in pagecounts.OrderByDescending(p => p.Value.First))
+                    result += "|-\n|[[:" + p.Key + "]]||" + p.Value.First + "||" + p.Value.Second + "\n";
                 result += "|}\n";
             }
         }
-        var page = new Page("u:MBH/most watched pages");
+        var page = new DotNetWikiBot.Page("u:MBH/most watched pages");
         page.Save(result);
     }
 }
