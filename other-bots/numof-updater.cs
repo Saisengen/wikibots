@@ -17,7 +17,9 @@ class Program
         var duplcodes = new string[] { "be-x-old", "yue", "zh-tw", "nb", "nan", "lzh" };
         var wikis = new Dictionary<string, wiki>();
         var codes = new HashSet<string>();
-        string result = "local info = {\n";
+        string result = "{\"license\": \"CC0-1.0\",\"description\": {\"en\": \"Pages/users stats for all wikipedias for Module:NumberOf on several wikis\"},\"sources\": \"Updated by [https://github.com/Saisengen/wikibots/blob/main/other-bots/numof-updater.cs MBHbot]\"," +
+            "\"schema\":{\"fields\": [{\"name\": \"lang\",\"type\": \"string\"},{\"name\": \"pos\", \"type\": \"number\"},{\"name\": \"activeusers\",\"type\": \"number\"},{\"name\": \"admins\",\"type\": \"number\"},{\"name\": \"articles\",\"type\": \"number\"},{\"name\":" +
+            "\"edits\",\"type\": \"number\"},{\"name\": \"files\",\"type\": \"number\"},{\"name\": \"pages\",\"type\": \"number\"},{\"name\": \"users\",\"type\": \"number\"},{\"name\": \"depth\",\"type\": \"number\"},{\"name\": \"date\",\"type\": \"string\"}]},\"data\": [";
         long tarticles = 0, tusers = 0, tadmins = 0, tactiveusers = 0, tedits = 0, tfiles = 0, tpages = 0;
         var l = new WebClient();
         using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(l.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=siteinfo&siprop=interwikimap")))))
@@ -61,25 +63,20 @@ class Program
         int n = 0;
         foreach (var w in wikis.OrderByDescending(w => w.Value.articles))
         {
-            result += "['" + w.Key + "'] = { pos = " + ++n + ", activeusers = " + w.Value.activeusers + ", admins = " + w.Value.admins + ", articles = " + w.Value.articles + ", edits = " + w.Value.edits +
-                ", files = " + w.Value.files + ", pages = " + w.Value.pages + ", users = " + w.Value.users + ", depth = " + (w.Value.pages != 0 && w.Value.articles != 0 ?
-                (w.Value.edits / (float)w.Value.pages) * ((w.Value.pages - w.Value.articles) / (float)w.Value.articles) * ((w.Value.pages - w.Value.articles) / (float)w.Value.articles)
-                : 0).ToString().Replace(",", ".") + " },\n";
+            result += "[\"" + w.Key + "\"," + ++n + "," + w.Value.activeusers + "," + w.Value.admins + "," + w.Value.articles + "," + w.Value.edits + "," + w.Value.files + "," + w.Value.pages + "," + w.Value.users + "," + (w.Value.pages != 0 && w.Value.articles != 0 ?
+                (w.Value.edits / (float)w.Value.pages) * ((w.Value.pages - w.Value.articles) / (float)w.Value.articles) * ((w.Value.pages - w.Value.articles) / (float)w.Value.articles) : 0) + ",null],";
         }
-        result += "['total'] = { activeusers = " + tactiveusers + ", admins = " + tadmins + ", articles = " + tarticles + ", edits = " + tedits + ", files = " + tfiles + ", pages = " + tpages +
-            ", users = " + tusers + ", depth = " + (tpages != 0 && tarticles != 0 ? (tedits / (float)tpages) * ((tpages - tarticles) / (float)tarticles) * ((tpages - tarticles) / (float)tarticles)
-            : 0).ToString().Replace(",", ".") + ", date = '@" + (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds + "' },\n}\nreturn info";
-        foreach (var lang in new HashSet<string>() { "ru", "uk", "be", "uz" })
+        result += "[\"total\",0," + tactiveusers + "," + tadmins + "," + tarticles + "," + tedits + "," + tfiles + "," + tpages + "," + tusers + "," + (tpages != 0 && tarticles != 0 ? (tedits / (float)tpages) * ((tpages - tarticles) / (float)tarticles) * ((tpages - tarticles)
+            / (float)tarticles) : 0) + ",\"@" + (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds + "\"]]}";
+
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        var site = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
+        if (DateTime.Now.Hour == 1 || DateTime.Now.Hour == 0)
         {
-            var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-            var site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
-            if (DateTime.Now.Hour == 1 || DateTime.Now.Hour == 0)
-            {
-                Page d = new Page(site, "Module:NumberOf/today");
-                d.Save(result, "", true);
-            }
-            Page h = new Page(site, "Module:NumberOf/data");
-            h.Save(result, "", true);
+            Page d = new Page(site, "Data:NumberOf/daily.tab");
+            d.Save(result, "", true);
         }
+        Page h = new Page(site, "Data:NumberOf/hourly.tab");
+        h.Save(result, "", true);
     }
 }
