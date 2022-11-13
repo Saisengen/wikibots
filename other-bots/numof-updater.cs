@@ -1,17 +1,50 @@
 using System;
 using System.Collections.Generic;
-using DotNetWikiBot;
 using System.Linq;
 using System.Xml;
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Net.Http;
+
 struct wiki
 {
     public long articles, admins, users, pages, files, activeusers, edits;
 }
 class Program
 {
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://commons.wikimedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://commons.wikimedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string title, string text, string comment)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://commons.wikimedia.org/w/api.php", request).Result;
+    }
     static void Main()
     {
         var duplcodes = new string[] { "be-x-old", "yue", "zh-tw", "nb", "nan", "lzh" };
@@ -70,13 +103,9 @@ class Program
             / (float)tarticles) : 0) + ",\"@" + (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds + "\"]]}";
 
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
+        var site = Site(creds[0], creds[1]);
         if (DateTime.Now.Hour == 1 || DateTime.Now.Hour == 0)
-        {
-            Page d = new Page(site, "Data:NumberOf/daily.tab");
-            d.Save(result, "", true);
-        }
-        Page h = new Page(site, "Data:NumberOf/hourly.tab");
-        h.Save(result, "", true);
+            Save(site, "Data:NumberOf/daily.tab", result, "");
+        Save(site, "Data:NumberOf/hourly.tab", result, "");
     }
 }
