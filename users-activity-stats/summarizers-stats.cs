@@ -2,12 +2,50 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using DotNetWikiBot;
 using System.Xml;
 using System.Text.RegularExpressions;
+using System.Net.Http;
+using System.Net;
 
 class Program
 {
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string title, string text, string comment)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+        if (result.ToString().Contains("uccess"))
+            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+        else
+            Console.WriteLine(result);
+    }
+
     static int cntr = 0;
     static string resulttext_per_year, resulttext_per_month;
     static void writerow(KeyValuePair<string, Dictionary<string, int>> s, bool per_year)
@@ -57,10 +95,10 @@ class Program
         var stats_per_month = new Dictionary<string, Dictionary<string, int>>();
         var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+        var site = Site(creds[0], creds[1]);
         foreach (var t in archivationtype.Keys)
         {
-            string apiout = site.GetWebPage("/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "&apnamespace=" + (t == "Инкубатор/Мини-рецензирование" ? 104 : 4) + "&aplimit=max");
+            string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "&apnamespace=" + (t == "Инкубатор/Мини-рецензирование" ? 104 : 4) + "&aplimit=max").Result;
             using (var xr = new XmlTextReader(new StringReader(apiout)))
                 while (xr.Read())
                     if (xr.Name == "p")
@@ -115,7 +153,7 @@ class Program
                         }
                         if (correctpage)
                         {
-                            string pagetext = site.GetWebPage("https://ru.wikipedia.org/wiki/" + page + "?action=raw");
+                            string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + page + "?action=raw").Result;
                             var matches = summary_rgx.Matches(pagetext);
                             foreach (Match m in matches)
                             {
@@ -161,11 +199,7 @@ class Program
         foreach (var s in stats_per_month.OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"]))
             writerow(s, false);
 
-        resulttext_per_year += "\n|}";
-        resulttext_per_month += "\n|}";
-        var yearresult = new Page("ВП:Статистика итогов/За год");
-        yearresult.Save(resulttext_per_year);
-        var monthresult = new Page("ВП:Статистика итогов");
-        monthresult.Save(resulttext_per_month);
+        Save(site, "ВП:Статистика итогов/За год", resulttext_per_year + "\n|}", "");
+        Save(site, "ВП:Статистика итогов", resulttext_per_month + "\n|}", "");
     }
 }
