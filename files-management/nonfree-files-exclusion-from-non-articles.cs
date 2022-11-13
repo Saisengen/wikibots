@@ -23,10 +23,10 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string lang, string title, string text, string comment)
+    static void Save(HttpClient site, string title, string text, string comment)
     {
         var doc = new XmlDocument();
-        var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
@@ -38,8 +38,8 @@ class Program
         request.Add(new StringContent(comment), "summary");
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
-        result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
-        Console.WriteLine(DateTime.Now.ToString() + " writing " + lang + ":" + title);
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+        Console.WriteLine(DateTime.Now.ToString() + " written " + title);
     }
 
     static void Main()
@@ -65,6 +65,7 @@ class Program
                     {
                         string title = r.GetAttribute("title");
                         string text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + title + "?action=raw").Result;
+                        string initialtext = text;
                         string filename = file.Substring(5);
                         filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + ")";
                         filename = filename.Replace(@"\ ", "[ _]");
@@ -86,11 +87,14 @@ class Program
                         text = r7.Replace(text, "");
                         text = r8.Replace(text, "$1");
                         text = r9.Replace(text, "$1");
-                        Save(site, "ru", title, text, "удаление несвободного файла из служебных пространств");
-                        if (r.GetAttribute("ns") == "10")
+                        if (text != initialtext)
                         {
-                            string tracktext = site.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
-                            Save(site, "ru", "u:MBH/Шаблоны с удалёнными файлами", tracktext + "\n* [[" + title + "]]", "");
+                            Save(site, title, text, "удаление несвободного файла из служебных пространств");
+                            if (r.GetAttribute("ns") == "10")
+                            {
+                                string tracktext = site.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
+                                Save(site, "u:MBH/Шаблоны с удалёнными файлами", tracktext + "\n* [[" + title + "]]", "");
+                            }
                         }
                     }
                 }
