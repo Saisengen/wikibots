@@ -4,8 +4,9 @@ using System.Linq;
 using System.Net;
 using System.IO;
 using System.Text.RegularExpressions;
-using DotNetWikiBot;
 using System.Xml;
+using System.Net.Http;
+
 class result
 {
     public string date;
@@ -13,6 +14,41 @@ class result
 }
 class Program
 {
+    static HttpClient Site(string wiki, string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://" + wiki + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://" + wiki + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string lang, string title, string text)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
+        if (result.ToString().Contains("uccess"))
+            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+        else
+            Console.WriteLine(result);
+    }
     static void Main()
     {
         int minneededpeakvalue;
@@ -64,11 +100,11 @@ class Program
             }
 
             var creds = new StreamReader("p").ReadToEnd().Split('\n');
-            var site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
+            var site = Site(lang, creds[0], creds[1]);
             string cont = "", query = "/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
             while (cont != null)
             {
-                string apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont)));
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -110,7 +146,6 @@ class Program
                         }
                 }
             }
-            site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
             string result = "<center>" + header + "{{" + templatename + "}}\n{|class=\"standard sortable ts-stickytableheader\" style=\"text-align:center\"\n!" + tableheader;
             foreach (var r in results.OrderByDescending(r => r.Value.max))
             {
@@ -118,9 +153,7 @@ class Program
                 string day = r.Value.date.Substring(6, 2);
                 result += "\n|-\n|[[" + r.Key + "]]||{{formatnum:" + r.Value.max + "}}||" + r.Value.median + "||{{~|" + month + day + "}}" + day + " " + monthnames[month] + "||{{Graph:PageViews|" + datespan + "|" + r.Key + "|height=120|width=240}}";
             }
-            result += "\n|}";
-            var p = new Page(outputpage);
-            p.Save(result);
+            Save(site, lang, outputpage, result + "\n|}");
         }
     }
 }
