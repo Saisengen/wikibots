@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.IO;
-using DotNetWikiBot;
 using System.Xml;
 using MySql.Data.MySqlClient;
+using System.Net.Http;
+using System.Net;
 
 class Record
 {
@@ -12,6 +13,41 @@ class Record
 }
 class Program
 {
+    static HttpClient Site(string wiki, string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://" + wiki + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://" + wiki + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string lang, string title, string text)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
+        if (result.ToString().Contains("uccess"))
+            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+        else
+            Console.WriteLine(result);
+    }
     static void Main()
     {
         var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "kk", new string[] { "Arystanbek", "Нұрлан_Рахымжанов" } } };
@@ -41,11 +77,11 @@ class Program
                     bots.Add(bot.Replace("_", " "));
             }
             rdr.Close();
-            var site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
-            string cont = "", query = "/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
+            var site = Site(lang, creds[0], creds[1]);
+            string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
             while (cont != null)
             {
-                string apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&cmcontinue=" + Uri.EscapeDataString(cont)));
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -60,10 +96,10 @@ class Program
             foreach (int ns in new int[] { 0, 6, 10, 14 })
             {
                 c = 0;
-                cont = ""; query = "/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
+                cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
                 while (cont != null)
                 {
-                    string apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont)));
+                    string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
                     using (var r = new XmlTextReader(new StringReader(apiout)))
                     {
                         r.WhitespaceHandling = WhitespaceHandling.None;
@@ -77,7 +113,7 @@ class Program
                                 string user = "";
                                 try
                                 {
-                                    using (var rr = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid))))
+                                    using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid).Result)))
                                         while (rr.Read())
                                             if (rr.Name == "rev")
                                                 user = rr.GetAttribute("user");
@@ -107,10 +143,10 @@ class Program
                 }
             }
             c = 0;
-            cont = ""; query = "/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=redirects&apnamespace=0";
+            cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=redirects&apnamespace=0";
             while (cont != null)
             {
-                string apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont)));
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -124,7 +160,7 @@ class Program
                             string user = "";
                             try
                             {
-                                using (var rr = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid))))
+                                using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid).Result)))
                                     while (rr.Read())
                                         if (rr.Name == "rev")
                                             user = rr.GetAttribute("user");
@@ -154,11 +190,7 @@ class Program
                 result += "\n|-" + color + "\n|" + number + "||{{u|" + (u.Key.Contains('=') ? "1=" + u.Key : u.Key) + "}}||" + u.Value.art + "||" + u.Value.redir + "||" + u.Value.disamb + "||" +
                     u.Value.templ + "||" + u.Value.cat + "||" + u.Value.file;
             }
-            result += "\n|}" + footers[lang];
-            Console.WriteLine(DateTime.Now);
-            site = new Site("https://" + lang + ".wikipedia.org", creds[0], creds[1]);
-            var page = new Page(resultpage[lang]);
-            page.Save(result);
+            Save(site, lang, resultpage[lang], result + "\n|}" + footers[lang]);
         }
     }
 }
