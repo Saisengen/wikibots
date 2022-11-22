@@ -6,15 +6,18 @@ using System.Linq;
 using System.Web;
 using System.Xml;
 using System.Text;
-using System.Security.Policy;
 
+class pageinfo
+{
+    public string pending_since, stable_revid;
+}
 class Program
 {
     static string wiki, cat, template;
     static int requireddepth = 0;
     static WebClient cl = new WebClient();
     static HashSet<string> candidates = new HashSet<string>();
-    static Dictionary<string, string> pages = new Dictionary<string, string>();
+    static Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
     static void sendresponse(string wiki, string cat, string template, int depth, string result)
     {
         var sr = new StreamReader("unreviewed-pages-template.txt");
@@ -72,19 +75,40 @@ class Program
     static void Main()
     {
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
-        //input = "wiki=ru.wikipedia&cat=Компьютерные+игры&depth=0&template=";
+        //input = "wiki=ru.wikipedia&cat=Компьютерные+игры1&depth=0&template=";
         if (input == "" || input == null)
+        {
             sendresponse("ru.wikipedia", "", "", 0, "");
+            return;
+        }
         var parameters = HttpUtility.ParseQueryString(input);
         wiki = parameters["wiki"];
-        cat = parameters["cat"];
-        template = parameters["template"];
+        cat = parameters["cat"] ?? "";
+        template = parameters["template"] ?? "";
         requireddepth = Convert.ToInt16(parameters["depth"]);
         if (requireddepth < 0)
+        {
             sendresponse(wiki, cat, template, 0, "Use non-negative depth value");
+            return;
+        }
         if (cat == "" && template == "")
         {
             sendresponse(wiki, cat, template, requireddepth, "Input category, template name or both");
+            return;
+        }
+
+        bool broken_title = false;
+        using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=category:" + Uri.EscapeDataString(cat))))))
+            while (r.Read())
+                if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
+                    broken_title = true;
+        using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(template))))))
+            while (r.Read())
+                if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
+                    broken_title = true;
+        if (broken_title)
+        {
+            sendresponse(wiki, cat, template, requireddepth, "There is no such category or such template in this wiki, you probably misspelled the page name");
             return;
         }
 
@@ -133,9 +157,9 @@ class Program
                         string title = r.GetAttribute("title");
                         r.Read();
                         if (r.Name != "flagged")
-                            pages.Add(title, "never");
+                            pages.Add(title, new pageinfo() { pending_since = "never", stable_revid = "" });
                         else if (r.GetAttribute("pending_since") != null)
-                            pages.Add(title, r.GetAttribute("pending_since").Substring(0, 10));
+                            pages.Add(title, new pageinfo() { pending_since = r.GetAttribute("pending_since").Substring(0, 10), stable_revid = r.GetAttribute("stable_revid") } );
                     }
             }
 
@@ -146,8 +170,16 @@ class Program
         else
         {
             string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th>Date of first unreviewed revision</th></tr>\n";
-            foreach (var p in pages.OrderByDescending(p => p.Value))
-                result += "<tr><td><a href=\"https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
+            foreach (var p in pages.OrderByDescending(p => p.Value.pending_since))
+            {
+                string link;
+                if (p.Value.pending_since == "never")
+                    link = "https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key);
+                else
+                    link = "https://" + wiki + ".org/w/index.php?title=" + Uri.EscapeDataString(p.Key) + "&type=revision&diff=cur&oldid=" + p.Value.stable_revid;
+                result += "<tr><td><a target=\"_blank\" href=\"" + link + "\">" + p.Key + "</a></td><td>" + p.Value.pending_since + "</td></tr>\n";
+            }
+                
             result += "</table></center>";
             sendresponse(wiki, cat, template, requireddepth, result);
         }
