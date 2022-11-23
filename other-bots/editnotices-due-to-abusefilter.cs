@@ -84,12 +84,14 @@ class Program
                 }
         foreach (var page in pageswithtemplate)
             if (!pagesinfilter.Contains(page))
-            {
-                string notice = site.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Editnotice-0-" + Uri.EscapeDataString(page) + "?action=raw").Result.Replace("{{Editnotice/АПАТ}}", "");
-                if (notice == "")
-                    Save(site, "MediaWiki:Editnotice-0-" + page, "{{#ifeq:{{NAMESPACENUMBER}}|8|{{db|нотис не нужен, статья удалена из фильтра}}}}", "статья удалена из [[special:abusefilter/146|146-го фильтра]]");
-                else
-                    Save(site, "MediaWiki:Editnotice-0-" + page, notice, "статья удалена из [[special:abusefilter/146|146-го фильтра]]");
-            }
+                try
+                {
+                    string notice = site.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Editnotice-0-" + Uri.EscapeDataString(page) + "?action=raw").Result.Replace("{{Editnotice/АПАТ}}", "");
+                    if (notice == "")
+                        Save(site, "MediaWiki:Editnotice-0-" + page, "{{#ifeq:{{NAMESPACENUMBER}}|8|{{db|нотис не нужен, статья удалена из фильтра}}}}", "статья удалена из [[special:abusefilter/146|146-го фильтра]]");
+                    else
+                        Save(site, "MediaWiki:Editnotice-0-" + page, notice, "статья удалена из [[special:abusefilter/146|146-го фильтра]]");
+                }
+                catch { continue; }
     }
 }
