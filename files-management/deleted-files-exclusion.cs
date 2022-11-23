@@ -1,9 +1,10 @@
 using System.Collections.Generic;
 using System.Xml;
 using System.IO;
-using DotNetWikiBot;
 using System.Text.RegularExpressions;
 using System;
+using System.Net.Http;
+using System.Net;
 
 class Pair
 {
@@ -19,17 +20,52 @@ class Logrecord
 
 class Program
 {
+    static HttpClient Site(string wiki, string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://" + wiki + ".org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://" + wiki + ".org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string wiki, string title, string text)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://" + wiki + ".org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://" + wiki + ".org/w/api.php", request).Result;
+        if (result.ToString().Contains("uccess"))
+            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+        else
+            Console.WriteLine(result);
+    }
     static void Main()
     {
         var deletedfiles = new Dictionary<string, Logrecord>();
         var replacedfiles = new Dictionary<string, Logrecord>();
         var deletingpairs = new HashSet<Pair>();
         var replacingpairs = new HashSet<Pair>();
-        string apiout, cont = "", query = "/w/api.php?action=query&format=xml&list=logevents&leprop=title%7Cuser%7Ccomment&leaction=delete%2Fdelete&lestart=" + DateTime.Now.AddDays(1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&leend=" + DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd") +
-            "T00%3A00%3A00.000Z&lenamespace=6&lelimit=max";
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=title%7Cuser%7Ccomment&leaction=delete%2Fdelete&lestart=" + DateTime.Now.AddDays(1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&leend=" + 
+            DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&lenamespace=6&lelimit=max";
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var ru = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
-        var commons = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
+        var ru = Site("ru.wikipedia", creds[0], creds[1]);
+        var commons = Site("commons.wikimedia", creds[0], creds[1]);
         var filerx = new Regex(@"\[\[(:?c:|:?commons:|)(File|Файл):([^\]]*)\]\]", RegexOptions.IgnoreCase);
         var kburx = new Regex("КБУ#Ф[178]", RegexOptions.IgnoreCase);
         var f8rx = new Regex("КБУ#Ф8", RegexOptions.IgnoreCase);
@@ -38,7 +74,7 @@ class Program
 
         while (cont != null)
         {
-            apiout = (cont == "" ? ru.GetWebPage(query) : ru.GetWebPage(query + "&lecontinue=" + cont));
+            apiout = (cont == "" ? ru.GetStringAsync(query).Result : ru.GetStringAsync(query + "&lecontinue=" + cont).Result);
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -73,7 +109,7 @@ class Program
 
         foreach (var q in requeststrings)
         {
-            apiout = commons.GetWebPage("/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q));
+            apiout = commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q)).Result;
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -82,7 +118,7 @@ class Program
                         replacedfiles[r.GetAttribute("title").Substring(5)].correct = false;
             }
 
-            apiout = ru.GetWebPage("/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=5000&titles=" + Uri.EscapeDataString(q));
+            apiout = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=5000&titles=" + Uri.EscapeDataString(q)).Result;
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 bool isexist = true;
@@ -118,7 +154,7 @@ class Program
 
         foreach (var q in requeststrings)
         {
-            apiout = commons.GetWebPage("/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q));
+            apiout = commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q)).Result;
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -127,7 +163,7 @@ class Program
                         deletedfiles[r.GetAttribute("title").Substring(5)].correct = false;
             }
 
-            apiout = ru.GetWebPage("/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(q));
+            apiout = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(q)).Result;
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 bool isexist = true;
@@ -153,18 +189,17 @@ class Program
 
         foreach (var rp in replacingpairs)
         {
-            var p = new Page(ru, rp.page);
-            p.Load();
-            string text = p.text;
+            string page_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(rp.page) + "?action=raw").Result;
+            string initial_text = page_text;
             string filename = rp.filename;
             filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(filename.Replace(" ", "_")) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + "|" + Regex.Escape(Uri.EscapeDataString(filename.Replace(" ", "_"))) + ")";
             string newname = filerx.Match(rp.file.comment).Groups[3].Value;
             var r = new Regex(filename, RegexOptions.IgnoreCase);
-            text = r.Replace(text, newname);
-            if (text != p.text)
+            page_text = r.Replace(page_text, newname);
+            if (page_text != initial_text)
                 try
                 {
-                    p.Save(text, "[[Файл:" + rp.filename + "]] удалён [[u:" + rp.file.user + "]] по причине " + rp.file.comment, true);
+                    Save(ru, rp.page, page_text, "[[Файл:" + rp.filename + "]] удалён [[u:" + rp.file.user + "]] по причине " + rp.file.comment);
                 }
                 catch (Exception e)
                 {
@@ -174,9 +209,8 @@ class Program
 
         foreach (var dp in deletingpairs)
         {
-            var p = new Page(ru, dp.page);
-            p.Load();
-            string text = p.text;
+            string page_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(dp.page) + "?action=raw").Result;
+            string initial_text = page_text;
             string filename = dp.filename;
             filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(filename.Replace(" ", "_")) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + "|" + Regex.Escape(Uri.EscapeDataString(filename.Replace(" ", "_"))) + ")";
             var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
@@ -188,24 +222,23 @@ class Program
             var r7 = new Regex(@"\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + filename + @"[^}]*\}\}");
             var r8 = new Regex(@"([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
             var r9 = new Regex(@"([=|]\s*)" + filename, RegexOptions.IgnoreCase);
-            text = r1.Replace(text, "");
-            text = r2.Replace(text, "");
-            text = r3.Replace(text, "");
-            text = r4.Replace(text, "$1");
-            text = r5.Replace(text, "$1");
-            text = r6.Replace(text, "");
-            text = r7.Replace(text, "");
-            text = r8.Replace(text, "$1");
-            text = r9.Replace(text, "$1");
-            if (text != p.text)
+            page_text = r1.Replace(page_text, "");
+            page_text = r2.Replace(page_text, "");
+            page_text = r3.Replace(page_text, "");
+            page_text = r4.Replace(page_text, "$1");
+            page_text = r5.Replace(page_text, "$1");
+            page_text = r6.Replace(page_text, "");
+            page_text = r7.Replace(page_text, "");
+            page_text = r8.Replace(page_text, "$1");
+            page_text = r9.Replace(page_text, "$1");
+            if (page_text != initial_text)
                 try
                 {
-                    p.Save(text, "[[Файл:" + dp.filename + "]] удалён [[u:" + dp.file.user + "]] по причине " + dp.file.comment, true);
+                    Save(ru, dp.page, page_text, "[[Файл:" + dp.filename + "]] удалён [[u:" + dp.file.user + "]] по причине " + dp.file.comment);
                     if (dp.page.StartsWith("Шаблон:"))
                     {
-                        var track = new Page("u:MBH/Шаблоны с удалёнными файлами");
-                        track.Load();
-                        track.Save(track.text + "\n* [[" + dp.page + "]]");
+                        string logpage_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
+                        Save(ru, "u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]", "");
                     }
                 }
                 catch (Exception e)
