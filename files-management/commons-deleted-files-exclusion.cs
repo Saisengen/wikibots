@@ -109,7 +109,7 @@ class Program
                         deletedfiles[r.GetAttribute("title")].correct = false;
             }
 
-            using (var r = new XmlTextReader(new StringReader(ru.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(q)).Result)))
+            using (var r = new XmlTextReader(new StringReader(ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(q)).Result)))
             {
                 bool isexist = true;
                 string filename = "";
