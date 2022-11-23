@@ -24,7 +24,7 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string title, string text, string comment)
+    static void Save(HttpClient site, string title, string text, string comment, bool empty)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
@@ -40,10 +40,13 @@ class Program
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
         result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-        if (result.ToString().Contains("uccess"))
-            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
-        else
-            Console.WriteLine(result);
+        if (!empty)
+        {
+            if (result.ToString().Contains("uccess"))
+                Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+            else
+                Console.WriteLine(result);
+        }
     }
     static void Main()
     {
@@ -116,12 +119,12 @@ class Program
                     {
                         string using_page_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(page) + "?action=raw").Result;
                         if (!redirrx.IsMatch(using_page_text))
-                            Save(site, page, using_page_text + "\n", "");
+                            Save(site, page, using_page_text + "\n", "", true);
                         else
                         {
                             string redirect_target_page = redirrx.Match(using_page_text).Groups[1].Value;
                             string target_page_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(redirect_target_page) + "?action=raw").Result;
-                            Save(site, redirect_target_page, target_page_text + "\n", "");
+                            Save(site, redirect_target_page, target_page_text + "\n", "", true);
                         }
                     }
                     catch { continue; }
@@ -141,16 +144,16 @@ class Program
         {
             string uploaddate = "";
             string file_descr = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(file) + "?action=raw").Result;
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + Uri.EscapeDataString(file) + "&rvprop=timestamp&rvlimit=1&rvdir=newer").Result)))
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + Uri.EscapeDataString(file) + "&rvprop=timestamp&rvlimit=1&rvdir=newer").Result)))
                 while (r.Read())
                     if (r.Name == "rev")
-                        uploaddate = r.GetAttribute("timestamp").Substring(10);
-            if (DateTime.ParseExact(uploaddate, "yyyy-MM-dd", CultureInfo.InvariantCulture) - DateTime.Now > new TimeSpan(0, 1, 0, 0))
-                Save(site, file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла");
+                        uploaddate = r.GetAttribute("timestamp").Substring(0, 10);
+            if (DateTime.Now - DateTime.ParseExact(uploaddate, "yyyy-MM-dd", CultureInfo.InvariantCulture) > new TimeSpan(0, 1, 0, 0))
+                Save(site, file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла", false);
         }
 
         var dt = DateTime.Now;
         if (unused_files.Count != 0)
-            Save(site, "К:Файлы:Неиспользуемые несвободные от " + dt.Day + " " + monthname[dt.Month] + " " + dt.Year, "__NOGALLERY__\n[[К:Файлы:Неиспользуемые несвободные|" + dt.ToString("MM-dd") + "]]", "");
+            Save(site, "К:Файлы:Неиспользуемые несвободные от " + dt.Day + " " + monthname[dt.Month] + " " + dt.Year, "__NOGALLERY__\n[[К:Файлы:Неиспользуемые несвободные|" + dt.ToString("MM-dd") + "]]", "", false);
     }
 }
