@@ -59,8 +59,8 @@ class Program
     {
         var deletedfiles = new Dictionary<string, logrecord>();
         var deletingpairs = new HashSet<pair>();
-        string apiout, cont = "", query = "/w/api.php?action=query&format=xml&list=logevents&leprop=title%7Cuser%7Ccomment&leaction=delete%2Fdelete&lestart=" + DateTime.Now.AddDays(1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&leend=" + DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd") +
-            "T00%3A00%3A00.000Z&lenamespace=6&lelimit=max";
+        string apiout, cont = "", query = "https://commons.wikimedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=title%7Cuser%7Ccomment&leaction=delete%2Fdelete&lestart=" + DateTime.Now.AddDays(1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&leend=" + 
+            DateTime.Now.AddDays(-1).ToString("yyyy-MM-dd") + "T00%3A00%3A00.000Z&lenamespace=6&lelimit=max";
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var ru = Site("ru.wikipedia", creds[0], creds[1]);
         var commons = Site("commons.wikimedia", creds[0], creds[1]);
@@ -101,8 +101,7 @@ class Program
 
         foreach (var q in requeststrings)
         {
-            apiout = commons.GetStringAsync("/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q)).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout)))
+            using (var r = new XmlTextReader(new StringReader(commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(q)).Result)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 while (r.Read())
@@ -110,8 +109,7 @@ class Program
                         deletedfiles[r.GetAttribute("title")].correct = false;
             }
 
-            apiout = ru.GetStringAsync("/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=5000&titles=" + Uri.EscapeDataString(q)).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout)))
+            using (var r = new XmlTextReader(new StringReader(ru.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(q)).Result)))
             {
                 bool isexist = true;
                 string filename = "";
