@@ -213,7 +213,8 @@ class Program
             string page_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(dp.page) + "?action=raw").Result;
             string initial_text = page_text;
             string filename = dp.filename;
-            filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(filename.Replace(" ", "_")) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + "|" + Regex.Escape(Uri.EscapeDataString(filename.Replace(" ", "_"))) + ")";
+            filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + ")";
+            filename = filename.Replace(@"\ ", "[ _]+");
             var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
             var r2 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
             var r3 = new Regex(@"<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
