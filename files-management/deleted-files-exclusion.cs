@@ -35,10 +35,10 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string wiki, string title, string text)
+    static void Save(HttpClient site, string title, string text, string comment)
     {
         var doc = new XmlDocument();
-        var result = site.GetAsync("https://" + wiki + ".org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
@@ -47,9 +47,10 @@ class Program
         request.Add(new StringContent("edit"), "action");
         request.Add(new StringContent(title), "title");
         request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
-        result = site.PostAsync("https://" + wiki + ".org/w/api.php", request).Result;
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
         if (result.ToString().Contains("uccess"))
             Console.WriteLine(DateTime.Now.ToString() + " written " + title);
         else
