@@ -35,7 +35,7 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string wiki, string title, string text)
+    static void Save(HttpClient site, string wiki, string title, string text, string comment)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://" + wiki + ".org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
@@ -47,6 +47,7 @@ class Program
         request.Add(new StringContent("edit"), "action");
         request.Add(new StringContent(title), "title");
         request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
         result = site.PostAsync("https://" + wiki + ".org/w/api.php", request).Result;
@@ -139,7 +140,7 @@ class Program
             string initial_text = page_text;
             string filename = dp.filename.Substring(5);
             filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + ")";
-            filename = filename.Replace(@"\ ", "[ _]");
+            filename = filename.Replace(@"\ ", "[ _]+");
             var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
             var r2 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
             var r3 = new Regex(@"<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -161,11 +162,11 @@ class Program
             if (page_text != initial_text)
                 try
                 {
-                    Save(ru, dp.page, page_text, "[[c:" + dp.filename + "]] удалён [[c:user:" + dp.file.user + "]] по причине " + dp.file.comment.Replace("[[", "[[c:"));
+                    Save(ru, "ru.wikipedia", dp.page, page_text, "[[c:" + dp.filename + "]] удалён [[c:user:" + dp.file.user + "]] по причине " + dp.file.comment.Replace("[[", "[[c:"));
                     if (dp.page.StartsWith("Шаблон:"))
                     {
                         string logpage_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
-                        Save(ru, "u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]", "");
+                        Save(ru, "ru.wikipedia", "u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]", "");
                     }
                 }
                 catch (Exception e)
