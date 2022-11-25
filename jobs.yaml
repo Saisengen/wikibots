@@ -1,0 +1,172 @@
+# daily
+- name: numof-updater
+  command: mono /data/project/mbh/bots/numof_updater.exe
+  image: tf-mono68
+  schedule: "0 */2 * * *"
+  emails: onfailure
+
+- name: trans-ns-moves
+  command: mono /data/project/mbh/bots/trans-ns-moves.exe
+  image: tf-mono68
+  schedule: "0 5 * * *"
+  emails: onfailure
+
+- name: outdated-tmplt-remove
+  command: mono /data/project/mbh/bots/currevents_remove.exe
+  image: tf-mono68
+  schedule: "0 5 * * *"
+  emails: onfailure
+
+- name: retired-users
+  command: mono /data/project/mbh/bots/retired_counter.exe
+  image: tf-mono68
+  schedule: "43 0 * * *"
+  emails: onfailure
+
+- name: zsf-archiving
+  command: mono /data/project/mbh/bots/zsf-archiving.exe
+  image: tf-mono68
+  schedule: "58 0 * * *"
+  emails: onfailure
+
+- name: editnotice
+  command: mono /data/project/mbh/bots/editnotices-from-filter.exe
+  image: tf-mono68
+  schedule: "28 0 * * *"
+  emails: onfailure
+
+- name: catmoves
+  command: mono /data/project/mbh/bots/catmoves.exe
+  image: tf-mono68
+  schedule: "57 0 * * *"
+  emails: onfailure
+
+- name: removeqid
+  command: mono /data/project/mbh/bots/removeqid.exe
+  image: tf-mono68
+  schedule: "29 0 * * *"
+  emails: onfailure
+
+- name: sparql-sync
+  command: /data/project/mbh/bots/sparql-sync
+  image: tf-mono68
+  schedule: "34 0 * * *"
+  emails: onfailure
+
+
+# files management
+- name: orphan-files
+  command: mono /data/project/mbh/bots/orphan-files.exe
+  image: tf-mono68
+  schedule: "55 23 * * *"
+  emails: onfailure
+
+- name: nolicensed-files
+  command: mono /data/project/mbh/bots/nolicensed_files.exe
+  image: tf-mono68
+  schedule: "55 23 * * *"
+  emails: onfailure
+
+- name: exclude-deleted-files
+  command: mono /data/project/mbh/bots/exclude-deleted-files.exe
+  image: tf-mono68
+  schedule: "18 * * * *"
+  emails: onfailure
+
+- name: nonfree-files-in-nonmain-ns
+  command: mono /data/project/mbh/bots/nffiles_in_nmns.exe
+  image: tf-mono68
+  schedule: "48 0 * * *"
+  emails: onfailure
+
+- name: commons-delinker
+  command: mono /data/project/mbh/bots/mbh-delinker.exe
+  image: tf-mono68
+  schedule: "28 * * * *"
+  emails: onfailure
+
+
+# monthly
+- name: likes
+  command: mono /data/project/mbh/bots/thanksgivers.exe
+  image: tf-mono68
+  schedule: "48 1 1 * *"
+  emails: onfailure
+
+- name: trans-ns-redirs
+  command: mono /data/project/mbh/bots/incorrect_redirects.exe
+  image: tf-mono68
+  schedule: "56 1 1 * *"
+  emails: onfailure
+
+- name: page-watchers
+  command: mono /data/project/mbh/bots/page-watchers.exe
+  image: tf-mono68
+  schedule: "23 1 1 * *"
+  emails: onfailure
+
+- name: wd-wo-ruwiki
+  command: mono /data/project/mbh/bots/best_wd_items_wo_ruwiki.exe
+  image: tf-mono68
+  schedule: "14 2 1 * *"
+  emails: onfailure
+
+- name: pageview-peaks
+  command: mono /data/project/mbh/bots/pageview_peaks.exe
+  image: tf-mono68
+  schedule: "38 1 2 * *"
+  emails: onfailure
+
+#- name: extlinks-counter
+#  command: mono /data/project/mbh/bots/extlinks_count.exe
+#  image: tf-mono68
+#  schedule: "14 3 1 * *"
+#  emails: onfailure
+#  mem: 16Gi
+
+
+# user activity stats
+- name: page-creators
+  command: mono /data/project/mbh/bots/page_creators.exe
+  image: tf-mono68
+  schedule: "0 8 28 * *"
+  emails: onfailure
+
+- name: month-creators
+  command: mono /data/project/mbh/bots/best-artcl-creators.exe
+  image: tf-mono68
+  schedule: "23 0 1 * *"
+  emails: onfailure
+
+- name: summary-stats
+  command: mono /data/project/mbh/bots/summary_stats.exe
+  image: tf-mono68
+  schedule: "0 8 1 * *"
+  emails: onfailure
+
+- name: adminstats
+  command: mono /data/project/mbh/bots/adminstats.exe
+  image: tf-mono68
+  schedule: "33 0 1 * *"
+  emails: onfailure
+
+- name: botstats
+  command: mono /data/project/mbh/bots/botstats.exe
+  image: tf-mono68
+  schedule: "12 1 1 * *"
+  emails: onfailure
+
+- name: pats-awarding
+  command: mono /data/project/mbh/bots/patstats.exe
+  image: tf-mono68
+  schedule: "38 1 1 * *"
+  emails: onfailure
+
+
+# yearly
+- name: pageviews-yearly
+  command: mono /data/project/mbh/bots/pageview_peaks_yearly.exe
+  image: tf-mono68
+  schedule: "15 3 2 1 *"
+  emails: onfailure
+
