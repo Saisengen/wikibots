@@ -4,10 +4,22 @@ using System.Xml;
 using System.IO;
 using System.Net.Http;
 using System.Net;
-using static System.Net.WebRequestMethods;
 
 class Program
 {
+    static bool sameuser(string s1, string s2)
+    {
+        if (s1.Contains(":"))
+            s1 = s1.Substring(s1.IndexOf(':'));
+        if (s2.Contains(":"))
+            s2 = s2.Substring(s2.IndexOf(':'));
+        if (s1.Contains("/"))
+            s1 = s1.Substring(0, s1.IndexOf('/'));
+        if (s2.Contains("/"))
+            s2 = s2.Substring(0, s2.IndexOf('/'));
+        if (s1 == s2) return true;
+        return false;
+    }
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -46,10 +58,10 @@ class Program
     }
     class redir
     {
-        public string src, dest, srcns, destns;
+        public string src_title, dest_title, src_ns, dest_ns;
         public override string ToString()
         {
-            return srcns + ' ' + src + ' ' + destns + ' ' + dest;
+            return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title;
         }
     }
 
@@ -68,78 +80,68 @@ class Program
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ns")
                 {
                     string id = r.GetAttribute("id");
-                    if (id != "0")
+                    //if (id != "0")
                         r.Read();
                     nss.Add(id, r.Value);
                 }
+            nss.Remove("-2");
+            nss.Remove("-1");
         }
 
-        foreach (var n in nss)
+        foreach (var current_target_ns in nss)
         {
-            bool end = false; string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allredirects&format=xml&arprop=ids%7Ctitle&arnamespace=" + n.Key + "&arlimit=max";
-            while (end == false)
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allredirects&format=xml&arprop=ids%7Ctitle&arnamespace=" + current_target_ns.Key + "&arlimit=500";//NOT 5000
+            while (cont != null)
             {
+                var temp = new Dictionary<string, redir>();
+                string idset = "";
                 apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + Uri.EscapeDataString(cont)).Result);
                 using (var rdr = new XmlTextReader(new StringReader(apiout)))
                 {
                     rdr.WhitespaceHandling = WhitespaceHandling.None;
                     rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("arcontinue");
-                    if (cont == null) end = true;
                     while (rdr.Read())
-                        if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "r")
-                            redirs.Add(rdr.GetAttribute("fromid"), new redir() { dest = rdr.GetAttribute("title"), destns = rdr.GetAttribute("ns") });
+                        if (rdr.Name == "r")
+                        {
+                            idset += '|' + rdr.GetAttribute("fromid");
+                            temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = rdr.GetAttribute("ns") });
+                        }
+                }
+                if (idset.Length != 0)
+                    idset = idset.Substring(1);
+
+                using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=info&format=xml&pageids=" + idset).Result)))
+                {
+                    rdr.WhitespaceHandling = WhitespaceHandling.None;
+                    while (rdr.Read())
+                        if (rdr.Name == "page")
+                        {
+                            var id = rdr.GetAttribute("pageid");
+                            if (temp[id].dest_ns != rdr.GetAttribute("ns") || temp[id].dest_ns == "6" || temp[id].dest_ns == "14")
+                                if (!(sameuser(rdr.GetAttribute("title"), temp[id].dest_title) && ((temp[id].dest_ns == "3" && rdr.GetAttribute("ns") == "2") || (temp[id].dest_ns == "2" && rdr.GetAttribute("ns") == "3"))))//если не редиректы между ЛС и СО одного участника
+                                    redirs.Add(id, new redir() { src_ns = rdr.GetAttribute("ns"), src_title = rdr.GetAttribute("title"), dest_ns = temp[id].dest_ns, dest_title = temp[id].dest_title });
+                        }
                 }
             }
         }
 
-        string idset = "";
-        int c = 0;
-        var requeststrings = new HashSet<string>();
-        foreach (var red in redirs)
-        {
-            idset +=  '|' + red.Key;
-            if (++c % 500 == 0)
-            {
-                requeststrings.Add(idset.Substring(1));
-                idset = "";
-            }
-        }
-        requeststrings.Add(idset.Substring(1));
-
-        foreach(var q in requeststrings)
-        {
-            string info = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=info&format=xml&pageids=" + q).Result;
-            using (var rdr = new XmlTextReader(new StringReader(info)))
-            {
-                rdr.WhitespaceHandling = WhitespaceHandling.None;
-                while (rdr.Read())
-                    if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "page")
-                    {
-                        var id = rdr.GetAttribute("pageid");
-                        if (id == "0") continue;
-                        if (!(redirs[id].destns == rdr.GetAttribute("ns")) || redirs[id].destns == "6" || redirs[id].destns == "14")
-                            if (!(redirs[id].destns == "3" && rdr.GetAttribute("ns") == "2" &&
-                                redirs[id].dest.Substring(redirs[id].dest.IndexOf(":")) == rdr.GetAttribute("title").Substring(rdr.GetAttribute("title").IndexOf(":"))))
-                            {
-                                redirs[id].srcns = rdr.GetAttribute("ns");
-                                redirs[id].src = rdr.GetAttribute("title");
-                            }
-                    }
-            }
-        }
         var result = "<center>\n";
         bool flag = false;
         foreach (var n in nss)
         {
             foreach (var r in redirs)
-                if (r.Value.srcns == n.Key)
+                if (r.Value.src_ns == n.Key)
+                {
                     flag = true;
+                    break;
+                }
+                    
             if (flag)
             {
-                result += "\n==" + (n.Value == "" ? "Статьи" : n.Value) + "==\n{| class=\"standard\"\n|-\n! Откуда !! Куда";
+                result += "\n==" + (n.Value == "" ? "Статьи" : n.Value) + "==\n{| class=\"standard\"\n|-\n!Откуда!!Куда";
                 foreach (var r in redirs)
-                    if (r.Value.srcns == n.Key && r.Value.src != null)
-                        result += "\n|-\n|[[:" + r.Value.src + "]]||[[:" + r.Value.dest + "]]";
+                    if (r.Value.src_ns == n.Key && r.Value.src_title != null)
+                        result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
                 result += "\n|}";
             }
             flag = false;
