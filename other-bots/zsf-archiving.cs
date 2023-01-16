@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Net;
 using System.Xml;
-using static System.Net.WebRequestMethods;
 
 class Program
 {
@@ -100,8 +99,16 @@ class Program
                     continue;
             }
             zsftext = zsftext.Replace(threadtext, "");
-            string archivetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + archivepage + "?action=raw").Result;
-            Save(site, archivepage, archivetext + threadtext, "");
+            try
+            {
+                string archivetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + archivepage + "?action=raw").Result;
+                Save(site, archivepage, archivetext + threadtext, "");
+            }
+            catch
+            {
+                Save(site, archivepage, threadtext, "");
+            }
+            
         }
         if (zsftext != initialtext)
             Save(site, "Википедия:Заявки на снятие флагов", zsftext, "архивация");
