@@ -172,7 +172,7 @@ class Program
                                     stats_per_month[user]["sum"]++;
                                     stats_per_month[user][t]++;
                                 }
-                                if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month >= dtn.Month))
+                                if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month > lastmonthdate.Month))
                                 {
                                     if (!stats_per_year.ContainsKey(user))
                                         stats_per_year.Add(user, new Dictionary<string, int>() { { "К удалению", 0 }, { "К улучшению", 0 }, { "К разделению", 0 }, { "К объединению", 0 }, { "К переименованию", 0 }, { "К восстановлению", 0 },
