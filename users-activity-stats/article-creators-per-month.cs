@@ -5,7 +5,6 @@ using System.Xml;
 using System.IO;
 using System.Net.Http;
 using System.Net;
-using static System.Net.WebRequestMethods;
 
 class Program
 {
@@ -101,10 +100,13 @@ class Program
                     if (r.Name == "item" && !redirs.Contains(r.GetAttribute("pageid")))
                     {
                         string user = r.GetAttribute("user");
-                        if (creators.ContainsKey(user))
-                            creators[user]++;
-                        else
-                            creators.Add(user, 1);
+                        if (user != null)
+                        {
+                            if (creators.ContainsKey(user))
+                                creators[user]++;
+                            else
+                                creators.Add(user, 1);
+                        }
                     }
             }
         }
