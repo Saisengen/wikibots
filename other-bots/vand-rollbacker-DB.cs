@@ -55,7 +55,7 @@ class Program
             request.Add(new StringContent(customparam), "text");
         else if (type == edit_type.rollback)
             request.Add(new StringContent(customparam), "user");
-        return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.ToString();
+        return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
     static int Main()
     {
@@ -67,6 +67,7 @@ class Program
         string lasteditid = "", newlasteditid = "", lowlimit = "";
         double mediumlimit = 1;
         int currminute = -1;
+        var badusers = new HashSet<string>();
         var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
         connect.Open();
         MySqlCommand command;
@@ -108,14 +109,18 @@ class Program
                     if (editid == lasteditid)
                         break;
 
-                    string zkab = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
-                    var reportedusers = reportedusersrx.Matches(zkab);
-                    bool reportedyet = false;
-                    foreach (Match r in reportedusers)
-                        if (user == r.Groups[1].Value)
-                            reportedyet = true;
-                    if (!reportedyet)
-                        Save(site, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос", edit_type.zkab_report);
+                    if (badusers.Contains(user))
+                    {
+                        string zkab = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
+                        var reportedusers = reportedusersrx.Matches(zkab);
+                        bool reportedyet = false;
+                        foreach (Match r in reportedusers)
+                            if (user == r.Groups[1].Value)
+                                reportedyet = true;
+                        if (!reportedyet)
+                            Save(site, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос", edit_type.zkab_report);
+                    }
+                    else badusers.Add(user);
 
                     if (damaging < mediumlimit)
                     {
@@ -129,8 +134,8 @@ class Program
                     {
                         string answer = Save(site, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" + damaging + "/" + goodfaith + ")", edit_type.rollback);
                         if (answer.Contains("<rollback title="))
-                            Save(site, "edit", "ut:" + user, null, (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена&text={{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" +
-                                goodfaith + "|" + (user_is_anon ? "1" : "") + "}}", edit_type.talkpage_warning);
+                        Save(site, "edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" + goodfaith + "|" + (user_is_anon ? "1" : "") + "}}", (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + 
+                            "автоматически отменена", edit_type.talkpage_warning);
                         else
                         {
                             Console.WriteLine(title);
