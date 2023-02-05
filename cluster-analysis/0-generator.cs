@@ -21,17 +21,16 @@ class Program // с лабса работает медленнее, пускай
     static WebClient cl = new WebClient();
     //static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Borealis55", "Daphne mesereum"}, { "ИкИлевап", "Pikryukov" },{ "Emin Bashirov", "Abu Zarr" }, { "Kor!An", "Andrey Korzun" }, { "Алексей Глушков", "Gajmar" },{ "Makakaaaa", "Lpi4635" },
     //{ "Microcell", "TheStrayCat" },{ "Temirov1960", "Игорь Темиров" }, { "Shanghainese.ua--", "Shanghainese.ua" },{ "Morrfeux", "Meiræ" }, { "Nоvа", "Andrey" }, { "Drakosha999", "Quaerite" }, { "Alexei Pechko", "TheCureMan" }, { "Cchrx23", "Александр Чебоксарский" } };
-    static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{ { "Wanderer", "Wanderer777" }, { "D.bratchuk", "Good Will Hunting" }, { "Qh13", "VladXe" }, { "Ыфь77", "VladXe" }, { "Грей2010", "Ouaf-ouaf2021" }, { "Ouaf-ouaf2010", "Ouaf-ouaf2021" },
-        { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Bcba3cf28a06", "Pikryukov" }};
+    static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{ { "Wanderer", "Wanderer777" }, { "D.bratchuk", "Good Will Hunting" }, { "Qh13", "VladXe" }, { "Ыфь77", "VladXe" }, { "Грей2010", "Ouaf-ouaf2021" }, { "Ouaf-ouaf2010", "Ouaf-ouaf2021" }, { "Bcba3cf28a06", "Pikryukov" },
+        { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Vanished user 234238", "Jaroslavleff"}};
     static Dictionary<string, string> processed_users = new Dictionary<string, string>();
     static Dictionary<string, HashSet<string>> yes = new Dictionary<string, HashSet<string>>();
     static Dictionary<string, HashSet<string>> no = new Dictionary<string, HashSet<string>>();
     static HashSet<string> elections = new HashSet<string>();
     static Dictionary<string, Pair> renamed_users = new Dictionary<string, Pair>();
-    static Regex voterrgx = new Regex(@"^#[^\*:].*\[(у:|участник:|участница:|u:|user:|оу:|обсуждение участника:|обсуждение участницы:|ut:|user talk:|special:contribs/|special:contributions/|
-служебная:вклад/)\s*([^#|\]]*)\s*[#|\]]", RegexOptions.IgnoreCase);
+    static Regex voterrgx = new Regex(@"^#[^\*:].*\[(у:|участник:|участница:|u:|user:|оу:|обсуждение участника:|обсуждение участницы:|ut:|user talk:|special:contribs/|special:contributions/|служебная:вклад/)\s*([^#|\]]*)\s*[#|\]]", RegexOptions.IgnoreCase);
+    static Regex old_in_nick = new Regex(@"\bold\b");
     static int earlieryear = 2006, lateryear = DateTime.Now.Year;//ЗСА имеют правильный формат с 2006, ВАРБ - с осени 2007
-    static DateTime SULfinalisation = new DateTime(2015, 04, 20);
     static void Main()
     {
         gather_renamed_users();
@@ -95,13 +94,12 @@ class Program // с лабса работает медленнее, пускай
                 {
                     string ts = r.GetAttribute("timestamp");
                     string oldname = r.GetAttribute("title");
-                    if (oldname == null || oldname.EndsWith(" old") || oldname.EndsWith("-old") || oldname.EndsWith("-Old") || oldname.EndsWith(" (old)") || oldname.EndsWith(" (usurped)") || oldname.EndsWith("~usurped") || oldname.EndsWith(" (usurp)"))
+                    if (oldname == null)
                         continue;
                     oldname = oldname.Substring(oldname.IndexOf(':') + 1);
-                    //if (oldname.EndsWith("~ruwiki"))
-                    //    oldname = oldname.Replace("~ruwiki", "");
                     r.Read(); r.Read(); r.Read();
-                    if (!r.Value.StartsWith("--"))
+                    string newname = r.Value;
+                    if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || oldname.Contains("surp"))) //usurped
                         try { renamed_users.Add(ts, new Pair() { First = oldname, Second = r.Value }); } catch { } //есть дублирующаяся запись в логах 2010-12-07T11:33:36Z
                 }
 
@@ -121,9 +119,9 @@ class Program // с лабса работает медленнее, пускай
                         if (Convert.ToInt32(r.GetAttribute("edits")) >= 450)
                         {
                             string oldname = r.GetAttribute("olduser");
-                            //if (oldname.EndsWith("~ruwiki") && new DateTime(Convert.ToInt16(ts.Substring(0, 4)), Convert.ToInt16(ts.Substring(5, 2)), Convert.ToInt16(ts.Substring(8, 2))) < SULfinalisation)
-                            //    oldname = oldname.Replace("~ruwiki", "");
-                            renamed_users.Add(ts, new Pair() { First = oldname, Second = r.GetAttribute("newuser") });
+                            string newname = r.GetAttribute("newuser");
+                            if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || oldname.Contains("surp"))) //usurped
+                                renamed_users.Add(ts, new Pair() { First = oldname, Second = newname });
                         }
                     }
             }
@@ -250,7 +248,7 @@ class Program // с лабса работает медленнее, пускай
     static string Getpage(string pagename)
     {
         Console.WriteLine(pagename);
-        //Thread.Sleep(800);
+        Thread.Sleep(800);
         return Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/wiki/" + pagename.Replace("&#61;", "=") + "?action=raw"));
     }
     static string Getapi(string api, string domain)
