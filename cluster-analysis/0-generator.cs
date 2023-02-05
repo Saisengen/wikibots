@@ -99,7 +99,7 @@ class Program // с лабса работает медленнее, пускай
                     oldname = oldname.Substring(oldname.IndexOf(':') + 1);
                     r.Read(); r.Read(); r.Read();
                     string newname = r.Value;
-                    if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || oldname.Contains("surp"))) //usurped
+                    if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || newname.Contains("surp"))) //usurped
                         try { renamed_users.Add(ts, new Pair() { First = oldname, Second = r.Value }); } catch { } //есть дублирующаяся запись в логах 2010-12-07T11:33:36Z
                 }
 
@@ -120,7 +120,7 @@ class Program // с лабса работает медленнее, пускай
                         {
                             string oldname = r.GetAttribute("olduser");
                             string newname = r.GetAttribute("newuser");
-                            if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || oldname.Contains("surp"))) //usurped
+                            if (!(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || newname.Contains("surp"))) //usurped
                                 renamed_users.Add(ts, new Pair() { First = oldname, Second = newname });
                         }
                     }
@@ -144,7 +144,7 @@ class Program // с лабса работает медленнее, пускай
                         string oldname = r.GetAttribute("olduser");
                         string newname = r.GetAttribute("newuser");
                         var pair = new Pair() { First = oldname, Second = newname };
-                        if (!renamed_users.ContainsKey(ts) && oldname != null && newname != null && !renamed_users.ContainsValue(pair))
+                        if (!renamed_users.ContainsKey(ts) && oldname != null && newname != null && !renamed_users.ContainsValue(pair) && !(newname.StartsWith("--") || old_in_nick.IsMatch(newname) || newname.Contains("surp")))
                             renamed_users.Add(ts, pair);
                     }
             }
