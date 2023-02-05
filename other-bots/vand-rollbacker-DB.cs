@@ -1,25 +1,72 @@
-using DotNetWikiBot;
 using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 
 class Program
 {
+    enum edit_type
+    {
+        zkab_report, talkpage_warning, suspicious_edit, rollback
+    }
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static string Save(HttpClient site, string action, string title, string customparam, string comment, edit_type type)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf|rollback").Result;
+        if (!result.IsSuccessStatusCode)
+            return "";
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent(action), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(comment), "summary");
+        if (type == edit_type.rollback)
+            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@rollbacktoken").Value), "token");
+        else
+            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token");
+        request.Add(new StringContent("xml"), "format");
+        if (type == edit_type.zkab_report)
+            request.Add(new StringContent(customparam), "appendtext");
+        else if (type == edit_type.talkpage_warning)
+        {
+            request.Add(new StringContent(customparam), "text");
+            request.Add(new StringContent("new"), "section");
+        }
+        else if (type == edit_type.suspicious_edit)
+            request.Add(new StringContent(customparam), "text");
+        else if (type == edit_type.rollback)
+            request.Add(new StringContent(customparam), "user");
+        return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.ToString();
+    }
     static int Main()
     {
         var goodanons = new HashSet<string>();
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        Site site = new Site("https://ru.wikipedia.org", creds[4], creds[5]);
+        var site = Site(creds[4], creds[5]);
         var reportedusersrx = new Regex(@"\| вопрос = u/(.*)");
         var rowrx = new Regex(@"\|-");
-        string lasteditid = "", newlasteditid = "", csrftoken = "", rollbacktoken = "", lowlimit = "";
+        string lasteditid = "", newlasteditid = "", lowlimit = "";
         double mediumlimit = 1;
         int currminute = -1;
-        var badusers = new HashSet<string>();
         var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
         connect.Open();
         MySqlCommand command;
@@ -31,18 +78,10 @@ class Program
                 if (currminute != DateTime.UtcNow.Minute / 10)
                 {
                     currminute = DateTime.UtcNow.Minute / 10;
-                    string apiout = site.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf%7Crollback");
-                    using (var r = new XmlTextReader(new StringReader(apiout)))
-                        while (r.Read())
-                            if (r.Name == "tokens")
-                            {
-                                rollbacktoken = Uri.EscapeDataString(r.GetAttribute("rollbacktoken"));
-                                csrftoken = Uri.EscapeDataString(r.GetAttribute("csrftoken"));
-                            }
-                    var limits = site.GetWebPage("https://ru.wikipedia.org/w/index.php?title=user:MBH/limits.css&action=raw").Split('\n');
+                    var limits = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/limits.css&action=raw").Result.Split('\n');
                     lowlimit = limits[0];
                     mediumlimit = Convert.ToDouble(limits[1]);
-                    foreach (var g in site.GetWebPage("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Split('\n'))
+                    foreach (var g in site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Result.Split('\n'))
                         goodanons.Add(g);
                 }
                 bool newle = false;
@@ -69,39 +108,29 @@ class Program
                     if (editid == lasteditid)
                         break;
 
-                    if (badusers.Contains(user))
-                    {
-                        string zkab = site.GetWebPage("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw");
-                        var reportedusers = reportedusersrx.Matches(zkab);
-                        bool reportedyet = false;
-                        foreach (Match r in reportedusers)
-                            if (user == r.Groups[1].Value)
-                                reportedyet = true;
-                        if (!reportedyet)
-                            site.PostDataAndGetResult("/w/api.php?action=edit&format=xml", "title=ВП:Запросы к администраторам/Быстрые&summary=[[special:contribs/" + user +
-                            "]] - новый запрос&appendtext=\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}&token=" + csrftoken);
-                    }
-                    else badusers.Add(user);
+                    string zkab = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
+                    var reportedusers = reportedusersrx.Matches(zkab);
+                    bool reportedyet = false;
+                    foreach (Match r in reportedusers)
+                        if (user == r.Groups[1].Value)
+                            reportedyet = true;
+                    if (!reportedyet)
+                        Save(site, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос", edit_type.zkab_report);
 
                     if (damaging < mediumlimit)
                     {
-                        string text = site.GetWebPage("https://ru.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Проблемные_правки&action=raw").Replace("!Дифф!!Статья!!Автор!!damaging!!goodfaith",
-                            "!Дифф!!Статья!!Автор!!damaging!!goodfaith\n|-\n|[[special:diff/" + editid + "|diff]]||[//ru.wikipedia.org/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " +
-                            title + "]||[[special:contribs/" + user + "|" + user + "]]||" + damaging + "||" + goodfaith);
+                        string text = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Проблемные_правки&action=raw").Result.Replace("!Дифф!!Статья!!Автор!!damaging!!goodfaith", "!Дифф!!Статья!!Автор!!damaging!!goodfaith\n|-\n|[[special:diff/" + editid +
+                            "|diff]]||[//ru.wikipedia.org/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + damaging + "||" + goodfaith);
                         var rows = rowrx.Matches(text);
                         text = text.Substring(0, rowrx.Matches(text)[rowrx.Matches(text).Count - 1].Index);
-                        string answer = site.PostDataAndGetResult("/w/api.php?action=edit&format=xml", "title=u:Рейму_Хакурей/Проблемные_правки&summary=[[special:diff/" + editid + "|diff]], " +
-                            "[[special:history/" + title + "|" + title + "]], [[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith + "&text=" + Uri.EscapeDataString(text) +
-                            "&token=" + csrftoken);
+                        Save(site, "edit", "u:Рейму_Хакурей/Проблемные_правки", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]], [[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith, edit_type.suspicious_edit);
                     }
                     else
                     {
-                        string answer = site.PostDataAndGetResult("/w/api.php?action=rollback&format=xml", "title=" + title + "&user=" + user + "&summary=[[u:Рейму Хакурей|" +
-                            "автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" + damaging + "/" + goodfaith + ")" + "&token=" + rollbacktoken);
+                        string answer = Save(site, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" + damaging + "/" + goodfaith + ")", edit_type.rollback);
                         if (answer.Contains("<rollback title="))
-                            site.PostDataAndGetResult("/w/api.php?action=edit&format=xml", "title=user talk:" + user + "&section=new&summary=" + (user_is_anon ? "Правка с вашего IP-адреса" :
-                                "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена&text={{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" +
-                                goodfaith + "|" + (user_is_anon ? "1" : "") + "}}&token=" + csrftoken);
+                            Save(site, "edit", "ut:" + user, null, (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена&text={{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" +
+                                goodfaith + "|" + (user_is_anon ? "1" : "") + "}}", edit_type.talkpage_warning);
                         else
                         {
                             Console.WriteLine(title);
