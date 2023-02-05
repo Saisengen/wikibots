@@ -41,11 +41,11 @@
   schedule: "57 0 * * *"
   emails: onfailure
 
-- name: removeqid
-  command: mono /data/project/mbh/bots/removeqid.exe
-  image: tf-mono68
-  schedule: "29 0 * * *"
-  emails: onfailure
+#- name: removeqid
+#  command: mono /data/project/mbh/bots/removeqid.exe
+#  image: tf-mono68
+#  schedule: "29 0 * * *"
+#  emails: onfailure
 
 - name: sparql-sync
   command: /data/project/mbh/bots/sparql-sync
@@ -96,7 +96,7 @@
 - name: trans-ns-redirs
   command: mono /data/project/mbh/bots/incorrect_redirects.exe
   image: tf-mono68
-  schedule: "56 1 1 * *"
+  schedule: "14 3 1 * *"
   emails: onfailure
 
 - name: page-watchers
@@ -124,7 +124,6 @@
 #  emails: onfailure
 #  mem: 16Gi
 
-
 # user activity stats
 - name: page-creators
   command: mono /data/project/mbh/bots/page_creators.exe
@@ -147,7 +146,7 @@
 - name: adminstats
   command: mono /data/project/mbh/bots/adminstats.exe
   image: tf-mono68
-  schedule: "33 0 1 * *"
+  schedule: "33 2 1 * *"
   emails: onfailure
 
 - name: botstats
@@ -162,11 +161,22 @@
   schedule: "38 1 1 * *"
   emails: onfailure
 
-
 # yearly
-- name: pageviews-yearly
-  command: mono /data/project/mbh/bots/pageview_peaks_yearly.exe
+- name: pageviews-yearly-ru
+  command: mono /data/project/mbh/bots/pageview_yearly_ru.exe
   image: tf-mono68
-  schedule: "15 3 2 1 *"
+  schedule: "15 0 2 1 *"
   emails: onfailure
 
+- name: pageviews-yearly-uk
+  command: mono /data/project/mbh/bots/pageview_yearly_uk.exe
+  image: tf-mono68
+  schedule: "15 0 2 1 *"
+  emails: onfailure
+
+# permanent
+- name: rollbacker
+  command: mono /data/project/mbh/bots/vand_rollbacker.exe
+  image: tf-mono68
+  emails: none
+  continuous: true
