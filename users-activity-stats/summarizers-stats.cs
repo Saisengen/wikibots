@@ -6,6 +6,7 @@ using System.Xml;
 using System.Text.RegularExpressions;
 using System.Net.Http;
 using System.Net;
+using System.Collections;
 
 class Program
 {
@@ -64,27 +65,27 @@ class Program
         var dtn = DateTime.Now;
         var lastmonthdate = dtn.AddMonths(-1);
         var last2monthdate = dtn.AddMonths(-2);
-        var archivationtype = new Dictionary<string, string>
+        var first_not_fully_summaried_year = new Dictionary<string, int>
         {
-            { "К удалению", "2018" },
-            { "К улучшению", "2018" },
-            { "К разделению", "2018" },
-            { "К объединению", "2015" },
-            { "К переименованию", "2015" },
-            { "К восстановлению", "2018" },
-            { "Обсуждение категорий", "2017" },
-            { "Снятие защиты", "monthly" },
-            { "Установка защиты", "monthly" },
-            { "Изменение спам-листа", "monthly" },
-            { "Запросы к администраторам", "monthly" },
-            { "Инкубатор/Мини-рецензирование", "monthly" },
-            { "Заявки на статус патрулирующего", "monthly" },
-            { "Заявки на статус автопатрулируемого", "monthly" },
-            { "Заявки на статус подводящего итоги", "monthly" },
-            { "Оспаривание итогов", "yearly" },
-            { "Заявки на снятие флагов", "yearly" },
-            { "К оценке источников", "quarterly" },
-            { "Оспаривание административных действий", "quarterly" },
+            { "К удалению", 2018 },
+            { "К улучшению", 2018 },
+            { "К разделению", 2018 },
+            { "К объединению", 2015 },
+            { "К переименованию", 2015 },
+            { "К восстановлению", 2018 },
+            { "Обсуждение категорий", 2017 },
+            { "Снятие защиты", 0 },
+            { "Установка защиты", 0 },
+            { "Оспаривание итогов", 0 },
+            { "К оценке источников", 0 },
+            { "Изменение спам-листа", 0 },
+            { "Заявки на снятие флагов", 0 },
+            { "Запросы к администраторам", 0 },
+            { "Инкубатор/Мини-рецензирование", 0 },
+            { "Заявки на статус патрулирующего", 0 },
+            { "Заявки на статус подводящего итоги", 0 },
+            { "Заявки на статус автопатрулируемого", 0 },
+            { "Оспаривание административных действий", 0 },
         };
         var monthnames = new string[13];
         monthnames[1] = "январе"; monthnames[2] = "феврале"; monthnames[3] = "марте"; monthnames[4] = "апреле"; monthnames[5] = "мае"; monthnames[6] = "июне"; monthnames[7] = "июле"; monthnames[8] = "августе"; monthnames[9] = "сентябре"; monthnames[10] = "октябре"; monthnames[11] = "ноябре"; monthnames[12] = "декабре";
@@ -94,97 +95,64 @@ class Program
         var stats_per_year = new Dictionary<string, Dictionary<string, int>>();
         var stats_per_month = new Dictionary<string, Dictionary<string, int>>();
         var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var yearrgx = new Regex(@"\d{4}");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
-        foreach (var t in archivationtype.Keys)
+        foreach (var pagetype in first_not_fully_summaried_year.Keys)
         {
-            string apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "&apnamespace=" + (t == "Инкубатор/Мини-рецензирование" ? 104 : 4) + "&aplimit=max").Result;
-            using (var xr = new XmlTextReader(new StringReader(apiout)))
-                while (xr.Read())
-                    if (xr.Name == "p")
-                    {
-                        string page = xr.GetAttribute("title");
-                        bool correctpage = false;
-                        int discussion_year;
-                        if (archivationtype[t] == "monthly")
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + pagetype + "&apnamespace=" + (pagetype == "Инкубатор/Мини-рецензирование" ? 104 : 4) + "&aplimit=max", apiout;
+            while (cont != null)
+            {
+                apiout = cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result;
+                using (var r = new XmlTextReader(new StringReader(apiout)))
+                {
+                    r.WhitespaceHandling = WhitespaceHandling.None;
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
+                    while (r.Read())
+                        if (r.Name == "p")
                         {
-                            if (page.IndexOf('/') == -1)
-                                correctpage = true;
-                            else
-                            {
-                                try { discussion_year = Convert.ToInt16(page.Substring(page.Length - 7, 4)); }
-                                catch { continue; }
-                                if (discussion_year >= last2monthdate.Year)
+                            string page = r.GetAttribute("title");
+                            bool correctpage = false;
+                            int startyear = first_not_fully_summaried_year[pagetype] == 0 ? last2monthdate.Year : first_not_fully_summaried_year[pagetype];
+                            if (yearrgx.IsMatch(page))
+                                if (Convert.ToInt16(yearrgx.Match(page).Value) >= startyear)
                                     correctpage = true;
-                            }
-                        }
-                        else if (archivationtype[t] == "quarterly")
-                        {
-                            if (page.IndexOf('/') == -1)
-                                correctpage = true;
-                            else
-                            {
-                                try { discussion_year = Convert.ToInt16(page.Substring(page.Length - 6, 4)); }
-                                catch { continue; }
-                                if (discussion_year >= last2monthdate.Year)
+                                else if (page.IndexOf('/') == -1)
                                     correctpage = true;
-                            }
-                        }
-                        else if (archivationtype[t] == "yearly")
-                        {
-                            if (page.IndexOf('/') == -1)
-                                correctpage = true;
-                            else
+                            if (correctpage)
                             {
-                                try { discussion_year = Convert.ToInt16(page.Substring(page.Length - 4)); }
-                                catch { continue; }
-                                if (discussion_year >= last2monthdate.Year)
-                                    correctpage = true;
-                            }
-                        }
-                        else
-                        {
-                            if (page.IndexOf('/') == -1)
-                                correctpage = true;
-                            try { discussion_year = Convert.ToInt16(page.Substring(page.Length - 4)); }
-                            catch { continue; }
-                            if (discussion_year >= Convert.ToInt16(archivationtype[t]))
-                                correctpage = true;
-                        }
-                        if (correctpage)
-                        {
-                            string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + page + "?action=raw").Result;
-                            var matches = summary_rgx.Matches(pagetext);
-                            foreach (Match m in matches)
-                            {
-                                int signature_year = Convert.ToInt16(m.Groups[6].Value);
-                                int signature_month = monthnumbers[m.Groups[5].Value];
-                                string user = m.Groups[3].ToString().Replace('_', ' ');
-                                if (user.Contains("/"))
-                                    continue;
-                                if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
+                                string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + page + "?action=raw").Result;
+                                var matches = summary_rgx.Matches(pagetext);
+                                foreach (Match m in matches)
                                 {
-                                    if (!stats_per_month.ContainsKey(user))
-                                        stats_per_month.Add(user, new Dictionary<string, int>() { { "К удалению", 0 }, { "К улучшению", 0 }, { "К разделению", 0 }, { "К объединению", 0 }, { "К переименованию", 0 }, { "К восстановлению", 0 },
-                                            { "Обсуждение категорий", 0 }, { "Снятие защиты", 0 }, { "Установка защиты", 0 }, { "sum", 0 }, { "Изменение спам-листа", 0 }, { "Запросы к администраторам", 0 }, { "Инкубатор/Мини-рецензирование", 0 },
-                                            { "Заявки на статус патрулирующего", 0 }, { "Заявки на статус автопатрулируемого", 0 }, { "Заявки на статус подводящего итоги", 0 }, { "Оспаривание итогов", 0 }, { "Заявки на снятие флагов", 0 },
-                                        { "К оценке источников", 0 }, { "Оспаривание административных действий", 0 }, });
-                                    stats_per_month[user]["sum"]++;
-                                    stats_per_month[user][t]++;
-                                }
-                                if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month > lastmonthdate.Month))
-                                {
-                                    if (!stats_per_year.ContainsKey(user))
-                                        stats_per_year.Add(user, new Dictionary<string, int>() { { "К удалению", 0 }, { "К улучшению", 0 }, { "К разделению", 0 }, { "К объединению", 0 }, { "К переименованию", 0 }, { "К восстановлению", 0 },
-                                            { "Обсуждение категорий", 0 }, { "Снятие защиты", 0 }, { "Установка защиты", 0 }, { "sum", 0 }, { "Изменение спам-листа", 0 }, { "Запросы к администраторам", 0 }, { "Инкубатор/Мини-рецензирование", 0 },
-                                            { "Заявки на статус патрулирующего", 0 }, { "Заявки на статус автопатрулируемого", 0 }, { "Заявки на статус подводящего итоги", 0 }, { "Оспаривание итогов", 0 }, { "Заявки на снятие флагов", 0 },
-                                        { "К оценке источников", 0 }, { "Оспаривание административных действий", 0 }, });
-                                    stats_per_year[user]["sum"]++;
-                                    stats_per_year[user][t]++;
+                                    int signature_year = Convert.ToInt16(m.Groups[6].Value);
+                                    int signature_month = monthnumbers[m.Groups[5].Value];
+                                    string user = m.Groups[3].ToString().Replace('_', ' ');
+                                    if (user.Contains("/"))
+                                        continue;
+                                    if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
+                                    {
+                                        if (!stats_per_month.ContainsKey(user))
+                                            stats_per_month.Add(user, new Dictionary<string, int>() { { "К удалению", 0 }, { "К улучшению", 0 }, { "К разделению", 0 }, { "К объединению", 0 }, { "К переименованию", 0 }, { "К восстановлению", 0 }, { "Обсуждение категорий", 0 }, { "Снятие защиты", 0 },
+                                            { "Установка защиты", 0 }, { "sum", 0 }, { "Изменение спам-листа", 0 }, { "Запросы к администраторам", 0 }, { "Инкубатор/Мини-рецензирование", 0 }, { "Заявки на статус патрулирующего", 0 }, { "Заявки на статус автопатрулируемого", 0 },
+                                            { "Заявки на статус подводящего итоги", 0 }, { "Оспаривание итогов", 0 }, { "Заявки на снятие флагов", 0 }, { "К оценке источников", 0 }, { "Оспаривание административных действий", 0 }, });
+                                        stats_per_month[user]["sum"]++;
+                                        stats_per_month[user][pagetype]++;
+                                    }
+                                    if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month > lastmonthdate.Month))
+                                    {
+                                        if (!stats_per_year.ContainsKey(user))
+                                            stats_per_year.Add(user, new Dictionary<string, int>() { { "К удалению", 0 }, { "К улучшению", 0 }, { "К разделению", 0 }, { "К объединению", 0 }, { "К переименованию", 0 }, { "К восстановлению", 0 }, { "Обсуждение категорий", 0 }, { "Снятие защиты", 0 },
+                                            { "Установка защиты", 0 }, { "sum", 0 }, { "Изменение спам-листа", 0 }, { "Запросы к администраторам", 0 }, { "Инкубатор/Мини-рецензирование", 0 }, { "Заявки на статус патрулирующего", 0 }, { "Заявки на статус автопатрулируемого", 0 },
+                                            { "Заявки на статус подводящего итоги", 0 }, { "Оспаривание итогов", 0 }, { "Заявки на снятие флагов", 0 }, { "К оценке источников", 0 }, { "Оспаривание административных действий", 0 }, });
+                                        stats_per_year[user]["sum"]++;
+                                        stats_per_year[user][pagetype]++;
+                                    }
                                 }
                             }
                         }
-                    }
+                }
+            }
         }
         string common_resulttext = "{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}{{clear}}<center>{{самые активные участники}}\nСтатистика по числу итогов, подведённых %type%. См. также %otherpage%.\n\nСтатистика собирается поиском по тексту " +
             "страниц обсуждений и потому верна лишь приближённо, нестандартный синтаксис итога или подписи итогоподводящего может привести к тому, что такой итог не будет засчитан. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ." +
