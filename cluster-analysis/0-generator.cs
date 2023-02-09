@@ -4,11 +4,8 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.IO;
 using System.Xml;
-using System.Net;
 using DotNetWikiBot;
 using System.Web.UI;
-using System.Text;
-using System.Threading;
 
 class arbvote
 {
@@ -18,11 +15,11 @@ class arbvote
 }
 class Program // с лабса работает медленнее, пускай локально
 {
-    static WebClient cl = new WebClient();
     //static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Borealis55", "Daphne mesereum"}, { "ИкИлевап", "Pikryukov" },{ "Emin Bashirov", "Abu Zarr" }, { "Kor!An", "Andrey Korzun" }, { "Алексей Глушков", "Gajmar" },{ "Makakaaaa", "Lpi4635" },
     //{ "Microcell", "TheStrayCat" },{ "Temirov1960", "Игорь Темиров" }, { "Shanghainese.ua--", "Shanghainese.ua" },{ "Morrfeux", "Meiræ" }, { "Nоvа", "Andrey" }, { "Drakosha999", "Quaerite" }, { "Alexei Pechko", "TheCureMan" }, { "Cchrx23", "Александр Чебоксарский" } };
     static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{ { "Wanderer", "Wanderer777" }, { "D.bratchuk", "Good Will Hunting" }, { "Qh13", "VladXe" }, { "Ыфь77", "VladXe" }, { "Грей2010", "Ouaf-ouaf2021" }, { "Ouaf-ouaf2010", "Ouaf-ouaf2021" }, { "Bcba3cf28a06", "Pikryukov" },
-        { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Vanished user 234238", "Jaroslavleff"}};
+        { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Vanished user 234238", "Jaroslavleff"}, { "Vetrov69", "Грустный кофеин"},
+        { "Алёна Синичкина", "Флаттершай"} };
     static Dictionary<string, string> processed_users = new Dictionary<string, string>();
     static Dictionary<string, HashSet<string>> yes = new Dictionary<string, HashSet<string>>();
     static Dictionary<string, HashSet<string>> no = new Dictionary<string, HashSet<string>>();
@@ -31,11 +28,14 @@ class Program // с лабса работает медленнее, пускай
     static Regex voterrgx = new Regex(@"^#[^\*:].*\[(у:|участник:|участница:|u:|user:|оу:|обсуждение участника:|обсуждение участницы:|ut:|user talk:|special:contribs/|special:contributions/|служебная:вклад/)\s*([^#|\]]*)\s*[#|\]]", RegexOptions.IgnoreCase);
     static Regex old_in_nick = new Regex(@"\bold\b");
     static int earlieryear = 2006, lateryear = DateTime.Now.Year;//ЗСА имеют правильный формат с 2006, ВАРБ - с осени 2007
+    static string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+    static Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+
     static void Main()
     {
         gather_renamed_users();
-        gather_rfabs();
         gather_arbvotings();
+        gather_rfabs();
 
         var result = new StreamWriter("elections.txt");
         var renames = new StreamWriter("renames.txt");
@@ -86,8 +86,6 @@ class Program // с лабса работает медленнее, пускай
     static void gather_renamed_users()
     {
         string cont, query, apiout;
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&list=logevents&leprop=details%7Ctimestamp%7Ctitle&leaction=renameuser%2Frenameuser&lestart=2007-08-28T00%3A00%3A00.000Z&leend=2012-12-23T00%3A00%3A00.000Z&ledir=newer&lelimit=max"))))
             while (r.Read())
                 if (r.Name == "item" && r.NodeType == XmlNodeType.Element)
@@ -149,6 +147,7 @@ class Program // с лабса работает медленнее, пускай
                     }
             }
         }
+        site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
     }
     static void gather_rfabs()
     {
@@ -206,7 +205,7 @@ class Program // с лабса работает медленнее, пускай
         string cont = "", query = "/w/api.php?action=query&format=xml&list=allpages&apprefix=Выборы арбитров/&apnamespace=4&aplimit=max", apiout;
         while (cont != null)
         {
-            apiout = (cont == "" ? Getapi(query, "ru.wikipedia") : Getapi(query + "&apcontinue=" + Uri.EscapeDataString(cont), "ru.wikipedia"));
+            apiout = cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont));
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -248,11 +247,6 @@ class Program // с лабса работает медленнее, пускай
     static string Getpage(string pagename)
     {
         Console.WriteLine(pagename);
-        Thread.Sleep(800);
-        return Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/wiki/" + pagename.Replace("&#61;", "=") + "?action=raw"));
-    }
-    static string Getapi(string api, string domain)
-    {
-        return Encoding.UTF8.GetString(cl.DownloadData("https://" + domain + ".org" + api));
+        return site.GetWebPage("https://ru.wikipedia.org/wiki/" + pagename.Replace("&#61;", "=") + "?action=raw");
     }
 }
