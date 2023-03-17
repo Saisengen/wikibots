@@ -47,6 +47,7 @@ class Program
     }
     static void Main()
     {
+        int limit = 2000;
         var pairs = new Dictionary<string, int>();
         var thankedusers = new Dictionary<string, int>();
         var thankingusers = new Dictionary<string, int>();
@@ -90,22 +91,22 @@ class Program
             }
         }
         int c1 = 0, c2 = 0, c3 = 0;
-        string result = "{{Плавающая шапка таблицы}}<center>См. также https://mbh.toolforge.org/likes.cgi\n{|\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!Место!!Участник!!Число выданных лайков";
+        string result = "{{Плавающая шапка таблицы}}<center>См. также https://mbh.toolforge.org/likes.cgi\n{|style=\"word-break: break-all\"\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👤⇨👍|место}}";
         foreach (var p in thankingusers.OrderByDescending(p => p.Value))
-            if (++c1 <= 2000)
-                result += "\n|-\n|" + c1 + "||{{u|" + p.Key + "}}||" + p.Value;
+            if (++c1 <= limit)
+                result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c1 + "}}";
             else
                 break;
-        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!Место!!Направление!!Число лайков";
+        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=400px|Направление!!Число";
         foreach (var p in pairs.OrderByDescending(p => p.Value))
-            if (++c2 <= 2000)
-                result += "\n|-\n|" + c2 + "||" + p.Key + "||" + p.Value;
+            if (++c2 <= limit)
+                result += "\n|-\n|" + p.Key + "||{{comment|" + p.Value + "|" + c2 + "}}";
             else
                 break;
-        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!Место!!Участник!!Число полученных лайков";
+        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👍⇨👤|место}}";
         foreach (var p in thankedusers.OrderByDescending(p => p.Value))
-            if (++c3 <= 2000)
-                result += "\n|-\n|" + c3 + "||{{u|" + p.Key + "}}||" + p.Value;
+            if (++c3 <= limit)
+                result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c3 + "}}";
             else
                 break;
         Save(site, "u:MBH/Лайки", result + "\n|}\n|}", "");
