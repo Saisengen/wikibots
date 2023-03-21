@@ -1,16 +1,47 @@
 using System.Xml;
 using System.IO;
-using DotNetWikiBot;
 using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Text;
 using PCRE;
-using System.Threading;
+using System.Net.Http;
 
 class Program
 {
-    static void Main(string[] args)
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static string Save(HttpClient site, string title, string text, string comment)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return "";
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
+    }
+    static void Main()
     {
         var cl = new WebClient();
         string rawblacklist = Encoding.UTF8.GetString(cl.DownloadData("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw"));
@@ -37,29 +68,18 @@ class Program
             if (current != "")
                 whitergx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
-        //var links = new Dictionary<string, int>();
-        //var regexes = new Dictionary<string, int>();
         var spamlinksonpage = new HashSet<string>();
         var pageids = new HashSet<string>();
         var pagenames = new Dictionary<string, string>();
         var requeststrings = new HashSet<string>();
-        int c = 0, numofarts;
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
-        string token = "";
-        using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf%7Crollback"))))
-            while (r.Read())
-                if (r.Name == "tokens")
-                    token = Uri.EscapeDataString(r.GetAttribute("csrftoken"));
-        using (var rd = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&meta=siteinfo&format=xml&siprop=statistics"))))
-            while (rd.Read())
-                if (rd.Name == "statistics")
-                    numofarts = Convert.ToInt32(rd.GetAttribute("articles"));
+        var site = Site(creds[0], creds[1]);
 
-        string apiout, cont = "", query = "/w/api.php?action=query&list=allpages&format=xml&apfrom=Green_Day&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
+        string dir = DateTime.Now.Month % 2 == 0 ? "ascending" : "descending";
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Томазий, Христиан
         while (cont != null)
         {
-            apiout = (cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont)));
+            apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -75,7 +95,8 @@ class Program
         }
 
         string idset = "", id = "";
-        query = "/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
+        int c = 0;
+        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
         foreach (var p in pageids)
         {
             idset += "|" + p;
@@ -87,14 +108,12 @@ class Program
         }
         requeststrings.Add(idset.Substring(1));
 
-        //var result1 = new StreamWriter("result1.txt");
-        c = 0;
         foreach (var q in requeststrings)
         {
             cont = "";
             while (cont != null)
             {
-                apiout = (cont == "" ? site.GetWebPage(query + q) : site.GetWebPage(query + q + "&eloffset=" + cont));
+                apiout = (cont == "" ? site.GetStringAsync(query + q).Result : site.GetStringAsync(query + q + "&eloffset=" + cont).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -105,7 +124,7 @@ class Program
                         {
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
-                                string starttext = Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw"));//page.text;
+                                string starttext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
                                 if (spamtemplatergx.IsMatch(starttext))
@@ -125,10 +144,12 @@ class Program
                                 if (starttext != text)
                                     try
                                     {
-                                        site.PostDataAndGetResult("/w/api.php?action=edit&format=xml", "pageid=" + id + "&summary=[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|уведомление о проблемных ссылках в статье]]" +
-                                            "&text=" + Uri.EscapeDataString(text + "\n\n" + newtemplate + "\n}}") + "&token=" + token);
+                                        Save(site, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|уведомление о спам-ссылках в статье]]");
                                     }
-                                    catch { }
+                                    catch (Exception e)
+                                    {
+                                        Console.WriteLine(e.ToString());
+                                    }
                                 spamlinksonpage.Clear();
                             }
                             if (r.NodeType == XmlNodeType.Element && r.GetAttribute("missing") == null)
@@ -138,7 +159,7 @@ class Program
                         {
                             r.Read();
                             bool match = false;
-                            var rgx = new PcreRegex("");
+                            PcreRegex rgx;
                             string shortlink = r.Value;
                             shortlink = shortlink.Substring(shortlink.IndexOf("//") + 2);
                             shortlink = shortlink.IndexOf("/") == -1 ? shortlink : shortlink.Substring(0, shortlink.IndexOf("/"));
@@ -159,38 +180,12 @@ class Program
                                     }
                             if (match && r.Value.Contains("goo.gl"))
                                 match = false;
-                            if (match && !spamlinksonpage.Contains(r.Value) && site.PostDataAndGetResult("/w/api.php?action=edit&format=xml", "title=u:MBH/test&text=" + Uri.EscapeDataString(r.Value) + "&token=" + token).Contains("spamblacklist"))
+                            if (match && !spamlinksonpage.Contains(r.Value) && Save(site, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
                                 spamlinksonpage.Add(r.Value);
-                            //{
-                            //    string longlink = r.Value;
-                            //    longlink = longlink.Substring(longlink.IndexOf("//") + 2);
-                            //    longlink = longlink.IndexOf("/") == -1 ? longlink : longlink.Substring(0, longlink.LastIndexOf("/"));
-                            //    if (links.ContainsKey(longlink))
-                            //        links[longlink]++;
-                            //    else
-                            //        links.Add(longlink, 1);
-                            //    string rgxs = rgx.ToString();
-                            //    if (regexes.ContainsKey(rgxs))
-                            //        regexes[rgxs]++;
-                            //    else
-                            //        regexes.Add(rgxs, 1);
-                            //    result1.WriteLine(pagenames[id] + "\t" + r.Value + "\t" + rgxs);
-                            //}
                         }
                     }
                 }
             }
         }
-        //result1.Close();
-
-        //var result2 = new StreamWriter("result2.txt");
-        //foreach (var l in links.OrderByDescending(l => l.Value))
-        //    result2.WriteLine(l.Key + "\t" + l.Value);
-        //result2.Close();
-
-        //var result3 = new StreamWriter("result3.txt");
-        //foreach (var r in regexes.OrderByDescending(l => l.Value))
-        //    result3.WriteLine(r.Key + "\t" + r.Value);
-        //result3.Close();
     }
 }
