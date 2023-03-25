@@ -77,15 +77,12 @@ class Program
         {
             r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "ns")
+                if (r.NodeType == XmlNodeType.Element && r.Name == "ns" && !r.GetAttribute("id").StartsWith("-"))
                 {
                     string id = r.GetAttribute("id");
-                    //if (id != "0")
-                        r.Read();
+                    r.Read();
                     nss.Add(id, r.Value);
                 }
-            nss.Remove("-2");
-            nss.Remove("-1");
         }
 
         foreach (var current_target_ns in nss)
@@ -125,27 +122,10 @@ class Program
             }
         }
 
-        var result = "<center>\n";
-        bool flag = false;
-        foreach (var n in nss)
-        {
-            foreach (var r in redirs)
-                if (r.Value.src_ns == n.Key)
-                {
-                    flag = true;
-                    break;
-                }
-                    
-            if (flag)
-            {
-                result += "\n==" + (n.Value == "" ? "Статьи" : n.Value) + "==\n{| class=\"standard\"\n|-\n!Откуда!!Куда";
-                foreach (var r in redirs)
-                    if (r.Value.src_ns == n.Key && r.Value.src_title != null)
-                        result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
-                result += "\n|}";
-            }
-            flag = false;
-        }
+        var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
+        foreach (var r in redirs)
+            result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
+        result += "\n|}";
         Save(site, "u:MBH/incorrect redirects", result, "");
     }
 }
