@@ -124,7 +124,11 @@ class Program
 
         var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
         foreach (var r in redirs)
-            result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
+        {
+            string sort_src_title = r.Value.src_ns == "0" ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
+            string sort_dest_title = r.Value.dest_ns == "0" ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
+            result += "\n|-\n|data-sort-value=\"" + r.Value.src_ns + "-" + sort_src_title + "\"|[[:" + r.Value.src_title + "]]||data-sort-value=\"" + r.Value.dest_ns + "-" + sort_dest_title + "\"|[[:" + r.Value.dest_title + "]]";
+        }
         result += "\n|}";
         Save(site, "u:MBH/incorrect redirects", result, "");
     }
