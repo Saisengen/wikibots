@@ -53,8 +53,7 @@
   schedule: "34 0 * * *"
   emails: onfailure
 
-
-# files management
+# files management--------------------------------------------------------------------------------------------------------------------
 - name: orphan-files
   command: mono /data/project/mbh/bots/orphan-files.exe
   image: tf-mono68
@@ -85,8 +84,19 @@
   schedule: "28 * * * *"
   emails: onfailure
 
+# monthly----------------------------------------------------------------------------------------------------------------------------
+- name: spam-links-management
+  command: mono /data/project/mbh/bots/spam.exe
+  image: tf-mono68
+  schedule: "12 4 1 * *"
+  emails: onfailure
 
-# monthly
+- name: apat-for-filemovers
+  command: mono /data/project/mbh/bots/apat-for-filemovers.exe
+  image: tf-mono68
+  schedule: "38 2 1 * *"
+  emails: onfailure
+
 - name: likes
   command: mono /data/project/mbh/bots/thanksgivers.exe
   image: tf-mono68
@@ -114,7 +124,7 @@
 - name: pageview-peaks
   command: mono /data/project/mbh/bots/pageview_peaks.exe
   image: tf-mono68
-  schedule: "38 1 2 * *"
+  schedule: "46 17 1 * *"
   emails: onfailure
 
 #- name: extlinks-counter
@@ -124,23 +134,17 @@
 #  emails: onfailure
 #  mem: 16Gi
 
-# user activity stats
+# user activity stats--------------------------------------------------------------------------------------------------------------------
 - name: page-creators
   command: mono /data/project/mbh/bots/page_creators.exe
   image: tf-mono68
-  schedule: "0 8 28 * *"
-  emails: onfailure
-
-- name: month-creators
-  command: mono /data/project/mbh/bots/best-artcl-creators.exe
-  image: tf-mono68
-  schedule: "23 0 1 * *"
+  schedule: "22 17 28 * *"
   emails: onfailure
 
 - name: summary-stats
   command: mono /data/project/mbh/bots/summary_stats.exe
   image: tf-mono68
-  schedule: "0 8 1 * *"
+  schedule: "16 8 1 * *"
   emails: onfailure
 
 - name: adminstats
@@ -161,7 +165,7 @@
   schedule: "38 1 1 * *"
   emails: onfailure
 
-# yearly
+# yearly--------------------------------------------------------------------------------------------------------------------------------
 - name: pageviews-yearly-ru
   command: mono /data/project/mbh/bots/pageview_yearly_ru.exe
   image: tf-mono68
