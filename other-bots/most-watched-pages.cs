@@ -47,10 +47,11 @@ class Program
     }
     static void Main()
     {
+        int limit = 30;
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
         var nss = new Dictionary<int, string>();
-        string cont, query, apiout, result = "<center>\n";
+        string cont, query, apiout, result = "<center>Отсортировано сперва по числу активных следящих, когда их меньше " + limit + " - по числу следящих в целом.\n";
 
         apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=xml&siprop=namespaces").Result;
         using (var r = new XmlTextReader(new StringReader(apiout)))
@@ -73,7 +74,8 @@ class Program
         foreach (var n in nss.Keys)
         {
             var pageids = new HashSet<string>();
-            var pagecounts = new Dictionary<string, Pair>();
+            var pagecountswithactive = new Dictionary<string, Pair>();
+            var pagecountswoactive = new Dictionary<string, int>();
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&aplimit=max&apfilterredir=nonredirects&apnamespace=";
             while (cont != null)
             {
@@ -117,19 +119,23 @@ class Program
                                 title = title.Replace("Обсуждение участника:", "Участник:").Replace("Обсуждение участницы:", "Участница:");
                             }
                             int watchers = Convert.ToInt16(r.GetAttribute("watchers"));
-                            string activewatchers = r.GetAttribute("visitingwatchers");
-                            if (activewatchers == null)
-                                activewatchers = "<30";
                             if (n == 0 && watchers >= 50 || n != 0)
-                                pagecounts.Add(title, new Pair() { First = watchers, Second = activewatchers });
+                            {
+                                if (r.GetAttribute("visitingwatchers") != null)
+                                    pagecountswithactive.Add(title, new Pair() { First = watchers, Second = r.GetAttribute("visitingwatchers") });
+                                else
+                                    pagecountswoactive.Add(title, watchers);
+                            }
                         }
                 }
 
-            if (pagecounts.Count != 0)
+            if (pagecountswoactive.Count != 0)
             {
                 result += "==" + (nss[n] == "" ? "Статьи" : (nss[n] == "Обсуждение участника" ? "Участник" : nss[n])) + "==\n{|class=\"standard sortable\"\n!Страница!!Всего следящих!!Активных\n";
-                foreach (var p in pagecounts.OrderByDescending(p => p.Value.First))
+                foreach (var p in pagecountswithactive.OrderByDescending(p => Convert.ToInt16(p.Value.Second)))
                     result += "|-\n|[[:" + p.Key + "]]||" + p.Value.First + "||" + p.Value.Second + "\n";
+                foreach (var p in pagecountswoactive.OrderByDescending(p => p.Value))
+                    result += "|-\n|[[:" + p.Key + "]]||" + p.Value + "||<" + limit + "\n";
                 result += "|}\n";
             }
         }
