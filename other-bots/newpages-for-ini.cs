@@ -5,11 +5,6 @@ using System.IO;
 using System.Net.Http;
 using System.Net;
 using Newtonsoft.Json;
-using System.Reflection;
-using System.ComponentModel;
-using System.Text.RegularExpressions;
-using static Program;
-using System.Runtime.Remoting.Contexts;
 
 class Program
 {
@@ -107,6 +102,7 @@ class Program
     static void Main()
     {
         string result = "";
+        var unimportant_flags = new HashSet<string>() { "*", "user" };
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
         var now = DateTime.Now;
@@ -124,6 +120,7 @@ class Program
                         else
                         {
                             int? edits, age;
+                            string groups = "";
                             if (data.query.users[0].invalid)
                             {
                                 var data2 = JsonConvert.DeserializeObject<Root2>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&list=usercontribs&formatversion=2&uclimit=max&ucuser=" + Uri.EscapeUriString(user) + "&ucdir=newer&ucprop=timestamp").Result);
@@ -133,16 +130,25 @@ class Program
                             else
                             {
                                 edits = data.query.users[0].editcount;
-                                age = (now - data.query.users[0].registration).Value.Days;
+                                if (data.query.users[0].registration == null)//у очень старых юзеров нет даты регистрации
+                                    age = (now - new DateTime(2005, 1, 1)).Days;
+                                else
+                                    age = (now - data.query.users[0].registration).Value.Days;
                                 bool trusteduser = false;
                                 if (data.query.users[0].groups != null)
                                     foreach (var flag in data.query.users[0].groups)
-                                        if (flag == "autoconfirmed")
+                                    {
+                                        if (flag == "autoconfirmed" && edits > 100 || flag == "editor" || flag == "autoeditor")
                                             trusteduser = true;
+                                        if (!unimportant_flags.Contains(flag))
+                                            groups += ',' + flag;
+                                    }
                                 if (trusteduser)
                                     continue;
+                                if (groups != "")
+                                    groups = groups.Substring(1);
                             }
-                            result += "\n|-\n|[[" + page + "]]||[[special:contribs/" + user + "|" + user + "]]||" + edits + "||" + age;
+                            result += "\n|-\n|[[" + page + "]]||[[special:contribs/" + user + "|" + user + "]]||" + edits + "||" + age + "||" + groups;
                         }
 
                     }
