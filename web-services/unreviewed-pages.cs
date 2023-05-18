@@ -37,7 +37,7 @@ class Program
     {
         if (currentdepth <= requireddepth)
         {
-            string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=ids|title&cmlimit=max&cmnamespace=100|102|0|6|10|14";
+            string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=ids&cmlimit=max&cmnamespace=100|102|0|6|10|14";
             while (cont != null)
             {
                 var apiout = Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&cmcontinue=" + Uri.EscapeDataString(cont)));
@@ -148,7 +148,7 @@ class Program
         requeststrings.Add(idset.Substring(1));
         
         foreach(var rstring in requeststrings)
-            using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=flagged&pageids=" + rstring)))))
+            using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&format=xml&prop=flagged&pageids=" + rstring)))))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 while (r.Read())
