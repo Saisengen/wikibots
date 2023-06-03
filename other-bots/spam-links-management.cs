@@ -9,10 +9,14 @@ using System.Net.Http;
 
 class Program
 {
+    static string[] creds;
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        client.DefaultRequestHeaders.Add("User-Agent", login);
+        if (login.Contains("@"))
+            client.DefaultRequestHeaders.Add("User-Agent", login.Substring(0, login.IndexOf('@')));
+        else
+            client.DefaultRequestHeaders.Add("User-Agent", login);
         var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
         if (!result.IsSuccessStatusCode)
             return null;
@@ -72,14 +76,15 @@ class Program
         var pageids = new HashSet<string>();
         var pagenames = new Dictionary<string, string>();
         var requeststrings = new HashSet<string>();
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = Site(creds[0], creds[1]);
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        var bot = Site(creds[0], creds[1]);
+        var nonbot = Site(creds[6], creds[7]);
 
         string dir = DateTime.Now.Month % 2 == 0 ? "ascending" : "descending";
         string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Томазий, Христиан
         while (cont != null)
         {
-            apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+            apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
@@ -113,7 +118,7 @@ class Program
             cont = "";
             while (cont != null)
             {
-                apiout = (cont == "" ? site.GetStringAsync(query + q).Result : site.GetStringAsync(query + q + "&eloffset=" + cont).Result);
+                apiout = (cont == "" ? bot.GetStringAsync(query + q).Result : bot.GetStringAsync(query + q + "&eloffset=" + cont).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -124,7 +129,7 @@ class Program
                         {
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
-                                string starttext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
+                                string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
                                 if (spamtemplatergx.IsMatch(starttext))
@@ -144,7 +149,7 @@ class Program
                                 if (starttext != text)
                                     try
                                     {
-                                        Save(site, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|уведомление о спам-ссылках в статье]]");
+                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|уведомление о спам-ссылках в статье]]");
                                     }
                                     catch (Exception e)
                                     {
@@ -180,12 +185,13 @@ class Program
                                     }
                             if (match && r.Value.Contains("goo.gl"))
                                 match = false;
-                            if (match && !spamlinksonpage.Contains(r.Value) && Save(site, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
+                            if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
                                 spamlinksonpage.Add(r.Value);
                         }
                     }
                 }
             }
         }
+        Save(nonbot, "u:MBH/test", "{{db-owner}}", "");
     }
 }
