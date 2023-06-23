@@ -20,7 +20,7 @@ class Program
     static Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
     static void sendresponse(string wiki, string cat, string template, int depth, string result)
     {
-        var sr = new StreamReader("unreviewed-pages-template.txt");
+        var sr = new StreamReader("unreviewed-pages-template.html");
         string resulttext = sr.ReadToEnd();
         string title = "";
         if (cat != "" && template != "")
@@ -75,7 +75,7 @@ class Program
     static void Main()
     {
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
-        //input = "wiki=ru.wikipedia&cat=Компьютерные+игры1&depth=0&template=";
+        //input = "wiki=ru.wikipedia&cat=Статьи+проекта+Волгоград+и+Волгоградская+область+IV+уровня+низкой+важности&depth=0&template=";
         if (input == "" || input == null)
         {
             sendresponse("ru.wikipedia", "", "", 0, "");
@@ -145,7 +145,8 @@ class Program
                 idset = "";
             }
         }
-        requeststrings.Add(idset.Substring(1));
+        if (idset.Length > 0)
+            requeststrings.Add(idset.Substring(1));
         
         foreach(var rstring in requeststrings)
             using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&format=xml&prop=flagged&pageids=" + rstring)))))
