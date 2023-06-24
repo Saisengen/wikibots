@@ -15,12 +15,13 @@ class Program
 {
     static string wiki, cat, template;
     static int requireddepth = 0;
+    static bool talks;
     static WebClient cl = new WebClient();
     static HashSet<string> candidates = new HashSet<string>();
     static Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
     static void sendresponse(string wiki, string cat, string template, int depth, string result)
     {
-        var sr = new StreamReader("unreviewed-pages-template.html");
+        var sr = new StreamReader("unreviewed-pages.html");
         string resulttext = sr.ReadToEnd();
         string title = "";
         if (cat != "" && template != "")
@@ -30,6 +31,8 @@ class Program
         else if (template != "")
             title = " (" + template + ")";
         resulttext = resulttext.Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%template%", template).Replace("%depth%", depth.ToString()).Replace("%title%", title);
+        if (talks)
+            resulttext = resulttext.Replace("%checked_talks%", "checked");
         Console.WriteLine(resulttext);
         return;
     }
@@ -37,7 +40,7 @@ class Program
     {
         if (currentdepth <= requireddepth)
         {
-            string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=ids&cmlimit=max&cmnamespace=100|102|0|6|10|14";
+            string cont = "", query = "https://" + wiki + ".org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Category:" + Uri.EscapeDataString(category) + "&cmprop=" + (talks ? "title" : "ids") + "&cmlimit=max" + (talks ? "" : "&cmnamespace=100|102|0|6|10|14");
             while (cont != null)
             {
                 var apiout = Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&cmcontinue=" + Uri.EscapeDataString(cont)));
@@ -47,8 +50,13 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
                     while (r.Read())
                         if (r.Name == "cm")
-                            if (!candidates.Contains(r.GetAttribute("pageid")))
-                                candidates.Add(r.GetAttribute("pageid"));
+                        {
+                            string id_or_title = r.GetAttribute(talks ? "title" : "pageid");
+                            if (talks && id_or_title.IndexOf(":") >= 0)
+                                id_or_title = id_or_title.Substring(id_or_title.IndexOf(":") + 1);
+                            if (!candidates.Contains(id_or_title))
+                                candidates.Add(id_or_title);
+                        }
                 }
             }
 
@@ -82,6 +90,7 @@ class Program
             return;
         }
         var parameters = HttpUtility.ParseQueryString(input);
+        talks = parameters["talks"] == "on";
         wiki = parameters["wiki"];
         cat = parameters["cat"] ?? "";
         template = parameters["template"] ?? "";
@@ -139,7 +148,7 @@ class Program
         foreach (var id in candidates)
         {
             idset += "|" + id;
-            if (++c % 49 == 0)
+            if (++c % (talks ? 10 : 49) == 0)
             {
                 requeststrings.Add(idset.Substring(1));
                 idset = "";
@@ -149,7 +158,7 @@ class Program
             requeststrings.Add(idset.Substring(1));
         
         foreach(var rstring in requeststrings)
-            using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&format=xml&prop=flagged&pageids=" + rstring)))))
+            using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + wiki + ".org/w/api.php?action=query&format=xml&prop=flagged&" + (talks ? "titles=" : "pageids=") + rstring)))))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 while (r.Read())
