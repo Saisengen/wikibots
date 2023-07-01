@@ -81,7 +81,7 @@ class Program
         var nonbot = Site(creds[6], creds[7]);
 
         string dir = DateTime.Now.Month % 2 == 0 ? "ascending" : "descending";
-        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Томазий, Христиан
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Чичкан, Антон Петрович
         while (cont != null)
         {
             apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
@@ -94,7 +94,15 @@ class Program
                     {
                         string pid = r.GetAttribute("pageid");
                         pageids.Add(pid);
-                        pagenames.Add(pid, r.GetAttribute("title"));
+                        try
+                        {
+                            pagenames.Add(pid, r.GetAttribute("title"));
+                        }
+                        catch
+                        {
+                            Console.WriteLine(pagenames[pid]);
+                            Console.WriteLine(r.GetAttribute("title"));
+                        }
                     }
             }
         }
@@ -111,7 +119,10 @@ class Program
                 idset = "";
             }
         }
-        requeststrings.Add(idset.Substring(1));
+        if (idset.Length > 0)
+        {
+            requeststrings.Add(idset.Substring(1));
+        }
 
         foreach (var q in requeststrings)
         {
@@ -166,27 +177,30 @@ class Program
                             bool match = false;
                             PcreRegex rgx;
                             string shortlink = r.Value;
-                            shortlink = shortlink.Substring(shortlink.IndexOf("//") + 2);
-                            shortlink = shortlink.IndexOf("/") == -1 ? shortlink : shortlink.Substring(0, shortlink.IndexOf("/"));
-                            foreach (var br in blackrgx)
-                                if (br.IsMatch(shortlink))
-                                {
-                                    match = true;
-                                    rgx = br;
-                                    break;
-                                }
-                            if (match)
-                                foreach (var wr in whitergx)
-                                    if (wr.IsMatch(shortlink))
+                            if (shortlink.IndexOf("//") > -1)
+                            {
+                                shortlink = shortlink.Substring(shortlink.IndexOf("//") + 2);
+                                shortlink = shortlink.IndexOf("/") == -1 ? shortlink : shortlink.Substring(0, shortlink.IndexOf("/"));
+                                foreach (var br in blackrgx)
+                                    if (br.IsMatch(shortlink))
                                     {
-                                        match = false;
-                                        rgx = null;
+                                        match = true;
+                                        rgx = br;
                                         break;
                                     }
-                            if (match && r.Value.Contains("goo.gl"))
-                                match = false;
-                            if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
-                                spamlinksonpage.Add(r.Value);
+                                if (match)
+                                    foreach (var wr in whitergx)
+                                        if (wr.IsMatch(shortlink))
+                                        {
+                                            match = false;
+                                            rgx = null;
+                                            break;
+                                        }
+                                if (match && r.Value.Contains("goo.gl"))
+                                    match = false;
+                                if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
+                                    spamlinksonpage.Add(r.Value);
+                            }
                         }
                     }
                 }
