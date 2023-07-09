@@ -16,7 +16,7 @@ class Program
     static HashSet<string> pagenames = new HashSet<string>();
     static void sendresponse(string wiki, string cat, int depth, string result)
     {
-        var sr = new StreamReader("transclusions-count-template.txt");
+        var sr = new StreamReader("transclusions-count.html");
         string resulttext = sr.ReadToEnd();
         resulttext = resulttext.Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", depth.ToString());
         Console.WriteLine(resulttext);
@@ -122,7 +122,7 @@ class Program
         {
             string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th>Transclusions</th></tr>\n";
             foreach (var p in pages.OrderByDescending(p => p.Value))
-                result += "<tr><td><a target=\"_blank\" href=\"https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key) + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
+                result += "<tr><td><a target=\"_blank\" href=\"https://" + wiki + ".org/wiki/" + Uri.EscapeDataString(p.Key).Replace("%3A", ":").Replace("%20", "_") + "\">" + p.Key + "</a></td><td>" + p.Value + "</td></tr>\n";
 
             result += "</table></center>";
             sendresponse(wiki, cat, requireddepth, result);
