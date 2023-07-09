@@ -93,7 +93,7 @@ class Program
 
     public static void Main()
     {
-        cl.Headers.Add("user-agent", "Category Pathfinder, a tool by user:MBH and user:Adamant.pwn");
+        cl.Headers.Add("user-agent", "Category Pathfinder, a tool by MBH and Adamant.pwn");
 
         string get = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (get == "")
@@ -112,7 +112,7 @@ class Program
         }
         catch
         {
-            Sendresponse("<li>Такого раздела (" + SecurityElement.Escape(lang) + ") не существует</li>");
+            Sendresponse("<li>There is no such wiki (" + SecurityElement.Escape(lang) + ")</li>");
             return;
         }
         string apiout = Encoding.UTF8.GetString(rawapiout);
@@ -120,7 +120,7 @@ class Program
             while (r.Read())
                 if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 {
-                    Sendresponse("<li>Такой категории (" + SecurityElement.Escape(category) + ") в данном разделе нет</li>");
+                    Sendresponse("<li>There is no such category (Category:" + SecurityElement.Escape(category) + ") on this wiki</li>");
                     return;
                 }
         rawapiout = cl.DownloadData("https://" + Uri.EscapeDataString(lang) + ".org/w/api.php?action=query&prop=pageprops&format=xml&titles=" + Uri.EscapeDataString(page));
@@ -129,7 +129,7 @@ class Program
             while (r.Read())
                 if (r.Name == "page" && r.GetAttribute("_idx") == "-1")
                 {
-                    Sendresponse("<li>Такой страницы (" + SecurityElement.Escape(page) + ") в данном разделе нет</li>");
+                    Sendresponse("<li>There is no such page (" + SecurityElement.Escape(page) + ") on this wiki</li>");
                     return;
                 }
 
@@ -156,7 +156,7 @@ class Program
             Sendresponse(sb.ToString());
             return;
         }
-        Sendresponse("<li>Путь не найден</li>");
+        Sendresponse("<li>Path not found</li>");
     }
 
     static void Sendresponse(string response)
