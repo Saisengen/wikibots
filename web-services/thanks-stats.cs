@@ -8,7 +8,7 @@ class Program
 {
     static void sendresponse(string response, string user, string wiki)
     {
-        var sr = new StreamReader("likes-template.txt");
+        var sr = new StreamReader("thanks-stats.html");
         Console.WriteLine(sr.ReadToEnd().Replace("%response%", response).Replace("%user%", user).Replace("%wiki%", wiki));
     }
     static string url2db(string url)
@@ -38,7 +38,7 @@ class Program
         connect.Open();
 
         command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user +
-            "\");", connect)        { CommandTimeout = 9999 };
+            "\");", connect) { CommandTimeout = 9999 };
         r = command.ExecuteReader();
         while (r.Read())
         {
@@ -51,7 +51,7 @@ class Program
         r.Close();
 
         command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join " +
-            "actor on actor_id=log_actor;", connect)        { CommandTimeout = 9999 };
+            "actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
         r = command.ExecuteReader();
         while (r.Read())
         {
