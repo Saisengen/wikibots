@@ -12,7 +12,7 @@ class Program
 {
     static void Sendresponse(string type, string source, int notless, string result)
     {
-        var sr = new StreamReader("page-authors-template.txt");
+        var sr = new StreamReader("page-authors.html");
         string template = sr.ReadToEnd();
         if (type == "category")
             template = template.Replace("%checked_category%", "checked");
@@ -23,7 +23,6 @@ class Program
         else if (type == "links")
             template = template.Replace("%checked_links%", "checked");
         Console.WriteLine(template.Replace("%result%", result).Replace("%source%", source).Replace("%notless%", notless.ToString()));
-        Console.WriteLine();
     }
     static void Main()
     {
@@ -155,7 +154,7 @@ class Program
             }
         }
         else
-            Sendresponse("category", "", 2, "Неверный тип получения списка");
+            Sendresponse("category", "", 2, "Incorrect list type");
 
         int c = 0;
         result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
