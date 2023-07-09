@@ -161,7 +161,7 @@ class Program
 
     static void Sendresponse(string response)
     {
-        var sr = new StreamReader("cpf-template.txt");
+        var sr = new StreamReader("category-pathfinder.html");
         Console.WriteLine(sr.ReadToEnd().Replace("%page%", page).Replace("%uppercat%", category).Replace("%lang%", lang).Replace("%response%", response));
     }
 }
