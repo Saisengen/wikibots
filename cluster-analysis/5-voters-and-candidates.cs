@@ -30,7 +30,7 @@ class voterspercandidate
 }
 class Program
 {
-    static bool method_is_post = false;
+    static bool method_is_post = true;
     static Dictionary<string, voterspercandidate> candidates = new Dictionary<string, voterspercandidate>();
     static HashSet<string> unimportant_flags = new HashSet<string>() { "*", "user", "autoconfirmed", "rollbacker", "suppressredirect", "uploader" };
     static string result = "<table border=\"1\" cellspacing=\"0\"><tr><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Голосующий</th><th style=\"writing-mode:horizontal-tb;transform:rotate(0);\">Регистрация</th>" +
@@ -43,7 +43,7 @@ class Program
     static Regex yearrgx = new Regex(@"\d{4}");
     static void Sendresponse(string result, string elections, string users, string sort, bool allvoters, string mode, int earlieryear, int lateryear)
     {
-        var sr = new StreamReader(method_is_post ? "clusters-template5.5.txt" : "clusters-template5.txt");
+        var sr = new StreamReader(method_is_post ? "clusters5.5.html" : "clusters5.html");
         string output = sr.ReadToEnd().Replace("%result%", result).Replace("%elections%", elections).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
         if (mode == "years")
             output = output.Replace("%checked_years%", "checked");
@@ -142,7 +142,7 @@ class Program
         var electionsstring = "";
         foreach (var e in electionslist.OrderByDescending(e => e.Value))
             electionsstring += "<option value=\"" + e.Key + "\" s" + e.Key + ">АК " + e.Value + ": " + e.Key + "</option>\n";
-        //Environment.SetEnvironmentVariable("QUERY_STRING", "mode=varb&elections=Весна+2013&allvoters=on&earlieryear=2020&lateryear=2021&users=&sort=no");
+        //Environment.SetEnvironmentVariable("QUERY_STRING", "mode=varb&elections=Зима+2023+2&allvoters=on&earlieryear=2023&lateryear=2023&users=&sort=reg");
         string input = method_is_post ? Console.ReadLine() : Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == null || input == "")
         {
@@ -170,20 +170,15 @@ class Program
             while (!rdr.EndOfStream)
             {
                 string voting = rdr.ReadLine();
-                if (!voting.StartsWith(electionforanalyze + '/'))
-                {
-                    rdr.ReadLine(); rdr.ReadLine();
-                    continue;
-                }
-                else
+                if (voting.StartsWith(electionforanalyze + '/'))
                     process_votes(voting.Substring(voting.IndexOf('/') + 1));
             }
         else
             while (!rdr.EndOfStream)
             {
                 string voting = rdr.ReadLine();
-                if (voting.StartsWith("Зима 2019—2020"))
-                    voting = voting.Replace("Зима 2019—2020", "Зима 2020");
+                //if (voting.StartsWith("Зима 2019—2020"))
+                //    voting = voting.Replace("Зима 2019—2020", "Зима 2020");
                 int year;
                 if (voting.StartsWith("2"))
                     year = Convert.ToInt16(voting.Substring(0, 4));
