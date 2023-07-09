@@ -8,7 +8,7 @@ class Program
 {
     static void Sendresponse(string source, bool addauthor, string author, string result)
     {
-        var r = new StreamReader("cite2template-template.txt");
+        var r = new StreamReader("cite2template.html");
         string answer = r.ReadToEnd().Replace("%result%", result).Replace("%source%", source).Replace("%author%", author);
         if (addauthor)
             answer = answer.Replace("%checked_author%", "checked");
