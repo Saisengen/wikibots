@@ -37,8 +37,7 @@ class Program
         var connect = new MySqlConnection("Server=" + url2db(wiki) + ".labsdb;Database=" + url2db(wiki) + "_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
         connect.Open();
 
-        command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user +
-            "\");", connect) { CommandTimeout = 9999 };
+        command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
         r = command.ExecuteReader();
         while (r.Read())
         {
@@ -50,8 +49,7 @@ class Program
         }
         r.Close();
 
-        command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join " +
-            "actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
+        command = new MySqlCommand("select cast(actor_name as char) source from (select log_actor from logging where log_type=\"thanks\" and log_title=\"" + user.Replace(' ', '_') + "\") log join actor on actor_id=log_actor;", connect) { CommandTimeout = 9999 };
         r = command.ExecuteReader();
         while (r.Read())
         {
@@ -65,14 +63,12 @@ class Program
         string response = "<table border=\"1\" cellspacing=\"0\">";
 
         foreach (var t in thanked.OrderByDescending(t => t.Value))
-            response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">⇨</a>" +
-                " <a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+            response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> <a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
 
         response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
 
         foreach (var t in thankers.OrderByDescending(t => t.Value))
-            response += "<tr><td><a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a>" +
-                "<a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">⇨</a>" + user +" </td><td>" + t.Value + "</td></tr>\n";
+            response += "<tr><td><a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user +" </td><td>" + t.Value + "</td></tr>\n";
 
         sendresponse(response + "</table>", user, wiki);
     }
