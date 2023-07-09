@@ -54,7 +54,7 @@ class Program
     }
     static void Sendresponse(string type, string project, string startdate, string enddate, string sort, string result)
     {
-        var sr = new StreamReader("patstats-template.txt");
+        var sr = new StreamReader("reviewers-stats.html");
         string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%project%", project).Replace("%startdate%", startdate).Replace("%enddate%", enddate);
         if (type == "db")
             result1 = result1.Replace("%checked_db%", "checked");
