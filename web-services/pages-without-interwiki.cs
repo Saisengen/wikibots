@@ -23,6 +23,7 @@ class Program
     static Dictionary<string, pageinfo> processedpages = new Dictionary<string, pageinfo>();
     static List<string> FAs = new List<string>();
     static List<string> GAs = new List<string>();
+    static List<string> RAs = new List<string>();
     static List<string> FLs = new List<string>();
     static void gather_quality_pages(List<string> list_of_quality_pages, string wd_item)
     {
@@ -50,7 +51,7 @@ class Program
     }
     static void sendresponse(string sourcewiki, string category, string template, string targetwiki, string type, string pagetype, string sort, bool wikilist, bool wikitable, int depth, int miniwiki, string result)
     {
-        var sr = new StreamReader("pages-wo-iwiki-template.txt");
+        var sr = new StreamReader("pages-wo-iwiki.html");
         string resulttext;
 
         if (type == "exist")
@@ -135,11 +136,13 @@ class Program
     {
         string status = "";
         if (FAs.Contains(page))
-            status = "<abbr title=\"Избранная статья\">⭐</abbr>";
+            status = "Featured";
         else if (GAs.Contains(page))
-            status = "<abbr title=\"Хорошая статья\">✨</abbr>";
+            status = "Good";
         else if (FLs.Contains(page))
-            status = "<abbr title=\"Избранный список\">📜</abbr>";
+            status = "Featured list";
+        else if (RAs.Contains(page))
+            status = "Recommended";
         return status;
     }
     static void Main()
@@ -154,15 +157,15 @@ class Program
         var parameters = HttpUtility.ParseQueryString(input);
         sourcewiki = parameters["sourcewiki"];
         category = parameters["category"];
-        template = parameters["template"];
+        template = parameters["template"] ?? "";
         pagetype = parameters["pagetype"];
         type = parameters["type"];
         targetwiki = parameters["targetwiki"];
-        sort = parameters["sort"];
+        sort = parameters["sort"] ?? "iwiki";
         wikilist = parameters["wikilist"] == "on";
         wikitable = parameters["wikitable"] == "on";
         requireddepth = Convert.ToInt16(parameters["depth"]);
-        miniwiki = Convert.ToInt16(parameters["miniwiki"]);
+        miniwiki = parameters["miniwiki"] == null ? 1 : Convert.ToInt16(parameters["miniwiki"]);
         if (requireddepth < 0)
         {
             sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, "Введите неотрицательную глубину");
@@ -212,6 +215,7 @@ class Program
             gather_quality_pages(FAs, "Q5626124");
             gather_quality_pages(GAs, "Q5303");
             gather_quality_pages(FLs, "Q5857568");
+            gather_quality_pages(RAs, "Q13402307");
 
             var creds = new StreamReader("../p").ReadToEnd().Split('\n');
             var connect = new MySqlConnection("Server=wikidatawiki.labsdb;Database=wikidatawiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
@@ -265,7 +269,7 @@ class Program
                 }
             }
 
-            string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Страница</th><th>Интервик</th><th>Статус</th></tr>\n";
+            string result = "<table border=\"1\" cellspacing=\"0\"><tr><th>Page</th><th># of interwikis</th><th>Status</th></tr>\n";
 
             if (type == "exist")
             {
