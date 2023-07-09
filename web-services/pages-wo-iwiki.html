@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<style> a, abbr { text-decoration: none; } </style>
+<title>Pages without interwiki%title%</title>
+</head><body>
+<center>
+<form action="https://mbh.toolforge.org/pages-wo-iwiki.cgi">
+Pages in <input type="text" name="sourcewiki" value="%sourcewiki%" size="11" required>
+From category <input type="text" name="category" value="%category%" placeholder="without Category: prefix">
+with subcats to depth <input type="number" name="depth" value="%depth%" style="width:2em">
+Using template <input type="text" name="template" value="%template%" placeholder="with Template: prefix">
+<br><br>
+<select size="1" name="pagetype">
+<option value="articles" %selected_articles%>articles</option>
+<option value="allpages" %selected_allpages%>all pages</option>
+</select>
+<select size="1" name="type">
+<option value="nonexist" %selected_nonexist%>without interwiki link</option>
+<option value="exist" %selected_exist%>with interwiki link</option>
+</select>
+ to <input type="text" name="targetwiki" value="%targetwiki%" size="11" required>
+having not less than <input type="number" name="miniwiki" value="%miniwiki%" style="width:3em"> interwiki links
+<br><br>
+Order by 
+<select size="1" name="sort">
+<option value="iwiki" %selected_iwiki%>number of interwiki links</option>
+<option value="status" %selected_status%>featured status</option>
+</select>
+Generate a list<label><input type="checkbox" name="wikilist" %checked_wikilist%> {{iw}} templates</label>
+<label><input type="checkbox" name="wikitable" %checked_wikitable%> wikitable</label>
+<button type="submit">Start</button>
+</form><br>
+%result%
+</body></html>
