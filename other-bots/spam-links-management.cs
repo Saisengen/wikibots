@@ -126,6 +126,7 @@ class Program
 
         foreach (var q in requeststrings)
         {
+            string title = "";
             cont = "";
             while (cont != null)
             {
@@ -138,8 +139,10 @@ class Program
                     {
                         if (r.Name == "page")
                         {
+                            title = r.GetAttribute("title");
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
+                                string summary = "";
                                 string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
@@ -149,18 +152,19 @@ class Program
                                     text = text.Replace(oldtemplate, "");
                                     var links = spamtemplatergx.Match(starttext).Groups[1].ToString().Split('\n');
                                     foreach (var l in links)
-                                        newtemplate += "\n*" + l;
+                                        newtemplate += "\n" + l;
                                 }
                                 foreach (var link in spamlinksonpage)
                                 {
                                     string brokenlink = link.Substring(link.IndexOf("//") + 2);
                                     text = text.Replace(link, brokenlink);
                                     newtemplate += "\n* " + brokenlink;
+                                    summary += brokenlink + ", ";
                                 }
                                 if (starttext != text)
                                     try
                                     {
-                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|уведомление о спам-ссылках в статье]]");
+                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "спам-ссылки: " + summary.Substring(0, summary.Length - 2));
                                     }
                                     catch (Exception e)
                                     {
@@ -198,7 +202,7 @@ class Program
                                         }
                                 if (match && r.Value.Contains("goo.gl"))
                                     match = false;
-                                if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", r.Value, r.Value).Contains("spamblacklist"))
+                                if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
                                     spamlinksonpage.Add(r.Value);
                             }
                         }
