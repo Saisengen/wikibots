@@ -155,12 +155,14 @@ class Program
                                         newtemplate += "\n" + l;
                                 }
                                 foreach (var link in spamlinksonpage)
-                                {
-                                    string brokenlink = link.Substring(link.IndexOf("//") + 2);
-                                    text = text.Replace(link, brokenlink);
-                                    newtemplate += "\n* " + brokenlink;
-                                    summary += brokenlink + ", ";
-                                }
+                                    if (text.Contains(link))//there are links from WD in infoboxes
+                                    {
+                                        string brokenlink = link.Substring(link.IndexOf("//") + 2);
+                                        text = text.Replace(link, brokenlink);
+                                        newtemplate += "\n* " + brokenlink;
+                                        string domain = brokenlink.Contains("/") ? brokenlink.Substring(0, brokenlink.IndexOf('/')) : brokenlink;
+                                        summary += domain + ", ";
+                                    }
                                 if (starttext != text)
                                     try
                                     {
@@ -200,8 +202,8 @@ class Program
                                             rgx = null;
                                             break;
                                         }
-                                if (match && r.Value.Contains("goo.gl"))
-                                    match = false;
+                                //if (match && r.Value.Contains("goo.gl"))
+                                //    match = false;
                                 if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
                                     spamlinksonpage.Add(r.Value);
                             }
