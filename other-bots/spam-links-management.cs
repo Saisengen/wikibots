@@ -139,6 +139,7 @@ class Program
                     {
                         if (r.Name == "page")
                         {
+                            var domains = new HashSet<string>();
                             title = r.GetAttribute("title");
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
@@ -161,8 +162,11 @@ class Program
                                         text = text.Replace(link, brokenlink);
                                         newtemplate += "\n* " + brokenlink;
                                         string domain = brokenlink.Contains("/") ? brokenlink.Substring(0, brokenlink.IndexOf('/')) : brokenlink;
-                                        summary += domain + ", ";
+                                        if (!domains.Contains(domain))
+                                            domains.Add(domain);
                                     }
+                                foreach (var domain in domains)
+                                    summary += domain + ", ";
                                 if (starttext != text)
                                     try
                                     {
@@ -212,6 +216,5 @@ class Program
                 }
             }
         }
-        Save(nonbot, "u:MBH/test", "{{db-owner}}", "");
     }
 }
