@@ -38,6 +38,7 @@ class Program
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
         var request = new MultipartFormDataContent();
         request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent("1"), "bot");
         request.Add(new StringContent(title), "title");
         request.Add(new StringContent(text), "text");
         request.Add(new StringContent(comment), "summary");
@@ -47,6 +48,9 @@ class Program
     }
     static void Main()
     {
+        //var files = Directory.GetFileSystemEntries(Directory.GetCurrentDirectory());
+        //foreach (var file in files)
+        //    Console.WriteLine(file);
         var cl = new WebClient();
         string rawblacklist = Encoding.UTF8.GetString(cl.DownloadData("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw"));
         rawblacklist += Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/wiki/MediaWiki:Spam-blacklist?action=raw"));
@@ -120,9 +124,7 @@ class Program
             }
         }
         if (idset.Length > 0)
-        {
             requeststrings.Add(idset.Substring(1));
-        }
 
         foreach (var q in requeststrings)
         {
@@ -185,32 +187,22 @@ class Program
                         {
                             r.Read();
                             bool match = false;
-                            PcreRegex rgx;
-                            string shortlink = r.Value;
-                            if (shortlink.IndexOf("//") > -1)
-                            {
-                                shortlink = shortlink.Substring(shortlink.IndexOf("//") + 2);
-                                shortlink = shortlink.IndexOf("/") == -1 ? shortlink : shortlink.Substring(0, shortlink.IndexOf("/"));
-                                foreach (var br in blackrgx)
-                                    if (br.IsMatch(shortlink))
+                            string link = r.Value;
+                            foreach (var br in blackrgx)
+                                if (br.IsMatch(link))
+                                {
+                                    match = true;
+                                    break;
+                                }
+                            if (match)
+                                foreach (var wr in whitergx)
+                                    if (wr.IsMatch(link))
                                     {
-                                        match = true;
-                                        rgx = br;
+                                        match = false;
                                         break;
                                     }
-                                if (match)
-                                    foreach (var wr in whitergx)
-                                        if (wr.IsMatch(shortlink))
-                                        {
-                                            match = false;
-                                            rgx = null;
-                                            break;
-                                        }
-                                //if (match && r.Value.Contains("goo.gl"))
-                                //    match = false;
-                                if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
-                                    spamlinksonpage.Add(r.Value);
-                            }
+                            if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
+                                spamlinksonpage.Add(r.Value);
                         }
                     }
                 }
