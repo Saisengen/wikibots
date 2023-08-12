@@ -1,3 +1,10 @@
+# minutely
+- name: newpages-for-ini
+  command: mono /data/project/mbh/bots/newpages-for-ini.exe
+  image: tf-mono68
+  schedule: "* * * * *"
+  emails: none
+
 # daily
 - name: numof-updater
   command: mono /data/project/mbh/bots/numof_updater.exe
@@ -27,12 +34,6 @@
   command: mono /data/project/mbh/bots/zsf-archiving.exe
   image: tf-mono68
   schedule: "58 0 * * *"
-  emails: onfailure
-
-- name: editnotice
-  command: mono /data/project/mbh/bots/editnotices-from-filter.exe
-  image: tf-mono68
-  schedule: "28 0 * * *"
   emails: onfailure
 
 - name: catmoves
@@ -85,11 +86,12 @@
   emails: onfailure
 
 # monthly----------------------------------------------------------------------------------------------------------------------------
-- name: spam-links-management
+- name: spam-tagging
   command: mono /data/project/mbh/bots/spam.exe
   image: tf-mono68
-  schedule: "12 4 1 * *"
+  schedule: "31 15 12 * *"
   emails: onfailure
+  mem: 4Gi
 
 - name: apat-for-filemovers
   command: mono /data/project/mbh/bots/apat-for-filemovers.exe
@@ -124,7 +126,7 @@
 - name: pageview-peaks
   command: mono /data/project/mbh/bots/pageview_peaks.exe
   image: tf-mono68
-  schedule: "46 17 1 * *"
+  schedule: "0 4 2 * *"
   emails: onfailure
 
 #- name: extlinks-counter
