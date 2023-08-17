@@ -13,10 +13,7 @@ class Program
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        if (login.Contains("@"))
-            client.DefaultRequestHeaders.Add("User-Agent", login.Substring(0, login.IndexOf('@')));
-        else
-            client.DefaultRequestHeaders.Add("User-Agent", login);
+        client.DefaultRequestHeaders.Add("User-Agent", login.Contains("@") ? login.Substring(0, login.IndexOf('@')) : login);
         var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
         if (!result.IsSuccessStatusCode)
             return null;
@@ -48,9 +45,6 @@ class Program
     }
     static void Main()
     {
-        //var files = Directory.GetFileSystemEntries(Directory.GetCurrentDirectory());
-        //foreach (var file in files)
-        //    Console.WriteLine(file);
         var cl = new WebClient();
         string rawblacklist = Encoding.UTF8.GetString(cl.DownloadData("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw"));
         rawblacklist += Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/wiki/MediaWiki:Spam-blacklist?action=raw"));
@@ -85,7 +79,7 @@ class Program
         var nonbot = Site(creds[6], creds[7]);
 
         string dir = DateTime.Now.Month % 2 == 0 ? "ascending" : "descending";
-        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Чичкан, Антон Петрович
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Гладков, Фёдор Васильевич
         while (cont != null)
         {
             apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
@@ -145,7 +139,7 @@ class Program
                             title = r.GetAttribute("title");
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
-                                string summary = "";
+                                string summary = "спам-ссылки: ";
                                 string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
@@ -160,9 +154,9 @@ class Program
                                 foreach (var link in spamlinksonpage)
                                     if (text.Contains(link))//there are links from WD in infoboxes
                                     {
-                                        string brokenlink = link.Substring(link.IndexOf("//") + 2);
+                                        string brokenlink = link.Replace("http://", "").Replace("https://", "");
                                         text = text.Replace(link, brokenlink);
-                                        newtemplate += "\n* " + brokenlink;
+                                        newtemplate += "\n* " + link;
                                         string domain = brokenlink.Contains("/") ? brokenlink.Substring(0, brokenlink.IndexOf('/')) : brokenlink;
                                         if (!domains.Contains(domain))
                                             domains.Add(domain);
@@ -172,11 +166,11 @@ class Program
                                 if (starttext != text)
                                     try
                                     {
-                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", "спам-ссылки: " + summary.Substring(0, summary.Length - 2));
+                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", summary.Substring(0, summary.Length - 2));
                                     }
                                     catch (Exception e)
                                     {
-                                        Console.WriteLine(e.ToString());
+                                        Console.WriteLine(pagenames[id] + newtemplate);
                                     }
                                 spamlinksonpage.Clear();
                             }
