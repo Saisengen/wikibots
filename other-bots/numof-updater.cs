@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Net.Http;
+using Newtonsoft.Json;
 
 struct wiki
 {
@@ -13,6 +14,10 @@ struct wiki
 }
 class Program
 {
+    public class Root
+    {
+        public List<string> duplcodes;
+    }
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -47,7 +52,9 @@ class Program
     }
     static void Main()
     {
-        var duplcodes = new string[] { "be-x-old", "yue", "zh-tw", "nb", "nan", "lzh" };
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        var site = Site(creds[0], creds[1]);
+        List<string> duplcodes = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/wiki/Module:NumberOf/lang.json?action=raw").Result).duplcodes;
         var wikis = new Dictionary<string, wiki>();
         var codes = new HashSet<string>();
         string result = "{\"license\": \"CC0-1.0\",\"description\": {\"en\": \"Pages/users stats for all wikipedias for Module:NumberOf on several wikis\"},\"sources\": \"Updated by [https://github.com/Saisengen/wikibots/blob/main/other-bots/numof-updater.cs MBHbot]\"," +
@@ -102,8 +109,7 @@ class Program
         result += "[\"total\",0," + tactiveusers + "," + tadmins + "," + tarticles + "," + tedits + "," + tfiles + "," + tpages + "," + tusers + "," + (tpages != 0 && tarticles != 0 ? (tedits / (float)tpages) * ((tpages - tarticles) / (float)tarticles) * ((tpages - tarticles)
             / (float)tarticles) : 0) + ",\"@" + (int)DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).TotalSeconds + "\"]]}";
 
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = Site(creds[0], creds[1]);
+        
         if (DateTime.Now.Hour == 1 || DateTime.Now.Hour == 0)
             Save(site, "Data:NumberOf/daily.tab", result, "");
         Save(site, "Data:NumberOf/hourly.tab", result, "");
