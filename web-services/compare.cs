@@ -23,6 +23,7 @@ class Program
     }
     static void Main()
     {
+        string width = "49%", height = "500";
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == "" || input == null)
             Sendresponse("", "", false);
@@ -31,7 +32,7 @@ class Program
             var parameters = HttpUtility.ParseQueryString(input);
             string page = parameters["page"];
             bool loadfromtool = parameters["loadfromtool"] == "on";
-            string result, runitext="", bugtext="";
+            string result, runitext = "", bugtext = "", znanietext = "";
             if (loadfromtool)
             {
                 var cl = new WebClient();
@@ -44,17 +45,19 @@ class Program
                 }
                 try { runitext = Encoding.UTF8.GetString(cl.DownloadData("https://xn--h1ajim.xn--p1ai/" + runititle)); } catch { }
                 try { bugtext = Encoding.UTF8.GetString(cl.DownloadData("https://ru.ruwiki.ru/wiki/" + bugtitle)); } catch { }
-                result =
-                "<iframe src=\"https://ru.wikipedia.org/wiki/%ruwiki%\" width=33% height=1100></iframe>\n" +
-                "<iframe srcdoc=\"" + HttpUtility.HtmlEncode(runitext) + "\" width=33% height=1100></iframe>\n" +
-                "<iframe srcdoc=\"" + HttpUtility.HtmlEncode(bugtext) + "\" width=33% height=1100></iframe>\n";
+                try { znanietext = Encoding.UTF8.GetString(cl.DownloadData("https://znanierussia.ru/articles/" + page)); } catch { }
+
+                result = "<iframe src=\"https://ru.wikipedia.org/wiki/%ruwiki%\" height=" + height + " width=" + width + "></iframe>\n" +
+                "<iframe srcdoc=\"" + HttpUtility.HtmlEncode(runitext) + "\" height=" + height + " width=" + width + "></iframe><br clear=all>\n" +
+                "<iframe srcdoc=\"" + HttpUtility.HtmlEncode(bugtext) + "\" height=" + height + " width=" + width + "></iframe>\n" +
+                "<iframe srcdoc=\"" + HttpUtility.HtmlEncode(znanietext) + "\" height=" + height + " width=" + width + "></iframe>";
             }
             else
             {
-                result =
-                "<iframe src=\"https://ru.wikipedia.org/wiki/%ruwiki%\" width=33% height=1100></iframe>\n" +
-                "<iframe src=\"https://xn--h1ajim.xn--p1ai/%runi%\" width=33% height=1100></iframe>\n" +
-                "<iframe src=\"https://ru.ruwiki.ru/wiki/%bug%\" width=33% height=1100></iframe>\n";
+                result = "<iframe src=\"https://ru.wikipedia.org/wiki/%ruwiki%\" height=" + height + " width=" + width + "></iframe>\n" +
+                "<iframe src=\"https://xn--h1ajim.xn--p1ai/%runi%\" height=" + height + " width=" + width + "></iframe><br clear=all>\n" +
+                "<iframe src=\"https://ru.ruwiki.ru/wiki/%bug%\" height=" + height + " width=" + width + "></iframe>\n" +
+                "<iframe src=\"https://znanierussia.ru/articles/%ruwiki%\" height=" + height + " width=" + width + "></iframe>";
             }
             Sendresponse(page, result, loadfromtool);
         }
