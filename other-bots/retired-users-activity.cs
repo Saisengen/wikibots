@@ -54,8 +54,6 @@ class Program
             if (!retireds.ContainsKey(user))
                 retireds.Add(user, 1);
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Шаблон:Участник покинул проект&einamespace=2%7C3&eilimit=max").Result)))
-        {
-            r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
                 {
@@ -67,14 +65,16 @@ class Program
                     if (!retireds.ContainsKey(user))
                         retireds.Add(user, 1);
                 }
-        }
+
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=sysop&aulimit=max").Result)))
+            while (r.Read())
+                if (r.Name == "u" && !retireds.ContainsKey(r.GetAttribute("name")))
+                    retireds.Add(r.GetAttribute("name"), 1);
 
         foreach (var u in retireds.Keys.ToList())
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + Uri.EscapeDataString(u)).Result)))
-            {
-                r.WhitespaceHandling = WhitespaceHandling.None;
                 while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "item")
+                    if (r.Name == "item")
                     {
                         string ts = r.GetAttribute("timestamp");
                         int y = Convert.ToInt32(ts.Substring(0, 4));
@@ -82,7 +82,6 @@ class Program
                         int d = Convert.ToInt32(ts.Substring(8, 2));
                         retireds[u] = (DateTime.Now - new DateTime(y, m, d)).Days;
                     }
-            }
 
         string result = "{{#switch: {{{1}}}\n";
         foreach (var r in retireds.OrderBy(r => r.Value))
