@@ -1,14 +1,16 @@
+# hourly
+- name: numof-updater
+  command: mono /data/project/mbh/bots/numof_updater.exe
+  image: tf-mono68
+  schedule: "48 */3 * * *"
+  emails: onfailure
+
+
 # daily
 - name: unreviewed-pages
   command: mono /data/project/mbh/bots/unreviewed-pages.exe
   image: tf-mono68
   schedule: "34 2 * * *"
-  emails: onfailure
-
-- name: numof-updater
-  command: mono /data/project/mbh/bots/numof_updater.exe
-  image: tf-mono68
-  schedule: "0 */2 * * *"
   emails: onfailure
 
 - name: trans-ns-moves
