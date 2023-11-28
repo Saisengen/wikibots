@@ -63,7 +63,7 @@ class Program
             apats.Add(r.GetString(0));
         r.Close();
 
-        connect = new MySqlConnection("Server=commonswiki.labsdb;Database=commonswiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        connect = new MySqlConnection(creds[2].Replace("%lang%", "commons"));
         connect.Open();
         command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";", connect) { CommandTimeout = 99999 };
         r = command.ExecuteReader();
