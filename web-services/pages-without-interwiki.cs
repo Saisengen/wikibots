@@ -218,7 +218,7 @@ class Program
             gather_quality_pages(RAs, "Q13402307");
 
             var creds = new StreamReader("../p").ReadToEnd().Split('\n');
-            var connect = new MySqlConnection("Server=wikidatawiki.labsdb;Database=wikidatawiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+            var connect = new MySqlConnection(creds[2].Replace("%lang%", "wikidata"));
             connect.Open();
             foreach (var pagename_on_sourcewiki in iterationlist)
             {
