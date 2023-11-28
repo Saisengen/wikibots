@@ -52,7 +52,7 @@ class Program
         var apats = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
-        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
