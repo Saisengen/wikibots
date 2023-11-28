@@ -68,7 +68,7 @@ class Program
         double mediumlimit = 1;
         int currminute = -1;
         var badusers = new HashSet<string>();
-        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru").Replace("analytics", "web"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader sqlrdr;
@@ -86,10 +86,9 @@ class Program
                         goodanons.Add(g);
                 }
                 bool newle = false;
-                command = new MySqlCommand("select cast(rc_title as char) title, max(case when oresm_name=\"damaging\" then oresc_probability else 0 end) damaging, max(case when oresm_name=" +
-                    "\"goodfaith\" then oresc_probability else 0 end) goodfaith, cast(actor_name as char) user, rc_this_oldid, actor_user from recentchanges join ores_classification on " +
-                    "oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmm") +
-                    "00 and rc_type=0 group by rc_this_oldid having max(case when oresm_name=\"damaging\" then oresc_probability else 0 end)>=" + lowlimit + "order by rc_this_oldid desc;", connect);
+                command = new MySqlCommand("select cast(rc_title as char) title, max(case when oresm_name=\"damaging\" then oresc_probability else 0 end) damaging, max(case when oresm_name=\"goodfaith\" then oresc_probability else 0 end) goodfaith, cast(actor_name as char) user, rc_this_oldid, " +
+                    "actor_user from recentchanges join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmm") + "00 and rc_type=0 group by rc_this_oldid " +
+                    "having max(case when oresm_name=\"damaging\" then oresc_probability else 0 end)>=" + lowlimit + "order by rc_this_oldid desc;", connect);
                 sqlrdr = command.ExecuteReader();
                 while (sqlrdr.Read())
                 {
