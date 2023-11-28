@@ -99,7 +99,7 @@ class Program
             reader.Close();
             connect.Close();
 
-            connect = new MySqlConnection("Server=metawiki.labsdb;Database=metawiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+            connect = new MySqlConnection(creds[2].Replace("%lang%", "meta"));
             connect.Open();
             command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type='gblrights' and (log_params like '%lobal-bot%' or log_params like '%lobal_bot%');", connect) { CommandTimeout = 9999 };
             reader = command.ExecuteReader();
