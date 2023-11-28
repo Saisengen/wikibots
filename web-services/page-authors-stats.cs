@@ -51,7 +51,7 @@ class Program
         var pageids = new HashSet<string>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
-        var connect = new MySqlConnection("Server=ruwiki.labsdb;Database=ruwiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
@@ -70,8 +70,7 @@ class Program
 
             foreach (var p in pageids)
             {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);",
-                    connect);
+                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
                 r = command.ExecuteReader();
                 while (r.Read())
                 {
@@ -98,8 +97,7 @@ class Program
             
             foreach (var p in pageids)
             {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);",
-                    connect);
+                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
                 r = command.ExecuteReader();
                 while (r.Read())
                 {
