@@ -24,7 +24,6 @@ class Program
         MySqlCommand command;
 
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
-        //input = "user=MBH&wiki=ru.wikipedia";
         if (input == "" || input == null)
         {
             sendresponse("", "", "ru.wikipedia");
@@ -34,7 +33,7 @@ class Program
         string user = parameters["user"];
         string wiki = parameters["wiki"];
         var creds = new StreamReader("../p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection("Server=" + url2db(wiki) + ".labsdb;Database=" + url2db(wiki) + "_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+        var connect = new MySqlConnection(creds[2].Replace("%lang%", url2db(wiki)));
         connect.Open();
 
         command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
