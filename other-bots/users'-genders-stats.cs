@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using MySql.Data.MySqlClient;
 using System.IO;
-using DotNetWikiBot;
+using System.Net.Http;
+using System.Net;
+using System.Xml;
 
 class sliceinfo
 {
@@ -17,19 +19,67 @@ class record
 
 class Program
 {
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string title, string text, string comment)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+        if (result.ToString().Contains("uccess"))
+            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+        else
+            Console.WriteLine(result);
+    }
     static void Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
-        var p = new DotNetWikiBot.Page("user:MBH/genders");
-        string text = "<center>";
-        foreach (var lang in new List<string>() { "en", "de", "fr", "es", "pt", "it", "ru", "ja", "zh", "ar", "fa", "uk", "pl", "nl", "he", "tr" })
+        var site = Site(creds[0], creds[1]);
+        string result = "<center>";
+        var langs = new Dictionary<string, string>() {
+            { "en", "английский" },{ "simple", "простой английский" },{ "commons", "викисклад" },{ "eo", "эсперанто" },
+            { "de", "немецкий" },{ "da", "датский" },{ "nl", "нидерландский" },
+            { "fr", "французский" },{ "es", "испанский" },{ "ca", "каталанский" },{ "eu", "баскский" },{ "it", "итальянский" },{ "pt", "португальский" },
+            { "ja", "японский" },{ "zh", "китайский" },{ "ko", "корейский" },{ "vi", "вьетнамский" },
+            { "ru", "русский" },{ "uk", "украинский" },{ "be", "белорусский" },{ "pl", "польский" },{ "cs", "чешский" },{ "sk", "словацкий" },{ "sr", "сербский" },{ "hr", "хорватский" },{ "ro", "румынский" },{ "bg", "болгарский" },
+            { "kk", "казахский" },{ "az", "азербайджанский" },{ "hy", "армянский" },{ "ka", "грузинский" },
+            { "ar", "арабский" },{ "fa", "персидский" },{ "he", "иврит" },{ "tr", "турецкий" },
+            { "no", "норвежский (букмол)" },{ "sv", "шведский" },{ "fi", "финский" },{ "et", "эстонский" },{ "lt", "литовский" },{ "lv", "латышский" },
+            { "id", "индонезийский" },{ "ms", "малайский" },{ "th", "тайский" },{ "hi", "хинди" },{ "ur", "урду" },{ "bn", "бенгальский" },{ "ta", "тамильский" },
+            { "el", "греческий" },{ "hu", "венгерский" }
+        };
+        foreach (var lang in langs.Keys)
         {
             Console.WriteLine(lang);
-            text += "\n==" + lang + "wiki==\n";
+            result += "\n==" + langs[lang] + "==\n";
             var slices = new Dictionary<string, sliceinfo>
             {
                 { "sysop", new sliceinfo() },
+                { "rollbacker", new sliceinfo() },
                 { "all", new sliceinfo() },
                 { "0", new sliceinfo() },
                 { "1-3", new sliceinfo() },
@@ -42,12 +92,11 @@ class Program
                 { "3k-10k", new sliceinfo() },
                 { "10k-30k", new sliceinfo() },
                 { "30k-100k", new sliceinfo() },
-                { "100k-300k", new sliceinfo() },
-                { "300k+", new sliceinfo() }
+                { "100k+", new sliceinfo() }
             };
             var userdata = new List<record> ();
             var processed_users = new HashSet<string> ();
-            var connect = new MySqlConnection("Server=" + lang + "wiki.labsdb;Database=" + lang + "wiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+            var connect = new MySqlConnection(creds[2].Replace("%lang%", lang));
             connect.Open();
             var command = new MySqlCommand("select up_value, ug_group, user_id, user_editcount from user left join user_groups on user.user_id = user_groups.ug_user join user_properties on user.user_id = user_properties.up_user where (up_property = 'gender' and up_value = 'male');", connect);
             command.CommandTimeout = 9999;
@@ -58,6 +107,8 @@ class Program
             {
                 if (user.flag == "sysop")
                     slices["sysop"].male++;
+                if (user.flag == "rollbacker")
+                    slices["rollbacker"].male++;
                 if (!processed_users.Contains(user.id))
                 {
                     slices["all"].male++;
@@ -83,9 +134,7 @@ class Program
                         slices["10k-30k"].male++;
                     else if (user.edits <= 100000)
                         slices["30k-100k"].male++;
-                    else if (user.edits <= 300000)
-                        slices["100k-300k"].male++;
-                    else slices["300k+"].male++;
+                    else slices["100k+"].male++;
                     processed_users.Add(user.id);
                 }
             }
@@ -101,6 +150,8 @@ class Program
             {
                 if (user.flag == "sysop")
                     slices["sysop"].female++;
+                if (user.flag == "rollbacker")
+                    slices["rollbacker"].female++;
                 if (!processed_users.Contains(user.id))
                 {
                     slices["all"].female++;
@@ -126,18 +177,17 @@ class Program
                         slices["10k-30k"].female++;
                     else if (user.edits <= 100000)
                         slices["30k-100k"].female++;
-                    else if (user.edits <= 300000)
-                        slices["100k-300k"].female++;
-                    else slices["300k+"].female++;
+                    else slices["100k+"].female++;
                     processed_users.Add(user.id);
                 }
             }
 
-            text += "\n{|class=\"standard sortable\"\n!Число правок!!Мужчин!!Женщин!!Доля мужчин";
+            result += "\n{|class=\"standard sortable\"\n!Число правок!!Мужчин!!Женщин!!Доля мужчин";
             foreach (var s in slices.OrderByDescending(s => s.Value.male))
-                text += "\n|-\n|" + s.Key + "||" + s.Value.male + "||" + s.Value.female + "||" + (float)s.Value.male / (s.Value.male + s.Value.female);
-            text += "\n|}";
+                result += "\n|-\n|" + s.Key + "||" + s.Value.male + "||" + s.Value.female + "||" + (100 * (float)s.Value.male / (s.Value.male + s.Value.female)) + "%";
+            result += "\n|}";
+            connect.Close();
         }
-        p.Save(text);
+        Save(site, "u:MBH/genders", result, "");
     }
 }
