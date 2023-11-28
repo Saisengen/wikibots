@@ -46,18 +46,16 @@ class Program
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
-        //site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "edit" }, { "title", title }, { "text", text }, { "token", token }, { "format", "xml" } }));
         Console.WriteLine(DateTime.Now.ToString() + " writing " + lang + ":" + title);
     }
     static void Main()
     {
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "be", new string[] { "Maksim L.", "Artsiom91" } },
-            { "kk", new string[] { "Arystanbek", "Нұрлан Рахымжанов" } } };
+        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "be", new string[] { "Maksim L.", "Artsiom91" } }, { "kk", new string[] { "Arystanbek", "Нұрлан Рахымжанов" } } };
         var min_num_of_edits = new Dictionary<string, int>() { { "ru", 10000 }, { "be", 5000 }, { "kk", 500 } };
 
         var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{Самые активные участники}}<center>\nВ каждой колонке приведена сумма правок в указанном пространстве и его обсуждении. Первично отсортировано и пронумеровано по общему числу правок.%specific_text%\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!{{abbr|№ п/с|место по числу правок в статьях|0}}!!Участник!!Всего правок!!В статьях!!шаблонах!!файлах!!категориях!!порталах и проектах!!модулях и MediaWiki!!страницах участников!!метапедических страницах" },
-            { "be", "<center>У кожным слупку прыведзена сума правак у адпаведнай прасторы і размовах пра яе. Першасна адсартавана і пранумаравана паводле агульнай колькасці правак.%specific_text%\n{|class=\"standard sortable\"\n!№!!{{abbr|№ п/с|месца па колькасці правак у артыкулах|0}}!!Удзельнік!!Агулам правак!!У артыкулах!!шаблонах!!файлах!!катэгорыях!!парталах і праектах!!модулях і MediaWiki!!старонках удзельнікаў!!метапедычных старонках" },
+            { "be", "{{Самыя актыўныя ўдзельнікі}}<center>У кожным слупку прыведзена сума правак у адпаведнай прасторы і размовах пра яе. Першасна адсартавана і пранумаравана паводле агульнай колькасці правак.%specific_text%\n{|class=\"standard sortable\"\n!№!!{{abbr|№ п/с|месца па колькасці правак у артыкулах|0}}!!Удзельнік!!Агулам правак!!У артыкулах!!шаблонах!!файлах!!катэгорыях!!парталах і праектах!!модулях і MediaWiki!!старонках удзельнікаў!!метапедычных старонках" },
             { "kk", "<center>Әрбір бағанда көрсетілген кеңістіктегі және оның талқылауындағы өңдеулер саны берілген. Ең алдымен жалпы түзетулер бойынша сұрыпталған және нөмірленген.%specific_text%\n{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!{{abbr|#м/о|мақалалардағы өңдеме саны бойынша орны|0}}!!Қатысушы!!Барлық өңдемесі!!Мақалалар!!Үлгілер!!Файлдар!!Санаттар!!Порталдар + жобалар!!Модулдар + MediaWiki!!Қатысушы беттері!!Метапедиялық (Уикипедия)" } };
 
         var resultpages = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:Самые активные боты", Second = "ВП:Участники по числу правок" } },
@@ -78,7 +76,7 @@ class Program
 
             var users = new Dictionary<string, record>();
             var bots = new Dictionary<string, record>();
-            var connect = new MySqlConnection("Server=" + lang + "wiki.labsdb;Database=" + lang + "wiki_p;Uid=" + creds[2] + ";Pwd=" + creds[3] + ";CharacterSet=utf8mb4;SslMode=none;");
+            var connect = new MySqlConnection(creds[2].Replace("%lang%", lang));
             connect.Open();
             var command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             var reader = command.ExecuteReader();
