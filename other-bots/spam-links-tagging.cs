@@ -139,7 +139,7 @@ class Program
                             title = r.GetAttribute("title");
                             if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
                             {
-                                string summary = "спам-ссылки: ";
+                                string summary = "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|спам-ссылки]]: ";
                                 string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
@@ -195,7 +195,7 @@ class Program
                                         match = false;
                                         break;
                                     }
-                            if (match && !spamlinksonpage.Contains(r.Value) && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
+                            if (match && !spamlinksonpage.Contains(r.Value) && !r.Value.Contains("youtu.be") && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
                                 spamlinksonpage.Add(r.Value);
                         }
                     }
