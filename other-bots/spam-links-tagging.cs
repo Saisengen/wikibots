@@ -53,7 +53,8 @@ class Program
         var whitelist = rawwhitelist.Split('\n');
         var blackrgx = new HashSet<PcreRegex>();
         var whitergx = new HashSet<PcreRegex>();
-        var spamtemplatergx = new PcreRegex(@"\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}");
+        var spam_template_rgx = new PcreRegex(@"\n*\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}");
+        var too_many_stars_rgx = new PcreRegex(@"^\*{2,}");
         foreach (string b in blacklist)
         {
             string current = b;
@@ -70,7 +71,7 @@ class Program
             if (current != "")
                 whitergx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
-        var spamlinksonpage = new HashSet<string>();
+        var new_spamlinks_on_page = new HashSet<string>();
         var pageids = new HashSet<string>();
         var pagenames = new Dictionary<string, string>();
         var requeststrings = new HashSet<string>();
@@ -137,21 +138,37 @@ class Program
                         {
                             var domains = new HashSet<string>();
                             title = r.GetAttribute("title");
-                            if (r.NodeType == XmlNodeType.EndElement && spamlinksonpage.Count != 0)
+                            if (r.NodeType == XmlNodeType.EndElement && new_spamlinks_on_page.Count != 0)
                             {
                                 string summary = "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|спам-ссылки]]: ";
                                 string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string text = starttext;
                                 string newtemplate = "{{спам-ссылки|1=";
-                                if (spamtemplatergx.IsMatch(starttext))
+                                if (spam_template_rgx.IsMatch(starttext))
                                 {
-                                    string oldtemplate = spamtemplatergx.Match(starttext).Groups[0].ToString();
+                                    string oldtemplate = spam_template_rgx.Match(starttext).Groups[0].ToString();
                                     text = text.Replace(oldtemplate, "");
-                                    var links = spamtemplatergx.Match(starttext).Groups[1].ToString().Split('\n');
-                                    foreach (var l in links)
-                                        newtemplate += "\n" + l;
+                                    var old_link_strings_raw = spam_template_rgx.Match(starttext).Groups[1].ToString().Split('\n');
+                                    var newstrings = new HashSet<string>();
+                                    foreach (var oldstring in old_link_strings_raw)
+                                        if (oldstring != "")
+                                        {
+                                            string newstring = oldstring;
+                                            if (newstring.EndsWith("/"))
+                                                newstring = newstring.Substring(0, newstring.Length - 1);
+                                            if (newstring.StartsWith("http://"))
+                                                newstring = newstring.Substring(7);
+                                            if (newstring.StartsWith("https://"))
+                                                newstring = newstring.Substring(8);
+                                            if (too_many_stars_rgx.IsMatch(newstring))
+                                                newstring = too_many_stars_rgx.Replace(newstring, "*");
+                                            if (!newstrings.Contains(newstring))
+                                                newstrings.Add(newstring);
+                                        }
+                                    foreach(var newstring in newstrings)
+                                        newtemplate += "\n" + newstring;
                                 }
-                                foreach (var link in spamlinksonpage)
+                                foreach (var link in new_spamlinks_on_page)
                                     if (text.Contains(link))//there are links from WD in infoboxes
                                     {
                                         string brokenlink = link.Replace("http://", "").Replace("https://", "");
@@ -163,16 +180,16 @@ class Program
                                     }
                                 foreach (var domain in domains)
                                     summary += domain + ", ";
-                                if (starttext != text)
+                                if (new_spamlinks_on_page.Count > 0 && domains.Count > 0)
                                     try
                                     {
-                                        Save(bot, pagenames[id], text + "\n\n" + newtemplate + "\n}}", summary.Substring(0, summary.Length - 2));
+                                        Save(bot, pagenames[id], text + "\n" + newtemplate + "}}", summary.Substring(0, summary.Length - 2));
                                     }
                                     catch (Exception e)
                                     {
                                         Console.WriteLine(pagenames[id] + newtemplate);
                                     }
-                                spamlinksonpage.Clear();
+                                new_spamlinks_on_page.Clear();
                             }
                             if (r.NodeType == XmlNodeType.Element && r.GetAttribute("missing") == null)
                                 id = r.GetAttribute("pageid");
@@ -195,8 +212,8 @@ class Program
                                         match = false;
                                         break;
                                     }
-                            if (match && !spamlinksonpage.Contains(r.Value) && !r.Value.Contains("youtu.be") && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
-                                spamlinksonpage.Add(r.Value);
+                            if (match && !new_spamlinks_on_page.Contains(r.Value) && !r.Value.Contains("youtu.be") && Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value).Contains("spamblacklist"))
+                                new_spamlinks_on_page.Add(r.Value);
                         }
                     }
                 }
