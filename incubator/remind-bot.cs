@@ -152,8 +152,7 @@ class MyBot : Bot
         PageList all = new PageList(site);
         PageList iskl = new PageList(site);
         MyBot bot = new MyBot();
-        string[] set = new string[10];
-        set = bot.Settings(11, site);
+        string[] set = bot.Settings(11, site);
         if (set[0] == "1")
         {
             all.FillFromAllPages("", 102, true, 5000);
@@ -168,13 +167,10 @@ class MyBot : Bot
                 exceptions[kk] = exceptions[kk].Remove(exceptions[kk].Length - 1); // remove "|" in the end of the string
                 kk++;
             }
-            // end of exceptions 
-            PageList candidats = new PageList(site);
-            PageList forgotten = new PageList(site);
-            PageList reviewing = new PageList(site);
-            candidats = bot.GetCategoryMembers(site, set[4], 5000);
-            forgotten = bot.GetCategoryMembers(site, set[5], 5000);
-            reviewing = bot.GetCategoryMembers(site, set[6], 5000);
+            // end of exceptions
+            var candidats = bot.GetCategoryMembers(site, set[4], 5000);
+            var forgotten = bot.GetCategoryMembers(site, set[5], 5000);
+            var reviewing = bot.GetCategoryMembers(site, set[6], 5000);
             string[,] pages = new string[5000, 5];
             int pn = 0;
             // обрабатываем рабочий список
@@ -276,7 +272,7 @@ class MyBot : Bot
             if ((set[3] != "0"))
             {
                 // выставляем на мини-рецензирование
-                bot.mrec(site, set, pages, iskl);
+                bot.mrec(site, set, pages);
             }
         }
     }
@@ -445,35 +441,25 @@ class MyBot : Bot
     /// <summary>
     /// Мини-рецензирование
     /// </summary>
-    public void mrec(Site site, string[] set, string[,] pages, PageList iskl)
+    public void mrec(Site site, string[] set, string[,] pages)
     {
         byte term = Convert.ToByte(set[3]);
-        PageList forgotten = new PageList(site);
-        // forgotten.FillFromCategory(set[5]);
         MyBot bot = new MyBot();
-        forgotten = bot.GetCategoryMembers(site, set[5], 5000);
+        var forgotten = bot.GetCategoryMembers(site, set[5], 5000);
         Page rp = new Page(site, set[7]);
-        Page logpage = new Page(site, "Участник:Dibot/Log RecenseBot");
-        // PageList pl = new PageList(site);
         PageList pact = new PageList(site);
-        // PageList pdel = new PageList(site);
-        PageList pred = new PageList(site);
         PageList prez = new PageList(site);
-        //PageList iskl = new PageList(site);
         DateTime dnow = DateTime.UtcNow;
         string[] mon = { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        string red, rez, isk;
         int numpages = 0;
         string d16, d10, numusers, numedits, textextract, user1, userN, datenow, d_3, d_7, log, length; // d_1, 
-        user1 = userN = datenow = log = "";
-        // d_1 = "== * --- 1-2 правки --- == \n\n";
+        log = "";
         d_3 = ""; // "== * --- Менее 5 правок --- == \n\n";
         d_7 = ""; // "== * --- 5-9 правок --- == \n\n";
         d10 = ""; // "== * --- 10-15 правок --- == \n\n";
         d16 = ""; // "== * --- Более 16 правок --- == \n\n";
         // загружаем страницу мини-рецензирования и логов
         rp.Load();
-        logpage.Load();
         // если сроки вышли
         PageList fromKU = new PageList(site);
         fromKU.FillFromCategory("Проект:Инкубатор:Статьи на доработке");
@@ -716,39 +702,18 @@ class MyBot : Bot
                 // теперь в зависимости от кол-ва правок раскидываем информацию о статье по 3ем переменным, которые потом составят страницу мини-рецензирования...
                 if (rp.text.IndexOf("== [[" + n.title + "]] ==") == -1)
                 {
-                    /*if (ne < 3)
-                    {
-                        d_1 = d_1 + "== [[" + n.title + "]] ==\n<small>([[" + titlefortalk + "|страница обсуждения статьи]])</small> \n\n\'\'<span style=\"color:gray\"><nowiki>" + textextract + "</nowiki></span>\'\'\n\n" + "{| class=\"wikitable\" width=\"100%\" \n|-\n! 1ая правка:\n| " + date1.ToString("yyyy.MM.dd HH:mm") + "\n| " + user1 + "\n! <span class=\"plainlinksneverexpand\">[http://ru.wikipedia.org/w/index.php?title=" + titleforhist + "&action=history Всего правок]</span>:\n| " + numedits + "\n! Редактировали:\n| " + ddiff1.Days + " дней (" + ddiff1.Hours + " часов)\n|-\n!Посл. правка:\n| " + date2.ToString("yyyy.MM.dd HH:mm") + "\n| " + userN + "\n! Всего авторов:\n| " + numusers + "\n!Без правок:\n| более " + ddiff.Days + " дней(-я).\n|}\n----\n<!-- свои мнения о статье в рамках мини-рецензирования высказывайте ниже -->\n\n\n";
-                    }
-                    else */
                     // чтобы не дублировать код в каждой секции ниже
-                    string review_section = "== [[" + n.title + "]] ==\n{{User:Dibot/Review" +
-                                    "\n|fe=" + date1.ToString("yyyy.MM.dd HH:mm") + "|fu=" + user1 +
-                                    "\n|le=" + date2.ToString("yyyy.MM.dd HH:mm") + "|lu=" + userN +
-                                    "\n|te=" + numedits + "|tu=" + nu.ToString() + "|ip=" + IPs +
-                                    "\n|d=" + ddiff1.Days + "|h=" + ddiff1.Hours + "|in=" + ddiff.Days +
-                                    "\n|tp=" + titlefortalk +
-                                    "\n|hp=" + titleforhist +
-                                    "\n|date=~~~~~" +
-                                    "\n|text=<nowiki>" + textextract +
-                                    "</nowiki>}}\n<!-- пишите ниже этой строки -->\n\n";
+                    string review_section = "== [[" + n.title + "]] ==\n{{User:Dibot/Review\n|fe=" + date1.ToString("yyyy.MM.dd HH:mm") + "|fu=" + user1 + "\n|le=" + date2.ToString("yyyy.MM.dd HH:mm") +
+                        "|lu=" + userN + "\n|te=" + numedits + "|tu=" + nu.ToString() + "|ip=" + IPs + "\n|d=" + ddiff1.Days + "|h=" + ddiff1.Hours + "|in=" + ddiff.Days + "\n|tp=" + titlefortalk + 
+                        "\n|hp=" + titleforhist + "\n|date=~~~~~" + "\n|text=<nowiki>" + textextract + "</nowiki>}}\n<!-- пишите ниже этой строки -->\n\n";
                     if (ne < 5)
-                    {
-                        d_3 = d_3 + review_section;
-                    }
+                        d_3 += review_section;
                     else if (ne < 10)
-                    {
-                        d_7 = d_7 + review_section;
-                    }
+                        d_7 += review_section;
                     else if (ne < 16)
-                    {
-                        d10 = d10 + review_section;
-                    }
+                        d10 += review_section;
                     else
-                    {
-                        d16 = d16 + review_section;
-                    }
-                    // "== [[" + n.title + "]] ==\n<small>([[" + titlefortalk + "|страница обсуждения статьи]])</small> \n\n\'\'<span style=\"color:gray\"><nowiki>" + textextract + "</nowiki></span>\'\'\n\n" + "{| class=\"wikitable\" width=\"100%\" \n|-\n! 1ая правка:\n| " + date1.ToString("yyyy.MM.dd HH:mm") + "\n| " + user1 + "\n! <span class=\"plainlinksneverexpand\">[http://ru.wikipedia.org/w/index.php?title=" + titleforhist + "&action=history Всего правок]</span>:\n| " + numedits + "\n! Редактировали:\n| " + ddiff1.Days + " дней (" + ddiff1.Hours + " часов)\n|-\n!Посл. правка:\n| " + date2.ToString("yyyy.MM.dd HH:mm") + "\n| " + userN + "\n! Всего авторов:\n| " + numusers + "\n!Без правок:\n| более " + ddiff.Days + " дней(-я).\n|}\n----\n<!-- свои мнения о статье в рамках мини-рецензирования высказывайте ниже -->\n\n\n";
+                        d16 += review_section;
                 }
             }
             catch // сохраняем в отдельный список упоминание об ошибке
@@ -756,43 +721,13 @@ class MyBot : Bot
                 log = log + "# [[" + n.title + "]] - ошибка веб-запроса\n";
             }
             numpages++;
-            // Console.WriteLine("Ожидаем..."); // вставляем паузу, чтобы не перегружать внешний сервер
-            // Thread.Sleep(1000); // 1 сек
         }
         if (numpages > 0)
         {
-            datenow = dnow.Day + " " + mon[dnow.Month - 1] + " " + dnow.Year;
-            // из 3ех переменных сортированных по кол-ву правок составляем итоговый текст
-            rp.text = rp.text + "\n\n" + d16 + d10 + d_7 + d_3; // +d_1;
-            // формируем отчет о проведенной работе и ощибках
-            if (log.Length > 0)
-                log = "\n=== Ошибки ===\n\n" + log;
-            red = rez = isk = "";
-            foreach (Page n in pred)
-            {
-                red = red + "# [[" + n.title + "]] \n";
-            }
-            foreach (Page n in prez)
-            {
-                rez = rez + "# [[" + n.title + "]] \n";
-            }
-            foreach (Page n in iskl)
-            {
-                isk = isk + "# [[" + n.title + "]] \n";
-            }
-            if (red.Length > 0)
-                red = "\n=== Перенаправления ===\n\n" + red;
-            if (rez.Length > 0)
-                rez = "\n=== Выставлены на рецензирование ===\n\n" + rez;
-            if (isk.Length > 0)
-                isk = "\n=== Исключены из обработки ===\n\n" + isk;
+            // из переменных сортированных по кол-ву правок составляем итоговый текст
+            rp.text = rp.text + "\n\n" + d16 + d10 + d_7 + d_3;
 
-            logpage.text = logpage.text + "\n\n== " + datenow + " ==\n" + rez + red + isk + log;
-
-            logpage.Save("обновление", true);
-            /* /////////////////////////////////////////////////////////////////////////////////////////////////
-             а теперь убираем лишние шаблоны с выставленных страниц, и ставим на них шаблон мини-рецензирования
-            ///////////////////////////////////////////////////////////////////////////////////////////////// */
+            /* а теперь убираем лишние шаблоны с выставленных страниц, и ставим на них шаблон мини-рецензирования */
             // pact.SaveTitlesToFile("template.txt", false);
             // загружаем активный список
             foreach (Page n in pact)
