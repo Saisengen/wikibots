@@ -25,7 +25,7 @@ internal class MyBot : Bot
             m[row2, i] = tmp;
         }
     }
-    public string[] Settings(byte num, DotNetWikiBot.Site site)
+    public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
         Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
@@ -128,7 +128,7 @@ internal class MyBot : Bot
     public static void Main()
     {
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        Site site2 = new Site("https://ru.wikipedia.org", "Dibоt", ""); //для переименования
+        Site site2 = new Site("https://ru.wikipedia.org", creds[10], creds[11]); //для переименования
         MyBot bot = new MyBot();
         string[] set = new string[6];
 
@@ -181,16 +181,7 @@ internal class MyBot : Bot
                             if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
                             {   // проверяем "ссылки сюда"
                                 string[] textArray3 = new string[] { site.apiPath, "?action=query&titles=", HttpUtility.UrlEncode(forKU[ku, 0]), "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml" };
-                                string pageURL = string.Concat(textArray3);
-                                string pageHTM = "";
-                                try
-                                {
-                                    pageHTM = site.GetWebPage(pageURL);
-                                }
-                                catch
-                                {
-                                    pageHTM = string.Empty;
-                                }
+                                string pageHTM = site.GetWebPage(string.Concat(textArray3));
                                 // если есть ссылки с ВУС на статью, то уточняем актуальность
                                 if (pageHTM.IndexOf("Википедия:К восстановлению") != -1 | pageHTM.IndexOf("Википедия:К_восстановлению") != -1)
                                 {
@@ -484,22 +475,7 @@ internal class MyBot : Bot
                                         str5 = str5.Replace("}}", "}");
                                         str5 = str5.Replace("http://", " ");
                                     }
-                                    /* try
-                                     {
-                                         if (str5.IndexOf("http://") != -1)
-                                         {
-                                             int st_a = str5.IndexOf("http://");
-                                             int st_b = str5.IndexOf(" ", st_a);
-                                             str5 = str5.Remove(st_a, st_b - st_a);
-                                         }
-                                     }
-                                     catch
-                                     {
-                                         Console.WriteLine("Error with link parsing in comment \"" + str5 + "\"");
-                                     }*/
                                     DateTime time2 = DateTime.Parse(str4);
-                                    // проверим даты переименования и удаления;
-                                    //string aasdas = (time2 - timing).Days.ToString();
                                     if ((time2 - timing).TotalDays > 2)
                                     {
                                         object[] objArray2 = new object[] { time2.Day, " ", datestring[time2.Month - 1], " ", time2.Year, " ", time2.TimeOfDay };
@@ -551,18 +527,6 @@ internal class MyBot : Bot
                     }
                 }
             }
-            /* while (mrpage.text.IndexOf("== * --- Загружены на мини-рецензирование") != -1)
-            {
-                mrpage.text = mrpage.text.Replace("== * --- Загружены на мини-рецензирование", "== * Загружены на мини-рецензирование");
-            }
-            MatchCollection specsections = new Regex(@"==.?" + Regex.Escape("* ---") + ".*?==[^=]*?==.?" + Regex.Escape("*"), RegexOptions.IgnoreCase).Matches(mrpage.text);
-            while (specsections.Count > 0)
-            {
-                foreach (Match m in specsections)
-                {
-                    mrpage.text = mrpage.text.Replace(m.ToString(), "== *");
-                }
-            }*/
             MatchCollection mainsections = new Regex(@"=.?<small>[^" + Regex.Escape("[") + "]*?<small>", RegexOptions.IgnoreCase & RegexOptions.Singleline).Matches(mrpage.text);
             int dsg = 0;
             while (mainsections.Count > 0)
