@@ -8,6 +8,7 @@ using System.Net;
 
 class Program
 {
+    static HashSet<string> highflags = new HashSet<string>();
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -23,21 +24,19 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string title, string text, string comment)
+    static void Save(HttpClient site, string title, string text)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
         var request = new MultipartFormDataContent();
         request.Add(new StringContent("edit"), "action");
         request.Add(new StringContent(title), "title");
         request.Add(new StringContent(text), "text");
-        request.Add(new StringContent(comment), "summary");
-        request.Add(new StringContent(token), "token");
-        request.Add(new StringContent("xml"), "format");
+        request.Add(new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token");
+        request.Add(new StringContent("1"), "bot");
         result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
         if (result.ToString().Contains("uccess"))
             Console.WriteLine(DateTime.Now.ToString() + " written " + title);
@@ -47,6 +46,7 @@ class Program
     static string serialize (HashSet<string> list)
     {
         string result = "";
+        list.ExceptWith(highflags);
         foreach (var item in list)
             result += "|" + item;
         return result.Substring(1).Replace("\"", "\\\"");
@@ -87,6 +87,19 @@ class Program
             fmovers.Add(rdr.GetString(0));
         rdr.Close();
 
+        foreach (string flag in new string[] {"sysop", "closer", "engineer" })
+        {
+            command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"" + flag + "\";";
+            rdr = command.ExecuteReader();
+            while (rdr.Read())
+            {
+                string user = rdr.GetString(0);
+                if (!highflags.Contains(user))
+                    highflags.Add(user);
+            }
+            rdr.Close();
+        }
+
         var patnotrolls = new HashSet<string>(pats);
         patnotrolls.ExceptWith(rolls);
 
@@ -97,7 +110,7 @@ class Program
         patrolls.IntersectWith(rolls);
 
         var site = Site(creds[0], creds[1]);
-        string result = "{\"userSet\":{\"pr\":\"" + serialize(patrolls) + "\",\"ap\":\"" + serialize(apats) + "\",\"p-r\":\"" + serialize(patnotrolls) + "\",\"r-p\":\"" + serialize(rollnotpats) + "\",\"f\":\"" + serialize(fmovers) + "\"}}";
-        Save(site, "MediaWiki:Gadget-markothers.json", result, "");
+        string result = "{\"userSet\":{\"p,r\":\"" + serialize(patrolls) + "\",\"ap\":\"" + serialize(apats) + "\",\"p\":\"" + serialize(patnotrolls) + "\",\"r\":\"" + serialize(rollnotpats) + "\",\"f\":\"" + serialize(fmovers) + "\"}}";
+        Save(site, "MediaWiki:Gadget-markothers.json", result);
     }
 }
