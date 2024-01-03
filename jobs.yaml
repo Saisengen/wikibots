@@ -1,11 +1,3 @@
-# hourly
-- name: numof-updater
-  command: mono /data/project/mbh/bots/numof_updater.exe
-  image: tf-mono68
-  schedule: "48 */3 * * *"
-  emails: onfailure
-
-
 # daily
 - name: unreviewed-pages
   command: mono /data/project/mbh/bots/unreviewed-pages.exe
@@ -41,6 +33,12 @@
   command: mono /data/project/mbh/bots/catmoves.exe
   image: tf-mono68
   schedule: "57 0 * * *"
+  emails: onfailure
+
+- name: little-flags
+  command: mono /data/project/mbh/bots/little-flags.exe
+  image: tf-mono68
+  schedule: "12 0 * * *"
   emails: onfailure
 
 #- name: removeqid
@@ -90,7 +88,7 @@
 #- name: spam-tagging
 #  command: mono /data/project/mbh/bots/spam.exe
 #  image: tf-mono68
-#  schedule: "19 14 17 * *"
+#  schedule: "34 10 3 * *"
 #  emails: onfailure
 #  mem: 4Gi
 
@@ -127,7 +125,7 @@
 - name: pageview-peaks
   command: mono /data/project/mbh/bots/pageview_peaks.exe
   image: tf-mono68
-  schedule: "0 4 2 * *"
+  schedule: "17 19 3 * *"
   emails: onfailure
 
 #- name: extlinks-counter
@@ -172,13 +170,13 @@
 - name: pageviews-yearly-ru
   command: mono /data/project/mbh/bots/pageview_yearly_ru.exe
   image: tf-mono68
-  schedule: "15 0 2 1 *"
+  schedule: "15 18 1 1 *"
   emails: onfailure
 
 - name: pageviews-yearly-uk
   command: mono /data/project/mbh/bots/pageview_yearly_uk.exe
   image: tf-mono68
-  schedule: "15 0 2 1 *"
+  schedule: "15 18 1 1 *"
   emails: onfailure
 
 # permanent
@@ -187,3 +185,53 @@
   image: tf-mono68
   emails: none
   continuous: true
+
+# incubator
+- name: checkbot
+  command: mono /data/project/mbh/d89bots/check-bot.exe
+  image: tf-mono68
+  schedule: "48 * * * *"
+  emails: onfailure
+
+- name: image-bot
+  command: mono /data/project/mbh/d89bots/image-inc-bot.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: inc-bot
+  command: mono /data/project/mbh/d89bots/inc-bot.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: stat-bot
+  command: mono /data/project/mbh/d89bots/inc-stat-bot.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: remind-bot
+  command: mono /data/project/mbh/d89bots/remind-inc-bot.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: nullbot
+  command: mono /data/project/mbh/d89bots/null-editor.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: minirec-itog
+  command: mono /data/project/mbh/d89bots/mini-recenz-summary.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
+- name: redir-from-inc-delete
+  command: mono /data/project/mbh/d89bots/redir-delete.exe
+  image: tf-mono68
+  schedule: "45 11 * * *"
+  emails: onfailure
+
