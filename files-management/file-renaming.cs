@@ -12,7 +12,7 @@ class MyBot : Bot
         DateTime now = DateTime.UtcNow;
         string log = "";
 
-        string xml = ru.GetWebPage(ru.apiPath + "?action=query&list=logevents&letype=move&lestart=" + now.ToString("yyyyMMddHHmmss") + "&lelimit=5000&format=xml");
+        string xml = ru.GetWebPage(ru.apiPath + "?action=query&list=logevents&letype=move&lelimit=100&format=xml");
         // RegExps
         Regex items = new Regex("<item [^<]*?" + Regex.Escape("ns=\"6\"") + ".*?</item>", RegexOptions.Singleline);
         Regex title = new Regex("(?<=title..).*?(?=" + Regex.Escape("\"") + ")", RegexOptions.Singleline);
@@ -33,15 +33,11 @@ class MyBot : Bot
         // look for usage of files
         for (int i = 0; i < n; i++)
         {
-            string pageURL2 = ru.apiPath + "?action=query&list=imageusage&iutitle=" + Uri.EscapeUriString(filemoves[i, 0]) + "&format=xml";
-            string usage = ru.GetWebPage(pageURL2);
-
-            //string usage = t.resultHTM(ru, "api.php?action=query&list=imageusage&iutitle=" + fname_code + "&format=xml");
             string[] filelinks = new string[500];
             Regex iu = new Regex("<iu [^<]*? />", RegexOptions.Singleline);
             int j = 0;
             // add pages with filelinks to array
-            foreach (Match m in iu.Matches(usage))
+            foreach (Match m in iu.Matches(ru.GetWebPage(ru.apiPath + "?action=query&list=imageusage&iutitle=" + Uri.EscapeUriString(filemoves[i, 0]) + "&format=xml")))
             {
                 filelinks[j] = title.Matches(m.ToString())[0].ToString();
                 j++;
@@ -92,7 +88,7 @@ class MyBot : Bot
         }
         if (log.Length > 2)
         {
-            Page logpage = new Page(ru, "Участник:Bot89/Переименования файлов");
+            Page logpage = new Page(ru, "user:" + creds[0] + "/Переименования файлов");
             logpage.Load();
             logpage.Save(logpage.text += log, "ошибки обработки", false);
         }
