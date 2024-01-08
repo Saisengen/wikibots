@@ -1,6 +1,6 @@
 MBHbot
 MBHbot password
-Server=%lang%.analytics.db.svc.wikimedia.cloud;Database=%lang%_p;Uid={login};Pwd={pwd};CharacterSet=utf8mb4;SslMode=none;
+Server=%project%.analytics.db.svc.wikimedia.cloud;Database=%project%_p;Uid={login};Pwd={pwd};CharacterSet=utf8mb4;SslMode=none;
 
 Рейму Хакурей
 Рейму Хакурей password
