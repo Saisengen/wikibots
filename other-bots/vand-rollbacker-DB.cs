@@ -68,7 +68,7 @@ class Program
         double mediumlimit = 1;
         int currminute = -1;
         var badusers = new HashSet<string>();
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru").Replace("analytics", "web"));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader sqlrdr;
