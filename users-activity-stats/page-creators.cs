@@ -65,7 +65,7 @@ class Program
             var users = new Dictionary<string, Record>();
             var bestusers = new Dictionary<string, Record>();
             var bots = new HashSet<string>();
-            var connect = new MySqlConnection(creds[2].Replace("%lang%", lang));
+            var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
             MySqlCommand command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             MySqlDataReader rdr;
