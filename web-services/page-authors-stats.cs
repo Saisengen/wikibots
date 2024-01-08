@@ -51,7 +51,7 @@ class Program
         var pageids = new HashSet<string>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru"));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
