@@ -76,7 +76,7 @@ class Program
 
             var users = new Dictionary<string, record>();
             var bots = new Dictionary<string, record>();
-            var connect = new MySqlConnection(creds[2].Replace("%lang%", lang));
+            var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
             var command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             var reader = command.ExecuteReader();
@@ -99,7 +99,7 @@ class Program
             reader.Close();
             connect.Close();
 
-            connect = new MySqlConnection(creds[2].Replace("%lang%", "meta"));
+            connect = new MySqlConnection(creds[2].Replace("%project%", "metawiki"));
             connect.Open();
             command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type='gblrights' and (log_params like '%lobal-bot%' or log_params like '%lobal_bot%');", connect) { CommandTimeout = 9999 };
             reader = command.ExecuteReader();
