@@ -54,7 +54,7 @@ class Program
     static void Main()
     {
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru"));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader rdr;
