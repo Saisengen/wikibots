@@ -52,7 +52,7 @@ class Program
         var apats = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", "ru"));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
@@ -63,7 +63,7 @@ class Program
             apats.Add(r.GetString(0));
         r.Close();
 
-        connect = new MySqlConnection(creds[2].Replace("%lang%", "commons"));
+        connect = new MySqlConnection(creds[2].Replace("%project%", "commonswiki"));
         connect.Open();
         command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";", connect) { CommandTimeout = 99999 };
         r = command.ExecuteReader();
