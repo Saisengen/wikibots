@@ -96,7 +96,7 @@ class Program
             };
             var userdata = new List<record> ();
             var processed_users = new HashSet<string> ();
-            var connect = new MySqlConnection(creds[2].Replace("%lang%", lang));
+            var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
             var command = new MySqlCommand("select up_value, ug_group, user_id, user_editcount from user left join user_groups on user.user_id = user_groups.ug_user join user_properties on user.user_id = user_properties.up_user where (up_property = 'gender' and up_value = 'male');", connect);
             command.CommandTimeout = 9999;
