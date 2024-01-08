@@ -33,7 +33,7 @@ class Program
         string user = parameters["user"];
         string wiki = parameters["wiki"];
         var creds = new StreamReader("../p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", url2db(wiki)));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki)));
         connect.Open();
 
         command = new MySqlCommand("select cast(replace (log_title, '_', ' ') as char) from logging where log_type=\"thanks\" and log_actor=(select actor_id from actor where actor_name=\"" + user + "\");", connect) { CommandTimeout = 9999 };
