@@ -19,11 +19,7 @@ internal class MyBot : Bot
     static void SwapRows(string[,] m, int row1, int row2)
     {
         for (int i = 0; i < m.GetLength(1); i++)
-        {
-            var tmp = m[row1, i];
-            m[row1, i] = m[row2, i];
-            m[row2, i] = tmp;
-        }
+            (m[row2, i], m[row1, i]) = (m[row1, i], m[row2, i]);
     }
     public string[] Settings(byte num, Site site)
     {
@@ -128,11 +124,9 @@ internal class MyBot : Bot
     public static void Main()
     {
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        Site site2 = new Site("https://ru.wikipedia.org", creds[10], creds[11]); //для переименования
+        Site site2 = new Site("https://ru.wikipedia.org", creds[6], creds[7]); //для переименования
         MyBot bot = new MyBot();
-        string[] set = new string[6];
-
-        set = bot.Settings(6, site);
+        var set = bot.Settings(6, site);
         // если разрешено
         if (set[0] == "1")
         {
@@ -140,7 +134,7 @@ internal class MyBot : Bot
             Page mrpage = new Page(site, set[1]);
             mrpage.Load();
             int num = 0;
-            PageList cand_list = new PageList(site);
+            PageList cand_list;
 
             // предварительный пробег на предмет номинации к удалению старейших стабов
             if (set[3] == "1") // получаем разрешение на номинацию КУ
@@ -206,7 +200,7 @@ internal class MyBot : Bot
                                         if (newname.IndexOf(",") != -1)
                                             newname = newname.Replace(",", "");
                                         else
-                                            newname = newname + ".";
+                                            newname += ".";
                                     }
                                     p.Load();
                                     try
@@ -221,7 +215,7 @@ internal class MyBot : Bot
                                             if (newname.IndexOf(",") != -1)
                                                 newname = newname.Replace(",", "");
                                             else
-                                                newname = newname + ".";
+                                                newname += ".";
                                             p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
                                         }
                                         catch // если не получилось, отбой
@@ -299,7 +293,7 @@ internal class MyBot : Bot
                     if (kuP.Exists())
                     {
                         kuP.Load();
-                        kuP.text = kuP.text + nom;
+                        kuP.text += nom;
                         kuP.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
                     }
                     else
@@ -417,7 +411,7 @@ internal class MyBot : Bot
                                     {
                                         str7 = str7 + " с комментарием \x00ab" + str5 + "\x00bb.";
                                     }
-                                    str7 = str7 + " <small>Данный итог подведен ботом</small> ~~~~\n";
+                                    str7 += " <small>Данный итог подведен ботом</small> ~~~~\n";
                                     //}
                                     result = true;
                                     break;
@@ -428,7 +422,7 @@ internal class MyBot : Bot
                                     // меняем заголовок
                                     string repp = "== [[" + str6 + "]] ==\n:<small>Обсуждение начато под заголовком [[" + title + "]]. ~~~~</small>";
                                     mrpage.text = mrpage.text.Replace("== [[" + title + "]] ==", repp);
-                                    length_add = length_add + repp.Length;
+                                    length_add += repp.Length;
                                     title = str6;
                                 }
                             }
