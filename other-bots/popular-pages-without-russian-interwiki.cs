@@ -51,7 +51,7 @@ class Program
         var nonruitems = new Dictionary<string, int>();
         string result = "<center>\n{|class=\"standard\"\n!Страница!!Кол-во интервик";
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection(creds[2].Replace("%lang%", "wikidata"));
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
         connect.Open();
         var query = new MySqlCommand("select ips_item_id, count(*) cnt from wb_items_per_site group by ips_item_id order by cnt desc limit " + numofitemstoanalyze + ";", connect);
         query.CommandTimeout = 99999;
