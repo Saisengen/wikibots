@@ -47,29 +47,30 @@ class Program
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
-        var nsnames = new Dictionary<int, string>() { { 6, "Файлы" }, { 10, "Шаблоны" }, { 14, "Категории" }, { 100, "Порталы" }, { 828, "Модули" } };
+        var nsnames = new Dictionary<int, string>() { { 0, "Статьи" }, { 6, "Файлы" }, { 10, "Шаблоны" }, { 14, "Категории" }, { 100, "Порталы" }, { 828, "Модули" } };
         string result = "";
         foreach (var ns in nsnames.Keys)
             foreach (string type in new string[] {"nonredirects", "redirects" })
-            {
-                string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=unreviewedpages&urlimit=max&urnamespace=" + ns + "&urfilterredir=" + type, apiout;
-                result += "==" + (type == "nonredirects" ? nsnames[ns] : "=Редиректы=") + "==\n";
-                while (cont != null)
+                if (!(ns == 0 && type == "nonredirects"))
                 {
-                    apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&urcontinue=" + Uri.EscapeDataString(cont)).Result);
-                    using (var r = new XmlTextReader(new StringReader(apiout)))
+                    string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=unreviewedpages&urlimit=max&urnamespace=" + ns + "&urfilterredir=" + type, apiout;
+                    result += "==" + (type == "nonredirects" ? nsnames[ns] : "=Редиректы=") + "==\n";
+                    while (cont != null)
                     {
-                        r.WhitespaceHandling = WhitespaceHandling.None;
-                        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("urcontinue");
-                        while (r.Read())
-                            if (r.Name == "p")
-                            {
-                                string title = r.GetAttribute("title");
-                                result += type == "nonredirects" ? "#[[:" + title + "]]\n" : "#[https://ru.wikipedia.org/w/index.php?title=" + Uri.EscapeDataString(title) +"&redirect=no " + title + "]\n";
-                            }
+                        apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&urcontinue=" + Uri.EscapeDataString(cont)).Result);
+                        using (var r = new XmlTextReader(new StringReader(apiout)))
+                        {
+                            r.WhitespaceHandling = WhitespaceHandling.None;
+                            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("urcontinue");
+                            while (r.Read())
+                                if (r.Name == "p")
+                                {
+                                    string title = r.GetAttribute("title");
+                                    result += type == "nonredirects" ? "#[[:" + title + "]]\n" : "#[https://ru.wikipedia.org/w/index.php?title=" + Uri.EscapeDataString(title) + "&redirect=no " + title + "]\n";
+                                }
+                        }
                     }
                 }
-            }
         Save(site, "Проект:Патрулирование/Непроверенные вне ОП", result, "");
     }
 }
