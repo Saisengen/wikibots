@@ -5,6 +5,7 @@ using System.IO;
 using System.Xml;
 using System.Net.Http;
 using System.Net;
+using Newtonsoft.Json;
 
 class Program
 {
@@ -45,11 +46,8 @@ class Program
     }
     static string serialize (HashSet<string> list)
     {
-        string result = "";
         list.ExceptWith(highflags);
-        foreach (var item in list)
-            result += "|" + item;
-        return result.Substring(1).Replace("\"", "\\\"");
+        return JsonConvert.SerializeObject(list);
     }
     static void Main()
     {
@@ -110,7 +108,7 @@ class Program
         patrolls.IntersectWith(rolls);
 
         var site = Site(creds[0], creds[1]);
-        string result = "{\"userSet\":{\"p,r\":\"" + serialize(patrolls) + "\",\"ap\":\"" + serialize(apats) + "\",\"p\":\"" + serialize(patnotrolls) + "\",\"r\":\"" + serialize(rollnotpats) + "\",\"f\":\"" + serialize(fmovers) + "\"}}";
+        string result = "{\"userSet\":{\"p,r\":" + serialize(patrolls) + ",\"ap\":" + serialize(apats) + ",\"p\":" + serialize(patnotrolls) + ",\"r\":" + serialize(rollnotpats) + "," + "\"f\":" + serialize(fmovers) + "}}";
         Save(site, "MediaWiki:Gadget-markothers.json", result);
     }
 }
