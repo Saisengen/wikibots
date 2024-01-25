@@ -82,8 +82,7 @@ class MyBot : Bot
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
         Site commons = new Site("https://commons.wikimedia.org", creds[8], creds[9]);
         MyBot bot = new MyBot();
-        string[] set = new string[6];
-        set = bot.Settings(6, site);
+        string[] set = bot.Settings(6, site);
         if (set[0] == "1")
         {
             Regex set_parser = new Regex(@".*?" + Regex.Escape("|"), RegexOptions.Singleline);
@@ -127,58 +126,43 @@ class MyBot : Bot
                     for (i = 0; i < str.Count; i++)
                     {
                         if (str[i].Contains("Файл:[[Файл:") == true)
-                        { str[i] = str[i].Replace("Файл:[[Файл:", "Файл:"); }
+                            str[i] = str[i].Replace("Файл:[[Файл:", "Файл:");
                         if (str[i] != "Файл:Example.jpg" & str[i] != "Файл:Person.jpg" & str[i] != "Файл:")
-                        {
                             im = im + str[i] + "|";
-                        }
                     }
                     if (im.Length > 1)
                     {
                         im = im.Remove(im.Length - 1);
-                        string text;
                         if (string.IsNullOrEmpty(im)) // API запрос
                             throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-                        string res = site.apiPath + "?action=query&prop=imageinfo&iiprop=timestamp|user|size|dimensions&titles=" + HttpUtility.UrlEncode(im) + "&format=xml";
                         try
                         {
-                            text = site.GetWebPage(res);
+                            var reader = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=imageinfo&iiprop=timestamp|user|size|dimensions&titles=" + HttpUtility.UrlEncode(im) + "&format=xml")));
+                            while (reader.Read())
+                                if (reader.NodeType == XmlNodeType.Element)
+                                {
+                                    if (reader.Name == "page")
+                                    {
+                                        m++;
+                                        imgs[m, 0] = reader.GetAttribute("title");
+                                        imgs[m, 1] = reader.GetAttribute("imagerepository");
+                                        imgs[m, 7] = n.title;
+                                        imgs[m, 8] = nst;
+                                        if (imgs[m, 1] == "" ^ imgs[m, 1] == null)
+                                            m--;
+                                    }
+                                    if (reader.Name == "ii")
+                                    {
+                                        imgs[m, 2] = reader.GetAttribute("timestamp");
+                                        imgs[m, 3] = reader.GetAttribute("user");
+                                        imgs[m, 4] = reader.GetAttribute("width");
+                                        imgs[m, 5] = reader.GetAttribute("height");
+                                    }
+                                }
                         }
                         catch
                         {
-                            try
-                            {
-                                text = site.GetWebPage(res);
-                            }
-                            catch
-                            {
-                                text = "";
-                            }
-                        }
-                        XmlTextReader reader = new XmlTextReader(new StringReader(text));
-                        //  reader.WhitespaceHandling = WhitespaceHandling.None;
-                        while (reader.Read())
-                        {
-                            if (reader.NodeType == XmlNodeType.Element)
-                            {
-                                if (reader.Name == "page")
-                                {
-                                    m++;
-                                    imgs[m, 0] = reader.GetAttribute("title");
-                                    imgs[m, 1] = reader.GetAttribute("imagerepository");
-                                    imgs[m, 7] = n.title;
-                                    imgs[m, 8] = nst;
-                                    if (imgs[m, 1] == "" ^ imgs[m, 1] == null)
-                                        m--;
-                                }
-                                if (reader.Name == "ii")
-                                {
-                                    imgs[m, 2] = reader.GetAttribute("timestamp");
-                                    imgs[m, 3] = reader.GetAttribute("user");
-                                    imgs[m, 4] = reader.GetAttribute("width");
-                                    imgs[m, 5] = reader.GetAttribute("height");
-                                }
-                            }
+                            continue;
                         }
                     }
                 }
@@ -203,7 +187,7 @@ class MyBot : Bot
                     Regex PD = new Regex("{{(Not-PD|PD).*?}}", RegexOptions.IgnoreCase);
                     Regex FU = new Regex("{{(Несвободный файл|FU|Fairuse|Символ|Скриншот).*?}}", RegexOptions.Singleline);
                     Regex FoP = new Regex("{{FoP.*?}}", RegexOptions.IgnoreCase);
-                    Regex OTRS = new Regex("{{.*?OTRS.*?}}", RegexOptions.IgnoreCase);
+                    Regex OTRS = new Regex("{{.*?(OTRS|VRT).*?}}", RegexOptions.IgnoreCase);
                     Regex Attribution = new Regex("{{Attribution.*?}}", RegexOptions.IgnoreCase);
                     Regex no = new Regex("{{no .*?}}", RegexOptions.IgnoreCase);
                     Regex other = new Regex("{{(VI.com-Gerbovnik|FAL|MTL|BSD|Trivial|Свободный скриншот|Kremlin).*?}}", RegexOptions.IgnoreCase);
