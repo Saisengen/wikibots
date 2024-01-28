@@ -35,10 +35,10 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string wiki, string title, string text, string comment)
+    static void Save(HttpClient site, string title, string text, string comment)
     {
         var doc = new XmlDocument();
-        var result = site.GetAsync("https://" + wiki + ".org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
@@ -50,7 +50,7 @@ class Program
         request.Add(new StringContent(comment), "summary");
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
-        result = site.PostAsync("https://" + wiki + ".org/w/api.php", request).Result;
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
         if (result.ToString().Contains("uccess"))
             Console.WriteLine(DateTime.Now.ToString() + " written " + title);
         else
@@ -78,8 +78,7 @@ class Program
                     {
                         string title = r.GetAttribute("title");
                         if (title == null) continue;
-                        string comment = r.GetAttribute("comment");
-                        if (comment == null) comment = "";
+                        string comment = r.GetAttribute("comment") ?? "";
                         if (!deletedfiles.ContainsKey(title) && !comment.Contains("emporary delet") && !comment.Contains("old revision"))
                             deletedfiles.Add(title, new logrecord { user = r.GetAttribute("user"), comment = comment, correct = true });
                     }
@@ -133,7 +132,6 @@ class Program
             }
         }
 
-        var write = Site("ru.wikipedia", creds[0], creds[1]);
         foreach (var dp in deletingpairs)
         {
             string page_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(dp.page) + "?action=raw").Result;
@@ -141,15 +139,15 @@ class Program
             string filename = dp.filename.Substring(5);
             filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(Uri.EscapeDataString(filename)) + ")";
             filename = filename.Replace(@"\ ", "[ _]+");
-            var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
-            var r2 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
-            var r3 = new Regex(@"<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            var r4 = new Regex(@"(<\s*gallery[^>]*>.*)(file|image|файл|изображение):\s*" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            var r5 = new Regex(@"(<\s*gallery[^>]*>.*)" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            var r6 = new Regex(@"<\s*gallery[^>]*>\s*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            var r7 = new Regex(@"\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + filename + @"[^}]*\}\}");
-            var r8 = new Regex(@"([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
-            var r9 = new Regex(@"([=|]\s*)" + filename, RegexOptions.IgnoreCase);
+            var r1 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
+            var r2 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
+            var r3 = new Regex(@" *<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            var r4 = new Regex(@" *(<\s*gallery[^>]*>.*)(file|image|файл|изображение):\s*" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            var r5 = new Regex(@" *(<\s*gallery[^>]*>.*)" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            var r6 = new Regex(@" *<\s*gallery[^>]*>\s*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+            var r7 = new Regex(@" *\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + filename + @"[^}]*\}\}");
+            var r8 = new Regex(@" *([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
+            var r9 = new Regex(@" *([=|]\s*)" + filename, RegexOptions.IgnoreCase);
             page_text = r1.Replace(page_text, "");
             page_text = r2.Replace(page_text, "");
             page_text = r3.Replace(page_text, "");
@@ -162,11 +160,11 @@ class Program
             if (page_text != initial_text)
                 try
                 {
-                    Save(ru, "ru.wikipedia", dp.page, page_text, "[[c:" + dp.filename + "]] удалён [[c:user:" + dp.file.user + "]] по причине " + dp.file.comment.Replace("[[", "[[c:"));
+                    Save(ru, dp.page, page_text, "[[c:" + dp.filename + "]] удалён [[c:user:" + dp.file.user + "]] по причине " + dp.file.comment.Replace("[[", "[[c:"));
                     if (dp.page.StartsWith("Шаблон:"))
                     {
                         string logpage_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
-                        Save(ru, "ru.wikipedia", "u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]", "");
+                        Save(ru, "u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]", "");
                     }
                 }
                 catch (Exception e)
