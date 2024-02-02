@@ -47,6 +47,7 @@ class Program
     }
     static void Main()
     {
+        var badusers = new List<string>() { "Шухрат Саъдиев" };
         var globalusers = new HashSet<string>();
         var globalusers_needs_flag = new HashSet<string>();
         var apats = new HashSet<string>();
@@ -84,7 +85,7 @@ class Program
             using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString("yyyy-MM-dd") + "T00:00:00.000Z&ucprop=comment&ucuser=" + Uri.EscapeDataString(mover)).Result)))
                 while (rdr.Read())
                     if (rdr.Name == "item" && rdr.GetAttribute("comment") != null)
-                        if (rdr.GetAttribute("comment").Contains("GR]"))
+                        if (rdr.GetAttribute("comment").Contains("GR]") && !badusers.Contains(mover))
                         {
                             globalusers_needs_flag.Add(mover);
                             break;
