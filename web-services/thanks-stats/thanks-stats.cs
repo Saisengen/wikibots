@@ -4,6 +4,7 @@ using System.Web;
 using MySql.Data.MySqlClient;
 using System.Linq;
 using System.IO;
+
 class Program
 {
     static void sendresponse(string response, string user, string wiki)
