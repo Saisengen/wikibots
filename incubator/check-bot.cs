@@ -11,7 +11,7 @@ class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex on = new Regex(@"checkbot.?=.?true", RegexOptions.Singleline);
@@ -132,14 +132,12 @@ class MyBot : Bot
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
         // счетчик запросов
         MyBot bot = new MyBot();
-        string[] set = new string[8];
-        set = bot.Settings(8, site);
+        string[] set = bot.Settings(8, site);
         if (set[0] == "1")
         {
             Page p = new Page(site, set[7]);
             int k = 0;
-            string talkdate, pagedate; // talkuser, pageuser;
-            talkdate = pagedate = ""; // talkuser = pageuser =
+            string talkdate, pagedate;
             Regex set_parser = new Regex(@".*?" + Regex.Escape("|"), RegexOptions.Singleline);
             int count = set_parser.Matches(set[1]).Count;
             string[] cats = new string[count];
@@ -205,7 +203,7 @@ class MyBot : Bot
              string defcolor = "bgcolor=\"#" + set[6] + "\"";*/
             // additional lists to sort by notability
             string[] nb = new string[set_parser.Matches(set[2]).Count];
-            PageList nblist = new PageList(site);
+            PageList nblist;
             for (int j = 0; j < set_parser.Matches(set[2]).Count; j++)
             {
                 nb[j] = "|";
