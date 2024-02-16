@@ -12,7 +12,7 @@ class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex imbot = new Regex(@"imagebot.?=.?true", RegexOptions.Singleline);
@@ -76,7 +76,6 @@ class MyBot : Bot
         else
         { ar[0] = "0"; return ar; }
     }
-
     public static void Main()
     {
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
@@ -187,49 +186,33 @@ class MyBot : Bot
                     Regex PD = new Regex("{{(Not-PD|PD).*?}}", RegexOptions.IgnoreCase);
                     Regex FU = new Regex("{{(Несвободный файл|FU|Fairuse|Символ|Скриншот).*?}}", RegexOptions.Singleline);
                     Regex FoP = new Regex("{{FoP.*?}}", RegexOptions.IgnoreCase);
-                    Regex OTRS = new Regex("{{.*?(OTRS|VRT).*?}}", RegexOptions.IgnoreCase);
+                    Regex VRT = new Regex("{{.*?(OTRS|VRT).*?}}", RegexOptions.IgnoreCase);
                     Regex Attribution = new Regex("{{Attribution.*?}}", RegexOptions.IgnoreCase);
                     Regex no = new Regex("{{no .*?}}", RegexOptions.IgnoreCase);
                     Regex other = new Regex("{{(VI.com-Gerbovnik|FAL|MTL|BSD|Trivial|Свободный скриншот|Kremlin).*?}}", RegexOptions.IgnoreCase);
                     Regex comm = new Regex("{{(Apache|ADRM|AGPL|APL|Artistic|BArch|Beerware|C0|CDDL|CPL|Careware|Copyright|DSL|EPL|Expat|FOLP|FWL|MIT|MPL|MTL|OAL|Open|WTFPL|X11|Zlib).*?}}", RegexOptions.IgnoreCase);
                     imgs[n, 9] = "0";
-                    if (!OTRS.IsMatch(ptext)) // if OTRS - somebody has already check file, so we don't need to check it again
+                    if (!VRT.IsMatch(ptext)) // if OTRS - somebody has already check file, so we don't need to check it again
                     {
                         if (!no.IsMatch(ptext, 0)) // the same, if here is template {{no permission}} (npd, nad, nld etc), file was checked before
                         {
                             imgs[n, 9] = "1";
                             if (CC.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + CC.Matches(ptext)[0].ToString();
-                            }
-                            else if (GFDL.IsMatch(ptext))
-                            {
+                            if (GFDL.IsMatch(ptext))
                                 imgs[n, 6] = imgs[n, 6] + GFDL.Matches(ptext)[0].ToString();
-                            }
                             if (PD.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + PD.Matches(ptext)[0].ToString();
-                            }
                             if (FU.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + FU.Matches(ptext)[0].ToString();
-                            }
                             if (FoP.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + FoP.Matches(ptext)[0].ToString();
-                            }
                             if (Attribution.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + Attribution.Matches(ptext)[0].ToString();
-                            }
                             if (other.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + other.Matches(ptext)[0].ToString();
-                            }
                             if (comm.IsMatch(ptext))
-                            {
                                 imgs[n, 6] = imgs[n, 6] + comm.Matches(ptext)[0].ToString();
-                            }
                         }
                     }
                 }
@@ -258,7 +241,6 @@ class MyBot : Bot
                 }
             }
             p.text = p.text + "|}";
-            p.SaveToFile("imgs.txt");
             p.Save("обновление списка", true);
         }
     }
