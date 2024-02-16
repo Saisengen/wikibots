@@ -24,7 +24,7 @@ internal class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex on = new Regex(@"mr_itog.?=.?true", RegexOptions.Singleline);
@@ -146,142 +146,120 @@ internal class MyBot : Bot
 
                 int max = 0;
                 string nom = "";
-                if (DateTime.Now.Hour < 1) // выполняем работу только до 1 часа ночи (один раз в день)
+                // получаем список статей на мини-рец
+                cand_list = bot.GetCategoryMembers(site, set[2], 5000);
+                string[,] forKU = new string[cand_list.Count(), 2];
+                int kunum = 0;
+                // смотрим дату последней правки
+                foreach (Page p in cand_list)
                 {
-                    // получаем список статей на мини-рец
-                    cand_list = bot.GetCategoryMembers(site, set[2], 5000);
-                    string[,] forKU = new string[cand_list.Count(), 2];
-                    int kunum = 0;
-                    // смотрим дату последней правки
-                    foreach (Page p in cand_list)
+                    p.Load();
+                    long razniza = (long)(DateTime.Now - p.timestamp).TotalSeconds;
+                    forKU[kunum, 0] = p.title;
+                    forKU[kunum, 1] = razniza.ToString();
+                    kunum++;
+                }
+                SortByColumn(forKU, 1);
+                // теперь надо проверить наличие ВУС и прочих исключений
+                PageList vus = new PageList();
+                PageList kucat = new PageList();
+                vus.FillAllFromCategory("Проект:Инкубатор:Статьи на доработке");
+                kucat.FillAllFromCategory("Википедия:Кандидаты на удаление");
+                for (int ku = 0; ku < kunum; ku++)
+                {
+                    bool work = true;
+                    if (Convert.ToInt64(forKU[ku, 1]) > (Convert.ToInt64(set[5]) * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
                     {
-                        p.Load();
-                        long razniza = (long)(DateTime.Now - p.timestamp).TotalSeconds;
-                        forKU[kunum, 0] = p.title;
-                        forKU[kunum, 1] = razniza.ToString();
-                        kunum++;
-                    }
-                    SortByColumn(forKU, 1);
-                    // теперь надо проверить наличие ВУС и прочих исключений
-                    PageList vus = new PageList();
-                    PageList kucat = new PageList();
-                    vus.FillAllFromCategory("Проект:Инкубатор:Статьи на доработке");
-                    kucat.FillAllFromCategory("Википедия:Кандидаты на удаление");
-                    for (int ku = 0; ku < kunum; ku++)
-                    {
-                        bool work = true;
-                        if (Convert.ToInt64(forKU[ku, 1]) > (Convert.ToInt64(set[5]) * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
-                        {
-                            if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
-                            {   // проверяем "ссылки сюда"
-                                string[] textArray3 = new string[] { site.apiPath, "?action=query&titles=", HttpUtility.UrlEncode(forKU[ku, 0]), "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml" };
-                                string pageHTM = site.GetWebPage(string.Concat(textArray3));
-                                // если есть ссылки с ВУС на статью, то уточняем актуальность
-                                if (pageHTM.IndexOf("Википедия:К восстановлению") != -1 | pageHTM.IndexOf("Википедия:К_восстановлению") != -1)
-                                {
-                                    PageList actvus = new PageList();
-                                    actvus.FillAllFromCategory("Википедия:Незакрытые обсуждения восстановления страниц");
-                                    foreach (Page b in actvus)
-                                    { // если хотя бы одна ссыдка является актуальным обсуждением
-                                        if (pageHTM.IndexOf(b.title) != -1)
-                                            work = false; // то выключаем обработку этой страницы
-                                    }
+                        if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
+                        {   // проверяем "ссылки сюда"
+                            string[] textArray3 = new string[] { site.apiPath, "?action=query&titles=", HttpUtility.UrlEncode(forKU[ku, 0]), "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml" };
+                            string pageHTM = site.GetWebPage(string.Concat(textArray3));
+                            // если есть ссылки с ВУС на статью, то уточняем актуальность
+                            if (pageHTM.IndexOf("Википедия:К восстановлению") != -1 | pageHTM.IndexOf("Википедия:К_восстановлению") != -1)
+                            {
+                                PageList actvus = new PageList();
+                                actvus.FillAllFromCategory("Википедия:Незакрытые обсуждения восстановления страниц");
+                                foreach (Page b in actvus)
+                                { // если хотя бы одна ссыдка является актуальным обсуждением
+                                    if (pageHTM.IndexOf(b.title) != -1)
+                                        work = false; // то выключаем обработку этой страницы
                                 }
+                            }
 
-                                // если все норм, продолжаем
-                                if (work)
+                            // если все норм, продолжаем
+                            if (work)
+                            {
+                                Page p = new Page(site2, forKU[ku, 0]);
+                                Page pp = new Page(site2, forKU[ku, 0].Replace("Инкубатор:", ""));
+                                bool not_moved = false;
+                                string newname = forKU[ku, 0].Replace("Инкубатор:", "");
+                                if (pp.Exists())
                                 {
-                                    Page p = new Page(site2, forKU[ku, 0]);
-                                    Page pp = new Page(site2, forKU[ku, 0].Replace("Инкубатор:", ""));
-                                    bool t = false;
-                                    string newname = forKU[ku, 0].Replace("Инкубатор:", "");
-                                    if (pp.Exists())
+                                    if (newname.IndexOf(",") != -1)
+                                        newname = newname.Replace(",", "");
+                                    else
+                                        newname += ".";
+                                }
+                                p.Load();
+                                try
+                                {
+                                    p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
+                                }
+                                catch
+                                { // если не переименовывается, попробовать еще раз
+                                    try
                                     {
                                         if (newname.IndexOf(",") != -1)
                                             newname = newname.Replace(",", "");
                                         else
                                             newname += ".";
-                                    }
-                                    p.Load();
-                                    try
-                                    {
                                         p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
-                                        //bot.RenameToSR(site, p.title, newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
                                     }
-                                    catch
-                                    { // если не переименовывается, попробовать еще раз
-                                        try
-                                        {
-                                            if (newname.IndexOf(",") != -1)
-                                                newname = newname.Replace(",", "");
-                                            else
-                                                newname += ".";
-                                            p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
-                                        }
-                                        catch // если не получилось, отбой
-                                        { t = true; Console.WriteLine("Problems with moving page <" + newname + ">."); }
-                                    }
-                                    if (t != true)
+                                    catch (Exception e) // если не получилось, отбой
                                     {
-                                        Page op = new Page(site2, newname);
-                                        op.Load();
-                                        // тут бы ее распатрулировать
-                                        // почистить от шаблонов инкубатора
-                                        Regex itemplates = new Regex(Regex.Escape("{{") + ".{0,5}(инкубатор|пишу|редактирую).*?(/n|" + Regex.Escape("}}") + ")", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                                        while (itemplates.IsMatch(op.text, 0))
-                                        {
-                                            for (int qw = 0; qw < itemplates.Matches(op.text).Count; qw++)
-                                            {
-                                                string rep = itemplates.Matches(op.text)[qw].ToString();
-                                                op.text = op.text.Replace(rep, "");
-                                            }
-                                        }
-                                        // почистить комментарии
-                                        Regex comments = new Regex(Regex.Escape("<!--") + ".*?" + Regex.Escape("-->"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                                        while (comments.IsMatch(op.text, 0))
-                                        {
-                                            for (int qw = 0; qw < comments.Matches(op.text).Count; qw++)
-                                            {
-                                                string rep = comments.Matches(op.text)[qw].ToString();
-                                                op.text = op.text.Replace(rep, "");
-                                            }
-                                        }
-                                        op.text = op.text.Replace("\n•••", "\n***"); // маркированный список
-                                        op.text = op.text.Replace("\n••", "\n**"); // маркированный список
-                                        op.text = op.text.Replace("\n•", "\n*"); // маркированный список
-                                        op.text = op.text.Replace("[[:Кат", "[[Кат");
-                                        op.text = op.text.Replace("[[:кат", "[[Кат");
-                                        op.text = op.text.Replace("[[:Cat", "[[Cat");
-                                        op.text = op.text.Replace("[[:cat", "[[Cat");
-                                        while (op.text.IndexOf("\n ") != -1)
-                                        {
-                                            op.text = op.text.Replace("\n ", "\n"); // строки начинающиеся с пробела
-                                        }
-                                        op.text = "{{подст:Предложение к удалению}}\n" + op.text; // к удалению
-                                        while (op.text.IndexOf("\n\n\n") != -1)
-                                        {
-                                            op.text = op.text.Replace("\n\n\n", "\n\n"); // лишние переносы строк
-                                        }
-                                        try
-                                        {
-                                            op.Save("[[" + kuP.title + "#" + op.title + "|автоматическая номинация к удалению]]", false);
-                                        }
-                                        catch
-                                        {
-                                            try
-                                            {
-                                                op.Save("[[" + kuP.title + "#" + op.title + "|автоматическая номинация к удалению]]", false);
-                                            }
-                                            catch
-                                            {
-                                                op.Save("[[" + kuP.title + "#" + op.title + "|автоматическая номинация к удалению]]", false);
-                                                Console.WriteLine("Problems with saving page <" + newname + ">.");
-                                            }
-                                        }
-                                        nom = nom + "\n\n== [[" + op.title + "]] ==\n{{subst:User:Dibot/mrKU}} ~~~~";
-                                        max++;
-                                        if (max == Convert.ToInt32(set[4])) break;
+                                        not_moved = true;
+                                        Console.WriteLine(e);
                                     }
+                                }
+                                if (!not_moved)
+                                {
+                                    Page page_in_mainspace = new Page(site2, newname);
+                                    page_in_mainspace.Load();
+                                    // тут бы ее распатрулировать
+                                    // почистить от шаблонов инкубатора
+                                    Regex itemplates = new Regex(Regex.Escape("{{") + ".{0,5}(инкубатор|пишу|редактирую).*?(/n|" + Regex.Escape("}}") + ")", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                                    while (itemplates.IsMatch(page_in_mainspace.text, 0))
+                                    {
+                                        for (int qw = 0; qw < itemplates.Matches(page_in_mainspace.text).Count; qw++)
+                                        {
+                                            string rep = itemplates.Matches(page_in_mainspace.text)[qw].ToString();
+                                            page_in_mainspace.text = page_in_mainspace.text.Replace(rep, "");
+                                        }
+                                    }
+                                    // почистить комментарии
+                                    Regex comments = new Regex(Regex.Escape("<!--") + ".*?" + Regex.Escape("-->"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                                    while (comments.IsMatch(page_in_mainspace.text, 0))
+                                    {
+                                        for (int qw = 0; qw < comments.Matches(page_in_mainspace.text).Count; qw++)
+                                        {
+                                            string rep = comments.Matches(page_in_mainspace.text)[qw].ToString();
+                                            page_in_mainspace.text = page_in_mainspace.text.Replace(rep, "");
+                                        }
+                                    }
+                                    page_in_mainspace.text = page_in_mainspace.text.Replace("\n•••", "\n***").Replace("\n••", "\n**").Replace("\n•", "\n*").Replace("[[:Кат", "[[Кат").Replace("[[:кат", "[[Кат").Replace("[[:Cat", "[[Cat").Replace("[[:cat", "[[Cat");
+                                    while (page_in_mainspace.text.IndexOf("\n ") != -1)
+                                    {
+                                        page_in_mainspace.text = page_in_mainspace.text.Replace("\n ", "\n"); // строки начинающиеся с пробела
+                                    }
+                                    page_in_mainspace.text = "{{подст:Предложение к удалению}}\n" + page_in_mainspace.text; // к удалению
+                                    while (page_in_mainspace.text.IndexOf("\n\n\n") != -1)
+                                    {
+                                        page_in_mainspace.text = page_in_mainspace.text.Replace("\n\n\n", "\n\n"); // лишние переносы строк
+                                    }
+                                    page_in_mainspace.Save("[[" + kuP.title + "#" + page_in_mainspace.title + "|автоматическая номинация к удалению]]", false);
+                                    nom = nom + "\n\n== [[" + page_in_mainspace.title + "]] ==\n{{subst:User:Dibot/mrKU}} ~~~~";
+                                    max++;
+                                    if (max == Convert.ToInt32(set[4])) break;
                                 }
                             }
                         }
@@ -314,14 +292,9 @@ internal class MyBot : Bot
             string[] datestring = new string[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
             for (int i = 0; i < titles.Count; i++)
             {
-                string str2;
-                string str3;
-                string str4;
-                string str5;
-                string str6;
-                string str7;
+                string str2, str3, str4, str5, str6, str7;
                 DateTime timing = DateTime.Now.AddDays(-5000); //для запоминания времени
-                string attribute = str2 = str3 = str4 = str5 = str6 = str7 = string.Empty;
+                string attribute = str2 = str3 = str4 = str5 = str6 = str7 = "";
                 // переменная - заголовок на мини-рец
                 string title = titles[i].Value.Replace("== [[", string.Empty).Replace("]] ==", string.Empty);
                 string title2 = title;
@@ -359,7 +332,7 @@ internal class MyBot : Bot
                             }
                             catch
                             {
-                                pageHTM = string.Empty;
+                                pageHTM = "";
                             }
                             // видимо, условие для проверки наличия записи в логах, и если переименование было обрабатываем данные
                             if (pageHTM.IndexOf("<item") != -1)
@@ -386,11 +359,6 @@ internal class MyBot : Bot
                                 // если другое пространство имен подводим итог, если нет, меняем заголовок
                                 if (attribute != str2)
                                 {
-                                    /*if (str5.IndexOf("/*") != -1)
-                                    {
-                                        str5 = str5.Remove(str5.IndexOf("/*") - 2);
-                                    }*/
-                                    // код выше глючил при удалении по d-шаблонам, заменен на нижеследующий
                                     if (str5.IndexOf("/*") > 1)
                                         str5 = str5.Remove(str5.IndexOf("/*"));
                                     else if (str5.IndexOf("/*") >= 0)
@@ -403,23 +371,17 @@ internal class MyBot : Bot
                                     timing = time;
                                     object[] objArray1 = new object[] { time.Day, " ", datestring[time.Month - 1], " ", time.Year, " ", time.TimeOfDay };
                                     string str11 = string.Concat(objArray1);
-                                    //if (str2 != "4")
-                                    //{
                                     string[] textArray4 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title, "]]\x00bb была переименована ", str11, " (UTC) участником [[ut:", str3, "|", str3, "]] в \x00ab[[", str6, "]]\x00bb" };
                                     str7 = string.Concat(textArray4);
                                     if (str5.Length > 0)
-                                    {
                                         str7 = str7 + " с комментарием \x00ab" + str5 + "\x00bb.";
-                                    }
                                     str7 += " <small>Данный итог подведен ботом</small> ~~~~\n";
-                                    //}
                                     result = true;
                                     break;
                                 }
                                 else
                                 {
                                     result = false;
-                                    // меняем заголовок
                                     string repp = "== [[" + str6 + "]] ==\n:<small>Обсуждение начато под заголовком [[" + title + "]]. ~~~~</small>";
                                     mrpage.text = mrpage.text.Replace("== [[" + title + "]] ==", repp);
                                     length_add += repp.Length;
@@ -526,12 +488,10 @@ internal class MyBot : Bot
             while (mainsections.Count > 0)
             {
                 foreach (Match m in mainsections)
-                {
                     mrpage.text = mrpage.text.Replace(m.ToString(), "= <small>");
-                }
                 // костыль для выхода из цикла
                 dsg++;
-                if (dsg > 5)
+                if (dsg > Convert.ToInt16(set[4]))
                     break;
             }
             while (mrpage.text.IndexOf("\n\n\n") != -1)
