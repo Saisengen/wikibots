@@ -10,7 +10,7 @@ class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex inc = new Regex(@"incubator.?=.?true", RegexOptions.Singleline);
