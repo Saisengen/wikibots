@@ -11,12 +11,11 @@ class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex onoff = new Regex(@"nullbot.?=.?true", RegexOptions.Singleline);
-        Regex nullcats_am = new Regex(@"nullcats_am.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline);
-        Regex nullcats_pm = new Regex(@"nullcats_pm.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline);
+        Regex nullcats = new Regex(@"nullcats.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline);
         Regex nullpages = new Regex(@"null_pages.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline);
         Regex nulllinksto = new Regex(@"null_links_to.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline);
 
@@ -25,21 +24,13 @@ class MyBot : Bot
             if (onoff.Matches(setting.text).Count > 0)
             {
                 ar[0] = "1";
-                if (nullcats_am.Matches(setting.text).Count > 0)
+                if (nullcats.Matches(setting.text).Count > 0)
                 {
-                    string a = nullcats_am.Matches(setting.text)[0].ToString();
+                    string a = nullcats.Matches(setting.text)[0].ToString();
                     a = a.Substring(a.IndexOf("=") + 1).Trim();
                     a = a.Substring(a.IndexOf("\"") + 1);
                     a = a.Remove(a.IndexOf("\""));
                     ar[1] = a;
-                }
-                if (nullcats_pm.Matches(setting.text).Count > 0)
-                {
-                    string a = nullcats_pm.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1).Trim();
-                    a = a.Substring(a.IndexOf("\"") + 1);
-                    a = a.Remove(a.IndexOf("\""));
-                    ar[2] = a;
                 }
                 if (nullpages.Matches(setting.text).Count > 0)
                 {
@@ -47,7 +38,7 @@ class MyBot : Bot
                     a = a.Substring(a.IndexOf("=") + 1).Trim();
                     a = a.Substring(a.IndexOf("\"") + 1);
                     a = a.Remove(a.IndexOf("\""));
-                    ar[3] = a;
+                    ar[2] = a;
                 }
                 if (nulllinksto.Matches(setting.text).Count > 0)
                 {
@@ -55,7 +46,7 @@ class MyBot : Bot
                     a = a.Substring(a.IndexOf("=") + 1).Trim();
                     a = a.Substring(a.IndexOf("\"") + 1);
                     a = a.Remove(a.IndexOf("\""));
-                    ar[4] = a;
+                    ar[3] = a;
                 }
                 return ar;
             }
@@ -65,9 +56,6 @@ class MyBot : Bot
         else
         { ar[0] = "0"; return ar; }
     }
-    /// <summary>
-    /// Альтернативный способ получения содержимого категорий
-    /// </summary>
     public PageList GetCategoryMembers(Site site, string cat, int limit)
     {
         PageList allpages = new PageList(site);
@@ -105,28 +93,16 @@ class MyBot : Bot
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
         // счетчик запросов
         MyBot bot = new MyBot();
-        string[] set = new string[6];
-        set = bot.Settings(6, site);
+        string[] set = bot.Settings(6, site);
         if (set[0] == "1")
         {
             Regex nullcat = new Regex(@"..*?" + Regex.Escape("|"), RegexOptions.Singleline);
             // объявляем список страниц
             PageList pl = new PageList(site);
-            DateTime now = DateTime.UtcNow;
-            // заполняем набор категорий по умолчанию
-            string cat_set = set[1];
-            // if (now.Hour > 12) // выбираем набор категорий по времени
-            if (now.Hour < 6)
-            { cat_set = set[1]; }
-            else
-            { cat_set = set[2]; }
-            // теперь циклом обрабатываем набор категорий...
-            foreach (Match m in nullcat.Matches(cat_set))
+            foreach (Match m in nullcat.Matches(set[1]))
             {
                 string cat = m.ToString();
                 cat = cat.Remove(cat.Length - 1);
-                // заполняем список страниц из категории под номером i
-                // pl.FillFromCategory(cat);
                 pl = bot.GetCategoryMembers(site, cat, 5000);
                 foreach (Page n in pl)
                 {
@@ -140,52 +116,38 @@ class MyBot : Bot
                         Console.WriteLine(n.title + " can't save or load;\n");
                     }
                 }
-                // очищаем список страниц перед заполнением из следующей категории и начинаем цикл заново
                 pl.Clear();
             }
-            // в разовых проходах
-            if (now.Hour > 6)
+            string pages = set[2];
+            foreach (Match m in nullcat.Matches(pages))
             {
-                // обрабатываем страницы...
-                string pages = set[3];
-                foreach (Match m in nullcat.Matches(pages))
+                string page = m.ToString();
+                page = page.Remove(page.Length - 1);
+                Page p = new Page(site, page);
+                p.Load();
+                try
                 {
-                    string page = m.ToString();
-                    page = page.Remove(page.Length - 1);
-                    Page p = new Page(site, page);
-                    p.Load();
-                    try
-                    {
-                        p.Save();
-                    }
-                    catch
-                    {
-                        Console.WriteLine(p.title + " can't save;\n");
-                    }
+                    p.Save();
                 }
-                // обрабатываем ccsстраницы...
-                string linksto = set[4];
-                foreach (Match mm in nullcat.Matches(linksto))
+                catch
                 {
-                    string links = mm.ToString();
-                    links = links.Remove(links.Length - 1);
-                    // заполняем список страниц из категории под номером i
-                    pl.FillFromLinksToPage(links);
-                    foreach (Page n in pl)
-                    {
-                        n.Load();
-                        try
-                        {
-                            n.Save();
-                        }
-                        catch
-                        {
-                            Console.WriteLine(n.title + " can't save;\n");
-                        }
-                    }
-                    // очищаем список страниц перед заполнением из следующей категории и начинаем цикл заново
-                    pl.Clear();
+                    Console.WriteLine(p.title + " can't save;\n");
                 }
+            }
+            // обрабатываем ccsстраницы...
+            string linksto = set[3];
+            foreach (Match mm in nullcat.Matches(linksto))
+            {
+                string links = mm.ToString();
+                links = links.Remove(links.Length - 1);
+                // заполняем список страниц из категории под номером i
+                pl.FillFromLinksToPage(links);
+                foreach (Page n in pl)
+                {
+                    n.Load();
+                    n.Save();
+                }
+                pl.Clear();
             }
         }
     }
