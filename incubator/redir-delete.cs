@@ -11,7 +11,7 @@ class MyBot : Bot
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        Page setting = new Page(site, "Участник:" + creds[8] + "/settings.js");
+        Page setting = new Page(site, "user:MBH/incubator.js");
         setting.Load();
         Regex on = new Regex(@"deleteredirects.?=.?true", RegexOptions.Singleline);
         if (on.Matches(setting.text).Count > 0) // if this bot is allowed
@@ -101,18 +101,14 @@ class MyBot : Bot
                                     temp = temp.Replace(db.Matches(temp)[qz].ToString(), "");
                                 }
                                 if (temp.Length - red.Length > 15)
-                                {
                                     delete = false;
-                                    string title = n.title;
-                                    title = HttpUtility.UrlEncode(title);
-                                }
 
                             }
                         }
                         if (delete == true)
                         {
 
-                            string rd = "";
+                            string rd;
                             if (red.IndexOf("[[") != -1)
                             {
                                 Regex rr = new Regex(Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline);
