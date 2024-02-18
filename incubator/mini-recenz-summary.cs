@@ -125,6 +125,11 @@ internal class MyBot : Bot
     {
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
         Site site2 = new Site("https://ru.wikipedia.org", creds[6], creds[7]); //для переименования
+        string token = "";
+        using (var r = new XmlTextReader(new StringReader(site2.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf"))))
+            while (r.Read())
+                if (r.Name == "tokens")
+                    token = r.GetAttribute("csrftoken");
         MyBot bot = new MyBot();
         var set = bot.Settings(6, site);
         // если разрешено
@@ -189,37 +194,21 @@ internal class MyBot : Bot
                             // если все норм, продолжаем
                             if (work)
                             {
-                                Page p = new Page(site2, forKU[ku, 0]);
-                                Page pp = new Page(site2, forKU[ku, 0].Replace("Инкубатор:", ""));
                                 bool not_moved = false;
                                 string newname = forKU[ku, 0].Replace("Инкубатор:", "");
-                                if (pp.Exists())
+                                Page newpage = new Page(site2, newname);
+                                if (newpage.Exists())
                                 {
                                     if (newname.IndexOf(",") != -1)
                                         newname = newname.Replace(",", "");
                                     else
                                         newname += ".";
                                 }
-                                p.Load();
-                                try
+                                string result = site2.PostDataAndGetResult("/w/api.php?action=move&format=xml", "from=" + forKU[ku, 0] + "&to=" + newname + "&reason=автоперенос в ОП для номинации [[ВП:КУ|к удалению]]&movetalk=1&noredirect=1&token=" + token);
+                                if (!result.Contains("uccess"))
                                 {
-                                    p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
-                                }
-                                catch
-                                { // если не переименовывается, попробовать еще раз
-                                    try
-                                    {
-                                        if (newname.IndexOf(",") != -1)
-                                            newname = newname.Replace(",", "");
-                                        else
-                                            newname += ".";
-                                        p.RenameTo(newname, "автоперенос в ОП для номинации [[ВП:КУ|к удалению]]", true, false);
-                                    }
-                                    catch (Exception e) // если не получилось, отбой
-                                    {
-                                        not_moved = true;
-                                        Console.WriteLine(e);
-                                    }
+                                    not_moved = true;
+                                    Console.WriteLine(forKU[ku, 0] + ";" + newname + ";" + result);
                                 }
                                 if (!not_moved)
                                 {
@@ -270,13 +259,11 @@ internal class MyBot : Bot
                     kuP.Load();
                     if (kuP.Exists())
                     {
-                        kuP.Load();
                         kuP.text += nom;
                         kuP.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
                     }
                     else
                     {
-                        kuP.Load();
                         kuP.text = "{{КУ-Навигация}}\n\n" + kuP.text + nom;
                         kuP.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
                     }
