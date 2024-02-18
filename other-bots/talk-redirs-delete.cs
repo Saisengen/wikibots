@@ -33,7 +33,13 @@ class Program
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var legal_redirs = new List<string>();
 
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=Категория:Википедия:Намеренные перенаправления между СО&cmlimit=max").Result)))
+            while (r.Read())
+                if (r.Name == "cm")
+                    legal_redirs.Add(r.GetAttribute("pageid"));
+        
         foreach (int ns in new int[] { 1,5,7,9,11,13,15,101,103,105,107,829 })
         {
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allredirects&arprop=title%7Cids&arnamespace=" + ns + "&arlimit=max";
@@ -48,35 +54,38 @@ class Program
                         if (r.NodeType == XmlNodeType.Element && r.Name == "r")
                         {
                             string id = r.GetAttribute("fromid");
-                            using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + id + "&rvprop=ids&rvlimit=max").Result)))
+                            if (!legal_redirs.Contains(id))
                             {
-                                rr.WhitespaceHandling = WhitespaceHandling.None;
-                                while (rr.Read())
-                                    if (rr.Name == "rev")
-                                    {
-                                        rr.Read();
-                                        if (rr.NodeType == XmlNodeType.EndElement && rr.Name == "revisions")
-                                            using (var rrr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result)))
-                                            {
-                                                rrr.WhitespaceHandling = WhitespaceHandling.None;
-                                                bool there_are_links = false;
-                                                while (rrr.Read())
-                                                    if (rrr.Name == "bl" && !rrr.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями") && !rrr.GetAttribute("title").StartsWith("Участник:DvoreBot/Оставленные перенаправления"))
-                                                        there_are_links = true;
-                                                if (!there_are_links)
+                                using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + id + "&rvprop=ids&rvlimit=max").Result)))
+                                {
+                                    rr.WhitespaceHandling = WhitespaceHandling.None;
+                                    while (rr.Read())
+                                        if (rr.Name == "rev")
+                                        {
+                                            rr.Read();
+                                            if (rr.NodeType == XmlNodeType.EndElement && rr.Name == "revisions")
+                                                using (var rrr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result)))
                                                 {
-                                                    var request = new MultipartFormDataContent();
-                                                    request.Add(new StringContent("delete"), "action");
-                                                    request.Add(new StringContent(id), "pageid");
-                                                    request.Add(new StringContent("[[ВП:КБУ#П6|редирект между СО без ссылок]]"), "reason");
-                                                    request.Add(new StringContent(token), "token");
-                                                    result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-                                                    if (!result.ToString().Contains("uccess"))
-                                                        Console.WriteLine(result);
+                                                    rrr.WhitespaceHandling = WhitespaceHandling.None;
+                                                    bool there_are_links = false;
+                                                    while (rrr.Read())
+                                                        if (rrr.Name == "bl" && !rrr.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями") && !rrr.GetAttribute("title").StartsWith("Участник:DvoreBot/Оставленные перенаправления"))
+                                                            there_are_links = true;
+                                                    if (!there_are_links)
+                                                    {
+                                                        var request = new MultipartFormDataContent();
+                                                        request.Add(new StringContent("delete"), "action");
+                                                        request.Add(new StringContent(id), "pageid");
+                                                        request.Add(new StringContent("[[ВП:КБУ#П6|редирект между СО без ссылок]]"), "reason");
+                                                        request.Add(new StringContent(token), "token");
+                                                        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+                                                        if (!result.ToString().Contains("uccess"))
+                                                            Console.WriteLine(result);
+                                                    }
                                                 }
-                                            }
-                                        break;
-                                    }
+                                            break;
+                                        }
+                                }
                             }
                         }
                 }
