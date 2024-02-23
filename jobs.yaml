@@ -1,4 +1,10 @@
 # daily
+- name: talk-broken-redirs-delete
+  command: mono /data/project/mbh/bots/talk-redirs-delete.exe
+  image: tf-mono68
+  schedule: "50 22 * * *"
+  emails: onfailure
+
 - name: unreviewed-pages
   command: mono /data/project/mbh/bots/unreviewed-pages.exe
   image: tf-mono68
@@ -189,7 +195,7 @@
 - name: file-renaming
   command: mono /data/project/mbh/bots/file-renaming.exe
   image: tf-mono68
-  emails: onfailure
+  emails: none
   continuous: true
 
 # incubator
