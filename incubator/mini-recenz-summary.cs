@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Web;
 using DotNetWikiBot;
+using System.Threading;
 
 internal class MyBot : Bot
 {
@@ -86,7 +87,7 @@ internal class MyBot : Bot
         for (int ku = 0; ku < kunum; ku++)
         {
             bool work = true;
-            if (Convert.ToInt64(forKU[ku, 1]) > (5 * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
+            if (Convert.ToInt64(forKU[ku, 1]) > (4 * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
             {
                 if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
                 {   // проверяем "ссылки сюда"
@@ -137,6 +138,7 @@ internal class MyBot : Bot
                                 while (r.Read())
                                     if (r.Name == "rev")
                                         revid_to_unpatrol = r.GetAttribute("revid");
+                            Thread.Sleep(5000);
                             string unpat_result = site.PostDataAndGetResult("/w/api.php?action=review&format=xml", "revid=" + revid_to_unpatrol +
                                 "&comment=статья Инкубатора, перенесённая в ОП&unapprove=1&token=" + Uri.EscapeDataString(token));
                             if (!unpat_result.Contains("uccess"))
@@ -206,9 +208,9 @@ internal class MyBot : Bot
         string[] datestring = new string[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         for (int i = 0; i < titles.Count; i++)
         {
-            string str2, str3, str4, str5, str6, str7;
+            string target_ns, user, tstamp, comment, target_title, str7;
             DateTime timing = DateTime.Now.AddDays(-5000); //для запоминания времени
-            string attribute = str2 = str3 = str4 = str5 = str6 = str7 = "";
+            string initial_ns = target_ns = user = tstamp = comment = target_title = str7 = "";
             // переменная - заголовок на мини-рец
             string title = titles[i].Value.Replace("== [[", string.Empty).Replace("]] ==", string.Empty);
             string title2 = title;
@@ -241,42 +243,35 @@ internal class MyBot : Bot
                         {
                             XmlTextReader reader = new XmlTextReader(new StringReader(pageHTM));
                             while (reader.Read())
-                            {
                                 if (reader.NodeType == XmlNodeType.Element)
                                 {
                                     if (reader.Name == "item")
                                     {
-                                        attribute = reader.GetAttribute("ns");
-                                        str3 = reader.GetAttribute("user");
-                                        str4 = reader.GetAttribute("timestamp");
-                                        str5 = reader.GetAttribute("comment");
+                                        initial_ns = reader.GetAttribute("ns");
+                                        user = reader.GetAttribute("user");
+                                        tstamp = reader.GetAttribute("timestamp");
+                                        comment = reader.GetAttribute("comment");
                                     }
                                     if (reader.Name == "params")
                                     {
-                                        str6 = reader.GetAttribute("target_title");
-                                        str2 = reader.GetAttribute("target_ns");
+                                        target_title = reader.GetAttribute("target_title");
+                                        target_ns = reader.GetAttribute("target_ns");
                                     }
                                 }
-                            }
                             // если другое пространство имен подводим итог, если нет, меняем заголовок
-                            if (attribute != str2)
+                            if (initial_ns != target_ns)
                             {
-                                if (str5.IndexOf("/*") > 1)
-                                    str5 = str5.Remove(str5.IndexOf("/*"));
-                                else if (str5.IndexOf("/*") >= 0)
-                                {
-                                    str5 = str5.Replace("{{", "{");
-                                    str5 = str5.Replace("}}", "}");
-                                    str5 = str5.Replace("http://", " ");
-                                }
-                                DateTime time = DateTime.Parse(str4).AddHours(-3.0);
+                                if (comment.Contains("{{") || comment.Contains("{|"))
+                                    comment = "<nowiki>" + comment + "</nowiki>";
+                                DateTime time = DateTime.Parse(tstamp).AddHours(-3.0);
                                 timing = time;
                                 object[] objArray1 = new object[] { time.Day, " ", datestring[time.Month - 1], " ", time.Year, " ", time.TimeOfDay };
                                 string str11 = string.Concat(objArray1);
-                                string[] textArray4 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title, "]]\x00bb была переименована ", str11, " (UTC) участником [[ut:", str3, "|", str3, "]] в \x00ab[[", str6, "]]\x00bb" };
+                                string[] textArray4 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title, "]]\x00bb была переименована ", str11, " (UTC) участником [[u:", user, 
+                                    "]] в \x00ab[[", target_title, "]]\x00bb" };
                                 str7 = string.Concat(textArray4);
-                                if (str5.Length > 0)
-                                    str7 = str7 + " с комментарием \x00ab" + str5 + "\x00bb.";
+                                if (comment.Length > 0)
+                                    str7 = str7 + " с комментарием \x00ab" + comment + "\x00bb.";
                                 str7 += " <small>Данный итог подведен ботом</small> ~~~~\n";
                                 result = true;
                                 break;
@@ -284,10 +279,10 @@ internal class MyBot : Bot
                             else
                             {
                                 result = false;
-                                string repp = "== [[" + str6 + "]] ==\n:<small>Обсуждение начато под заголовком [[" + title + "]]. ~~~~</small>";
+                                string repp = "== [[" + target_title + "]] ==\n:<small>Обсуждение начато под заголовком [[" + title + "]]. ~~~~</small>";
                                 mrpage.text = mrpage.text.Replace("== [[" + title + "]] ==", repp);
                                 length_add += repp.Length;
-                                title = str6;
+                                title = target_title;
                             }
                         }
                         else break;
@@ -307,28 +302,21 @@ internal class MyBot : Bot
                         {
                             XmlTextReader reader2 = new XmlTextReader(new StringReader(pageHTM));
                             while (reader2.Read())
-                            {
                                 if ((reader2.NodeType == XmlNodeType.Element) && (reader2.Name == "item"))
                                 {
-                                    str3 = reader2.GetAttribute("user");
-                                    str4 = reader2.GetAttribute("timestamp");
-                                    str5 = reader2.GetAttribute("comment");
+                                    user = reader2.GetAttribute("user");
+                                    tstamp = reader2.GetAttribute("timestamp");
+                                    comment = reader2.GetAttribute("comment");
+                                    if (comment.Contains("{{") || comment.Contains("{|"))
+                                        comment = "<nowiki>" + comment + "</nowiki>";
                                 }
-                            }
-                            if (str5.IndexOf("/*") > 1)
-                                str5 = str5.Remove(str5.IndexOf("/*"));
-                            else if (str5.IndexOf("/*") >= 0)
-                            {
-                                str5 = str5.Replace("{{", "{");
-                                str5 = str5.Replace("}}", "}");
-                                str5 = str5.Replace("http://", " ");
-                            }
-                            DateTime time2 = DateTime.Parse(str4);
+                            DateTime time2 = DateTime.Parse(tstamp);
                             if ((time2 - timing).TotalDays > 2)
                             {
                                 object[] objArray2 = new object[] { time2.Day, " ", datestring[time2.Month - 1], " ", time2.Year, " ", time2.TimeOfDay };
                                 string str12 = string.Concat(objArray2);
-                                string[] textArray6 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title2, "]]\x00bb была удалена ", str12, " (UTC) участником [[ut:", str3, "|", str3, "]] по причине \x00ab", str5, "\x00bb. <small>Данный итог подведен ботом</small> ~~~~\n" };
+                                string[] textArray6 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title2, "]]\x00bb была удалена ", str12, " (UTC) участником [[ut:", user, "|", user,
+                                    "]] по причине \x00ab", comment, "\x00bb. <small>Данный итог подведен ботом</small> ~~~~\n" };
                                 str7 = string.Concat(textArray6);
                                 result = true;
                             }
