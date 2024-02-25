@@ -7,23 +7,18 @@ using DotNetWikiBot;
 
 internal class MyBot : Bot
 {
-    
-    // сортировка двумерного массива по http://www.cyberforum.ru/csharp-beginners/thread369842.html
     static void SortByColumn(string[,] m, int c)
     {
         for (int i = 0; i < m.GetLength(0); i++)
             for (int j = i + 1; j < m.GetLength(0); j++)
                 if (Convert.ToInt32(m[i, c]) < Convert.ToInt32(m[j, c]))
                     SwapRows(m, i, j);
-    }
+    }// сортировка двумерного массива по http://www.cyberforum.ru/csharp-beginners/thread369842.html
     static void SwapRows(string[,] m, int row1, int row2)
     {
         for (int i = 0; i < m.GetLength(1); i++)
             (m[row2, i], m[row1, i]) = (m[row1, i], m[row2, i]);
     }
-    /// <summary>
-    /// Альтернативный способ получения содержимого категорий
-    /// </summary>
     public PageList GetCategoryMembers(DotNetWikiBot.Site site, string cat, int limit)
     {
         PageList allpages = new PageList(site);
@@ -178,7 +173,7 @@ internal class MyBot : Bot
                                 page_in_mainspace.text = page_in_mainspace.text.Replace("\n\n\n", "\n\n"); // лишние переносы строк
                             }
                             page_in_mainspace.Save("[[" + kuP.title + "#" + page_in_mainspace.title + "|автоматическая номинация к удалению]]", false);
-                            nom = nom + "\n\n== [[" + page_in_mainspace.title + "]] ==\n{{subst:User:Dibot/mrKU}} ~~~~";
+                            nom = nom + "\n\n== [[" + page_in_mainspace.title + "]] ==\n{{subst:User:IncubatorBot/mrKU}} ~~~~";
                             max++;
                             if (max == 5)
                                 break;
@@ -234,7 +229,6 @@ internal class MyBot : Bot
                     string pageHTM; // если ее нет
                     for (int qaza = 0; qaza < 5; qaza++)
                     {
-
                         if (string.IsNullOrEmpty(title))
                             throw new WikiBotException(Bot.Msg("No title specified for page to load."));
                         // проверяем на переименования
@@ -301,45 +295,42 @@ internal class MyBot : Bot
                     // еще раз проверим на наличие в категории
                     if (!cand_list.Contains(title2)) // title2 = title до переиенования, если оно было
                     {
-                        if (true)//(result != true) // Убрал проверку на наличие итога от переименования, т.к. сравниваем по времени переименования и удаления
+                        if (string.IsNullOrEmpty(title2))
+                            throw new WikiBotException(Bot.Msg("No title specified for page to load."));
+                        // подгружаем лог удалений
+                        string[] textArray5 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title2), "&letype=delete&ledir=newer&format=xml" };
+                        string pageURL = string.Concat(textArray5);
+                        try { pageHTM = site.GetWebPage(pageURL); }
+                        catch { pageHTM = string.Empty; }
+                        // если в логе есть - подводим итог
+                        if (pageHTM.IndexOf("<item") != -1)
                         {
-                            if (string.IsNullOrEmpty(title2))
-                                throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-                            // подгружаем лог удалений
-                            string[] textArray5 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title2), "&letype=delete&ledir=newer&format=xml" };
-                            string pageURL = string.Concat(textArray5);
-                            try { pageHTM = site.GetWebPage(pageURL); }
-                            catch { pageHTM = string.Empty; }
-                            // если в логе есть - подводим итог
-                            if (pageHTM.IndexOf("<item") != -1)
+                            XmlTextReader reader2 = new XmlTextReader(new StringReader(pageHTM));
+                            while (reader2.Read())
                             {
-                                XmlTextReader reader2 = new XmlTextReader(new StringReader(pageHTM));
-                                while (reader2.Read())
+                                if ((reader2.NodeType == XmlNodeType.Element) && (reader2.Name == "item"))
                                 {
-                                    if ((reader2.NodeType == XmlNodeType.Element) && (reader2.Name == "item"))
-                                    {
-                                        str3 = reader2.GetAttribute("user");
-                                        str4 = reader2.GetAttribute("timestamp");
-                                        str5 = reader2.GetAttribute("comment");
-                                    }
+                                    str3 = reader2.GetAttribute("user");
+                                    str4 = reader2.GetAttribute("timestamp");
+                                    str5 = reader2.GetAttribute("comment");
                                 }
-                                if (str5.IndexOf("/*") > 1)
-                                    str5 = str5.Remove(str5.IndexOf("/*"));
-                                else if (str5.IndexOf("/*") >= 0)
-                                {
-                                    str5 = str5.Replace("{{", "{");
-                                    str5 = str5.Replace("}}", "}");
-                                    str5 = str5.Replace("http://", " ");
-                                }
-                                DateTime time2 = DateTime.Parse(str4);
-                                if ((time2 - timing).TotalDays > 2)
-                                {
-                                    object[] objArray2 = new object[] { time2.Day, " ", datestring[time2.Month - 1], " ", time2.Year, " ", time2.TimeOfDay };
-                                    string str12 = string.Concat(objArray2);
-                                    string[] textArray6 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title2, "]]\x00bb была удалена ", str12, " (UTC) участником [[ut:", str3, "|", str3, "]] по причине \x00ab", str5, "\x00bb. <small>Данный итог подведен ботом</small> ~~~~\n" };
-                                    str7 = string.Concat(textArray6);
-                                    result = true;
-                                }
+                            }
+                            if (str5.IndexOf("/*") > 1)
+                                str5 = str5.Remove(str5.IndexOf("/*"));
+                            else if (str5.IndexOf("/*") >= 0)
+                            {
+                                str5 = str5.Replace("{{", "{");
+                                str5 = str5.Replace("}}", "}");
+                                str5 = str5.Replace("http://", " ");
+                            }
+                            DateTime time2 = DateTime.Parse(str4);
+                            if ((time2 - timing).TotalDays > 2)
+                            {
+                                object[] objArray2 = new object[] { time2.Day, " ", datestring[time2.Month - 1], " ", time2.Year, " ", time2.TimeOfDay };
+                                string str12 = string.Concat(objArray2);
+                                string[] textArray6 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title2, "]]\x00bb была удалена ", str12, " (UTC) участником [[ut:", str3, "|", str3, "]] по причине \x00ab", str5, "\x00bb. <small>Данный итог подведен ботом</small> ~~~~\n" };
+                                str7 = string.Concat(textArray6);
+                                result = true;
                             }
                         }
                     }
