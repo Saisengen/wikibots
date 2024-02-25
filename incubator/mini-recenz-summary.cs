@@ -7,7 +7,7 @@ using DotNetWikiBot;
 
 internal class MyBot : Bot
 {
-    static string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+    
     // сортировка двумерного массива по http://www.cyberforum.ru/csharp-beginners/thread369842.html
     static void SortByColumn(string[,] m, int c)
     {
@@ -29,7 +29,7 @@ internal class MyBot : Bot
         PageList allpages = new PageList(site);
         string[] all = new string[limit];
         int page_num = 0;
-        string URL = site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=5000&cmtitle=" + HttpUtility.UrlEncode("Категория:" + cat) + "&format=xml";
+        string URL = site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=5000&cmtitle=К:" + HttpUtility.UrlEncode(cat) + "&format=xml";
         string h = site.GetWebPage(URL);
         XmlTextReader rdr = new XmlTextReader(new StringReader(h));
         while (rdr.Read())
@@ -47,18 +47,16 @@ internal class MyBot : Bot
         }
         Console.WriteLine("Loaded " + page_num + " pages from Category:" + cat);
         foreach (string m in all)
-        {
-
-            if (!String.IsNullOrEmpty(m))
+            if (!string.IsNullOrEmpty(m))
             {
                 Page n = new Page(site, m);
                 allpages.Add(n);
             }
-        }
         return allpages;
     }
     public static void Main()
     {
+        string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
         MyBot bot = new MyBot();
         Page mrpage = new Page(site, "Проект:Инкубатор/Мини-рецензирование");
@@ -69,11 +67,9 @@ internal class MyBot : Bot
         // предварительный пробег на предмет номинации к удалению старейших стабов
         DateTime nn = DateTime.Now;
         string[] mon = { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        Site site2 = new Site("https://ru.wikipedia.org", creds[6], creds[7]); //для переименования
-        Page kuP = new Page(site2, "Википедия:К удалению/" + nn.Day + " " + mon[nn.Month - 1] + " " + nn.Year);
+        Page kuP = new Page(site, "Википедия:К удалению/" + nn.Day + " " + mon[nn.Month - 1] + " " + nn.Year);
         int max = 0;
         string nom = "";
-        // получаем список статей на мини-рец
         cand_list = bot.GetCategoryMembers(site, "Проект:Инкубатор:Статьи на мини-рецензировании", 5000);
         string[,] forKU = new string[cand_list.Count(), 2];
         int kunum = 0;
@@ -95,7 +91,7 @@ internal class MyBot : Bot
         for (int ku = 0; ku < kunum; ku++)
         {
             bool work = true;
-            if (Convert.ToInt64(forKU[ku, 1]) > (7 * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
+            if (Convert.ToInt64(forKU[ku, 1]) > (5 * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
             {
                 if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
                 {   // проверяем "ссылки сюда"
@@ -107,10 +103,8 @@ internal class MyBot : Bot
                         PageList actvus = new PageList();
                         actvus.FillAllFromCategory("Википедия:Незакрытые обсуждения восстановления страниц");
                         foreach (Page b in actvus)
-                        { // если хотя бы одна ссыдка является актуальным обсуждением
-                            if (pageHTM.IndexOf(b.title) != -1)
+                            if (pageHTM.IndexOf(b.title) != -1) // если хотя бы одна ссыдка является актуальным обсуждением
                                 work = false; // то выключаем обработку этой страницы
-                        }
                     }
 
                     // если все норм, продолжаем
@@ -118,7 +112,7 @@ internal class MyBot : Bot
                     {
                         bool not_moved = false;
                         string newname = forKU[ku, 0].Replace("Инкубатор:", "");
-                        Page newpage = new Page(site2, newname);
+                        Page newpage = new Page(site, newname);
                         if (newpage.Exists())
                         {
                             if (newname.IndexOf(",") != -1)
@@ -127,11 +121,11 @@ internal class MyBot : Bot
                                 newname += ".";
                         }
                         string token = "";
-                        using (var r = new XmlTextReader(new StringReader(site2.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf"))))
+                        using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf"))))
                             while (r.Read())
                                 if (r.Name == "tokens")
                                     token = r.GetAttribute("csrftoken");
-                        string result = site2.PostDataAndGetResult("/w/api.php?action=move&format=xml", "from=" + Uri.EscapeDataString(forKU[ku, 0]) + "&to=" + Uri.EscapeDataString(newname) +
+                        string result = site.PostDataAndGetResult("/w/api.php?action=move&format=xml", "from=" + Uri.EscapeDataString(forKU[ku, 0]) + "&to=" + Uri.EscapeDataString(newname) +
                             "&reason=автоперенос в ОП для номинации [[ВП:КУ|к удалению]]&movetalk=1&noredirect=1&token=" + Uri.EscapeDataString(token));
                         if (result.Contains("error"))
                         {
@@ -140,9 +134,19 @@ internal class MyBot : Bot
                         }
                         if (!not_moved)
                         {
-                            Page page_in_mainspace = new Page(site2, newname);
+                            Page page_in_mainspace = new Page(site, newname);
                             page_in_mainspace.Load();
-                            // тут бы ее распатрулировать
+                            
+                            string revid_to_unpatrol = "";
+                            using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&prop=revisions&titles=" + Uri.EscapeDataString(newname) + "&rvprop=ids"))))
+                                while (r.Read())
+                                    if (r.Name == "rev")
+                                        revid_to_unpatrol = r.GetAttribute("revid");
+                            string unpat_result = site.PostDataAndGetResult("/w/api.php?action=review&format=xml", "revid=" + revid_to_unpatrol +
+                                "&comment=статья Инкубатора, перенесённая в ОП&unapprove=1&token=" + Uri.EscapeDataString(token));
+                            if (!unpat_result.Contains("uccess"))
+                                Console.WriteLine(unpat_result);
+
                             // почистить от шаблонов инкубатора
                             Regex itemplates = new Regex(@"\{\{.{0,5}(инкубатор|пишу|редактирую).*?(/n|\}\})", RegexOptions.Singleline | RegexOptions.IgnoreCase);
                             while (itemplates.IsMatch(page_in_mainspace.text, 0))
@@ -153,7 +157,7 @@ internal class MyBot : Bot
                                     page_in_mainspace.text = page_in_mainspace.text.Replace(rep, "");
                                 }
                             }
-                            // почистить комментарии
+
                             Regex comments = new Regex("<!--.*?-->", RegexOptions.Singleline | RegexOptions.IgnoreCase);
                             while (comments.IsMatch(page_in_mainspace.text, 0))
                             {
@@ -223,32 +227,21 @@ internal class MyBot : Bot
                 int length = mrpage.text.IndexOf("\n== [[", (int)(index + 6));
                 int length_add = 0;
                 if (length == -1)
-                {
                     length = mrpage.text.Length;
-                }
-                // проверяем наличие секции "Итог"
-                if (mrpage.text.IndexOf("=== Итог ===", index, (int)(length - index)) == -1)
+                
+                if (mrpage.text.IndexOf("=== Итог ===", index, (int)(length - index)) == -1) // проверяем наличие секции "Итог"
                 {
-                    // если ее нет
-                    string pageHTM;
+                    string pageHTM; // если ее нет
                     for (int qaza = 0; qaza < 5; qaza++)
                     {
 
                         if (string.IsNullOrEmpty(title))
-                        {
                             throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-                        }
                         // проверяем на переименования
                         string[] textArray3 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title), "&letype=move&ledir=newer&format=xml" };
                         string pageURL = string.Concat(textArray3);
-                        try
-                        {
-                            pageHTM = site.GetWebPage(pageURL);
-                        }
-                        catch
-                        {
-                            pageHTM = "";
-                        }
+                        try { pageHTM = site.GetWebPage(pageURL); }
+                        catch { pageHTM = ""; }
                         // видимо, условие для проверки наличия записи в логах, и если переименование было обрабатываем данные
                         if (pageHTM.IndexOf("<item") != -1)
                         {
@@ -311,20 +304,12 @@ internal class MyBot : Bot
                         if (true)//(result != true) // Убрал проверку на наличие итога от переименования, т.к. сравниваем по времени переименования и удаления
                         {
                             if (string.IsNullOrEmpty(title2))
-                            {
                                 throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-                            }
                             // подгружаем лог удалений
                             string[] textArray5 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title2), "&letype=delete&ledir=newer&format=xml" };
                             string pageURL = string.Concat(textArray5);
-                            try
-                            {
-                                pageHTM = site.GetWebPage(pageURL);
-                            }
-                            catch
-                            {
-                                pageHTM = string.Empty;
-                            }
+                            try { pageHTM = site.GetWebPage(pageURL); }
+                            catch { pageHTM = string.Empty; }
                             // если в логе есть - подводим итог
                             if (pageHTM.IndexOf("<item") != -1)
                             {
@@ -374,10 +359,7 @@ internal class MyBot : Bot
                             if (str7.IndexOf("https://") != -1)
                                 str7 = str7.Replace("https://", "");
                         }
-                        catch
-                        {
-                            Console.WriteLine("Error with link parsing: \n\n\"" + str7 + "\"\n");
-                        }
+                        catch { Console.WriteLine("Error with link parsing: \n\n\"" + str7 + "\"\n"); }
                         // вставляем итог в страницу
                         int startIndex = mrpage.text.IndexOf("}\n", index, (int)((length + length_add) - index));
                         int num6 = mrpage.text.IndexOf("\n==", startIndex);
