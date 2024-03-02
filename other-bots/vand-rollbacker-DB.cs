@@ -57,10 +57,13 @@ class Program
             request.Add(new StringContent(customparam), "user");
         return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
+
     static int Main()
     {
+        var discord = new HttpClient();
         var goodanons = new HashSet<string>();
-        var creds = new StreamReader("p").ReadToEnd().Split('\n');
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        string discord_token = creds[3];
         var site = Site(creds[4], creds[5]);
         var reportedusersrx = new Regex(@"\| вопрос = u/(.*)");
         var rowrx = new Regex(@"\|-");
@@ -123,11 +126,15 @@ class Program
 
                     if (damaging < mediumlimit)
                     {
-                        string text = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Проблемные_правки&action=raw").Result.Replace("!Дифф!!Статья!!Автор!!damaging!!goodfaith", "!Дифф!!Статья!!Автор!!damaging!!goodfaith\n|-\n|[[special:diff/" + editid +
-                            "|diff]]||[//ru.wikipedia.org/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + damaging + "||" + goodfaith);
+                        string text = site.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Проблемные_правки&action=raw").Result.Replace(
+                            "!Дифф!!Статья!!Автор!!damaging!!goodfaith", "!Дифф!!Статья!!Автор!!damaging!!goodfaith\n|-\n|[[special:diff/" + editid + "|diff]]||[//ru.wikipedia.org" +
+                            "/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + damaging + "||" + goodfaith);
                         var rows = rowrx.Matches(text);
                         text = text.Substring(0, rowrx.Matches(text)[rowrx.Matches(text).Count - 1].Index);
                         Save(site, "edit", "u:Рейму_Хакурей/Проблемные_правки", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]], [[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith, edit_type.suspicious_edit);
+
+                        var result = discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>
+                        { { "content", "https://ru.wikipedia.org/w/index.php?diff=" + editid + " \"" + title + "\", участник " + user }, { "username", "Рейму Хакурей" } })).Result;
                     }
                     else
                     {
