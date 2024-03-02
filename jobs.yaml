@@ -240,10 +240,3 @@
   image: tf-mono68
   schedule: "29 10 * * *"
   emails: onfailure
-
-- name: redir-from-inc-delete
-  command: mono /data/project/mbh/d89bots/redir-delete.exe
-  image: tf-mono68
-  schedule: "58 9 * * *"
-  emails: onfailure
-
