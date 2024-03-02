@@ -89,9 +89,11 @@ class Program
                         goodanons.Add(g);
                 }
                 bool newle = false;
-                command = new MySqlCommand("select cast(rc_title as char) title, max(case when oresm_name=\"damaging\" then oresc_probability else 0 end) damaging, max(case when oresm_name=\"goodfaith\" then oresc_probability else 0 end) goodfaith, cast(actor_name as char) user, rc_this_oldid, " +
-                    "actor_user from recentchanges join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmm") + "00 and rc_type=0 group by rc_this_oldid " +
-                    "having max(case when oresm_name=\"damaging\" then oresc_probability else 0 end)>=" + lowlimit + "order by rc_this_oldid desc;", connect);
+                command = new MySqlCommand("select cast(rc_title as char) title, max(case when oresm_name=\"damaging\" then oresc_probability else 0 end) damaging, max(case when oresm_name=" +
+                    "\"goodfaith\" then oresc_probability else 0 end) goodfaith, cast(actor_name as char) user, rc_this_oldid, actor_user from recentchanges join ores_classification on " +
+                    "oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddMinutes(-1).ToString(
+                        "yyyyMMddHHmm") + "00 and rc_type=0 group by rc_this_oldid having max(case when oresm_name=\"damaging\" then oresc_probability else 0 end)>=" + lowlimit + 
+                        "order by rc_this_oldid desc;", connect);
                 sqlrdr = command.ExecuteReader();
                 while (sqlrdr.Read())
                 {
@@ -120,7 +122,8 @@ class Program
                             if (user == r.Groups[1].Value)
                                 reportedyet = true;
                         if (!reportedyet)
-                            Save(site, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос", edit_type.zkab_report);
+                            Save(site, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user +
+                                "]] - новый запрос", edit_type.zkab_report);
                     }
                     else badusers.Add(user);
 
@@ -131,17 +134,20 @@ class Program
                             "/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + damaging + "||" + goodfaith);
                         var rows = rowrx.Matches(text);
                         text = text.Substring(0, rowrx.Matches(text)[rowrx.Matches(text).Count - 1].Index);
-                        Save(site, "edit", "u:Рейму_Хакурей/Проблемные_правки", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]], [[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith, edit_type.suspicious_edit);
+                        Save(site, "edit", "u:Рейму_Хакурей/Проблемные_правки", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
+                            "[[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith, edit_type.suspicious_edit);
 
                         var result = discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title +
-                                "](<https://ru.wikipedia.org/w/index.php?diff=" + editid + ">) [" + user + "](<https://ru.wikipedia.org/wiki/special:contribs/" + user + ">)" }})).Result;
+                                "](<https://ru.wikipedia.org/w/index.php?diff=" + editid + ">) / [" + user + "](<https://ru.wikipedia.org/wiki/special:contribs/" + user + ">) (dmg:" +
+                                damaging + " gdfth:" + goodfaith + ")"}})).Result;
                     }
                     else
                     {
-                        string answer = Save(site, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" + damaging + "/" + goodfaith + ")", edit_type.rollback);
+                        string answer = Save(site, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" +
+                            damaging + "/" + goodfaith + ")", edit_type.rollback);
                         if (answer.Contains("<rollback title="))
-                        Save(site, "edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" + goodfaith + "|" + (user_is_anon ? "1" : "") + "}}", (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + 
-                            "автоматически отменена", edit_type.talkpage_warning);
+                        Save(site, "edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + editid + "|" + title + "|" + damaging + "|" + goodfaith + "|" + (user_is_anon ? "1" : "") +
+                            "}}", (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена", edit_type.talkpage_warning);
                         else
                         {
                             Console.WriteLine(title);
