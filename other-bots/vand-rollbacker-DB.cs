@@ -133,8 +133,8 @@ class Program
                         text = text.Substring(0, rowrx.Matches(text)[rowrx.Matches(text).Count - 1].Index);
                         Save(site, "edit", "u:Рейму_Хакурей/Проблемные_правки", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]], [[special:contribs/" + user + "|" + user + "]], " + damaging + "/" + goodfaith, edit_type.suspicious_edit);
 
-                        var result = discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>
-                        { { "content", "[" + title + "](<https://ru.wikipedia.org/w/index.php?diff=" + editid + ">) " + user }})).Result;
+                        var result = discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title +
+                                "](<https://ru.wikipedia.org/w/index.php?diff=" + editid + ">) [" + user + "](<https://ru.wikipedia.org/wiki/special:contribs/" + user + ">)" }})).Result;
                     }
                     else
                     {
@@ -157,7 +157,7 @@ class Program
                 Console.WriteLine(e.ToString());
                 return 1;
             }
-            Thread.Sleep(10000);
+            Thread.Sleep(5000);
         }
     }
 }
