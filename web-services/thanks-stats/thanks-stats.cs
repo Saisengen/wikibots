@@ -9,7 +9,7 @@ class Program
 {
     static void sendresponse(string response, string user, string wiki)
     {
-        var sr = new StreamReader("thanks-stats.html");
+        var sr = new StreamReader("likes.html");
         Console.WriteLine(sr.ReadToEnd().Replace("%response%", response).Replace("%user%", user).Replace("%wiki%", wiki));
     }
     static string url2db(string url)
@@ -33,7 +33,7 @@ class Program
         var parameters = HttpUtility.ParseQueryString(input);
         string user = parameters["user"];
         string wiki = parameters["wiki"];
-        var creds = new StreamReader("../p").ReadToEnd().Split('\n');
+        var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
         var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki)));
         connect.Open();
 
