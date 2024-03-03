@@ -13,4 +13,7 @@ python \
     --directory="$DEST_DIR" \
     --cgi \
     "$@" \
-    "${PORT:-8000}" 
+    "${PORT:-8000}"
+
+exec 1>>$TOOL_DATA_DIR/access.log
+exec 2>>$TOOL_DATA_DIR/error.log
