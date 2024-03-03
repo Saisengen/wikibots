@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "thanks-stats", "thanks-stats\thanks-stats.csproj", "{FD320275-1E4A-46D4-BE73-E7E9222409D5}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "likes", "likes\likes.csproj", "{FD320275-1E4A-46D4-BE73-E7E9222409D5}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "transclusions-count", "transclusions-count\transclusions-count.csproj", "{7EA581B1-6A33-4809-89B0-9E28805DDB58}"
 EndProject
