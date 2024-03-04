@@ -19,9 +19,9 @@ export_to_html_dir() {
     mkdir -p "$dest_dir/cgi-bin"
 
     # Static files
-    for file in "index.html" "favicon.ico" "favicon-32x32.png"; do
-        echo "Gathering index page"
-        cp "web-services/$file" "$dest_dir/"
+    for file in web-services/*html web-services/*ico; do
+        echo "Gathering static file $file"
+        cp "$file" "$dest_dir/"
     done
 
     # Compiled files
