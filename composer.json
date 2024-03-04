@@ -1,1 +1,10 @@
-{}
+{
+    "scripts": {
+        "post-install-cmd": [
+            "./compile.sh"
+        ],
+        "post-update-cmd": [
+            "./compile.sh"
+        ]
+    }
+}

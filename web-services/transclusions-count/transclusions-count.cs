@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
-using System.IO;
-using System.Linq;
 using System.Web;
 using System.Xml;
 using System.Text;
@@ -16,7 +12,11 @@ class Program
     static HashSet<string> pagenames = new HashSet<string>();
     static void sendresponse(string wiki, string cat, int depth, string result)
     {
-        var sr = new StreamReader("transclusions-count.html");
+        // Get the path of the executable, and lead the html file from that same directory
+        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
+        string strHtmlPath = Path.Combine(strWorkPath!, "transclusions-count.html");
+        var sr = new StreamReader(strHtmlPath);
         string resulttext = sr.ReadToEnd();
         resulttext = resulttext.Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", depth.ToString());
         Console.WriteLine(resulttext);

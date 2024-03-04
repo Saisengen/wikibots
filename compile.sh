@@ -1,47 +1,89 @@
 #!/bin/bash
-
-
-if [[ "$1" != "" ]]; then
-    PROJECT="$1"
-    if ! [[ -d "web-services/$PROJECT" ]]; then
-        echo "Unable to find project $PROJECT"
-        exit 1
-    fi
-else
-    PROJECT="all"
-fi
-
-if [[ "$TOOL_DATA_DIR" == "" ]]; then
-    DEST_DIR="/tmp/compilation" 
-else
-    DEST_DIR="$TOOL_DATA_DIR/public_html" 
-fi
-[[ -d "$DEST_DIR/cgi-bin" ]] || mkdir -p "$DEST_DIR/cgi-bin"
-
 set -o nounset
 set -o errexit
 set -o pipefail
+shopt -s nullglob
 
-DOTNET_BUILD="dotnet publish --self-contained --runtime linux-x64"
-if [[ "$PROJECT" == "all" ]]; then
-    $DOTNET_BUILD web-services/web-services.sln
-else
-    $DOTNET_BUILD web-services/$PROJECT
-fi
+LAYER_DIR="/layers/heroku_php/wikibots"
+PUBLIC_HTML="$LAYER_DIR/public_html"
+PROJECTS=(
+    web-services/*
+    cluster-analysis/*
+)
 
-for file in "index.html" "favicon.ico" "favicon-32x32.png"; do
-    echo "Gathering index page"
-    cp "web-services/$file" "$DEST_DIR/"
-done
 
-for program in web-services/*; do
-    if [[ -d "$program" ]]; then
-        if [[ "$PROJECT" == "all" ]] || [[ "$program" =~ $PROJECT$ ]]; then
-            echo "Gathering $program"
-            cp -a "$program"/bin/Release/net8.0/linux-x64/publish/* "$DEST_DIR/cgi-bin/"
-            cp "$program"/*.html "$DEST_DIR/cgi-bin/"
+export_to_html_dir() {
+    echo "#################################################"
+    echo "## Export start ##"
+    local dest_dir="${1?}"
+    mkdir -p "$dest_dir/cgi-bin"
+
+    # Static files
+    for file in web-services/*html web-services/*ico; do
+        echo "Gathering static file $file"
+        cp "$file" "$dest_dir/"
+    done
+
+    # Compiled files
+    for project in "${PROJECTS[@]}"; do
+        if [[ -d "$project" ]]; then
+            if [[ -d "$project/bin/Release" ]]; then
+                echo "## Gathering $project"
+                cp -a "$project"/bin/Release/*/linux-x64/publish/* "$dest_dir/cgi-bin/"
+                cp "$project"/*.html "$dest_dir/cgi-bin/"
+            else
+                echo "Unable to find release for project $project, did you forget to add it to the solutions file?"
+                echo "   dotnet sln add $project"
+            fi
         fi
-    fi
-done
+    done
 
-echo "Done compiling all the code, you can find the binaries and static code at $DEST_DIR"
+    echo "## Export end ##"
+    echo "#################################################"
+}
+
+
+build_all() {
+    echo "#################################################"
+    echo "## Building start ##"
+    local dotnet_build="dotnet publish --self-contained --runtime linux-x64"
+    echo "#################################################"
+    echo "## Compiling all.sln ##"
+    $dotnet_build all.sln
+    echo "## Building end ##"
+    echo "#################################################"
+}
+
+
+populate_procfile() {
+    # This adds an entry in the procfile for each of the binaries built
+    # so they can be used in jobs
+    for executable in $(find "$PUBLIC_HTML" -type f -executable -print); do
+        # skip files with extensions
+        if ! [[ "$executable" == *.* ]]; then
+            echo "Creating Procfile entry point ${executable##*/}"
+            echo "${executable##*/}: $executable" >> Procfile
+        fi
+    done
+}
+
+
+add_buildpack_layer_config() {
+    cat >>"$LAYER_DIR.toml" <<EOL
+[types]
+launch = true
+build = false
+cache = false
+EOL
+}
+
+
+main() {
+    build_all
+    export_to_html_dir "$PUBLIC_HTML"
+    populate_procfile
+    add_buildpack_layer_config
+}
+
+
+main "$@"
