@@ -26,7 +26,7 @@ class Program
     }
     static void Main()
     {
-        var creds = new StreamReader("../p").ReadToEnd().Split('\n');
+        var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
         var cl = new WebClient();
         var srcpages = new List<string>();
         //Environment.SetEnvironmentVariable("QUERY_STRING", "type=links&source=Проект:Востоковедная неделя/Статьи&notless=1");
