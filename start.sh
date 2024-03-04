@@ -1,13 +1,15 @@
 #!/bin/bash
 
-if [[ "$TOOL_DATA_DIR" == "" ]]; then
-    echo "Starting dev environment"
-    DEST_DIR="/tmp/compilation"
-else
-    DEST_DIR="$TOOL_DATA_DIR/public_html"
-fi
+DEST_DIR="/layers/heroku_php/wikibots/public_html"
 
-cd "$DEST_DIR/cgi-bin" || exit
+[[ -d "$DEST_DIR/cgi-bin" ]] || {
+    echo "Unable to find cgi-bin directory at $DEST_DIR, something went wrong."
+    exit 1
+}
+
+exec 1>>$TOOL_DATA_DIR/access.log
+exec 2>>$TOOL_DATA_DIR/error.log
+
 python \
     -m http.server \
     --directory="$DEST_DIR" \
@@ -15,5 +17,3 @@ python \
     "$@" \
     "${PORT:-8000}"
 
-exec 1>>$TOOL_DATA_DIR/access.log
-exec 2>>$TOOL_DATA_DIR/error.log
