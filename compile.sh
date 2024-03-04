@@ -27,9 +27,14 @@ export_to_html_dir() {
     # Compiled files
     for project in "${PROJECTS[@]}"; do
         if [[ -d "$project" ]]; then
-            echo "## Gathering $project"
-            cp -a "$project"/bin/Release/*/linux-x64/publish/* "$dest_dir/cgi-bin/"
-            cp "$project"/*.html "$dest_dir/cgi-bin/"
+            if [[ -d "$project/bin/Release" ]]; then
+                echo "## Gathering $project"
+                cp -a "$project"/bin/Release/*/linux-x64/publish/* "$dest_dir/cgi-bin/"
+                cp "$project"/*.html "$dest_dir/cgi-bin/"
+            else
+                echo "Unable to find release for project $project, did you forget to add it to the solutions file?"
+                echo "   dotnet sln add $project"
+            fi
         fi
     done
 
