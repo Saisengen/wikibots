@@ -78,11 +78,18 @@ EOL
 }
 
 
+cleanup() {
+    # Remove all the temporary files we generated
+    git clean -fdx
+}
+
+
 main() {
     build_all
     export_to_html_dir "$PUBLIC_HTML"
     populate_procfile
     add_buildpack_layer_config
+    cleanup
 }
 
 
