@@ -13,7 +13,7 @@ class Program
 {
     static void Sendresponse(string result, string elections, string type)
     {
-        var sr = new StreamReader("clusters-template4.txt");
+        var sr = new StreamReader("clusters4.html");
         string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%elections%", elections);
         if (type == "d")
             result1 = result1.Replace("%checked_d%", "checked").Replace("%checked_dn%", "");
