@@ -98,7 +98,7 @@ class Program
 
         if (type == "db")
         {
-            var creds = new StreamReader("../p").ReadToEnd().Split('\n');
+            var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
             var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(project)));
             connect.Open();
             var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and log_timestamp >" + startdate.Replace("-", "") +
