@@ -1,15 +1,15 @@
-using System;
-using System.Collections.Generic;
 using System.Web;
 using MySql.Data.MySqlClient;
-using System.Linq;
-using System.IO;
 
 class Program
 {
     static void sendresponse(string response, string user, string wiki)
     {
-        var sr = new StreamReader("likes.html");
+        // Get the path of the executable, and lead the html file from that same directory
+        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
+        string strHtmlPath = Path.Combine(strWorkPath!, "likes.html");
+        var sr = new StreamReader(strHtmlPath);
         Console.WriteLine(sr.ReadToEnd().Replace("%response%", response).Replace("%user%", user).Replace("%wiki%", wiki));
     }
     static string url2db(string url)
@@ -33,7 +33,8 @@ class Program
         var parameters = HttpUtility.ParseQueryString(input);
         string user = parameters["user"];
         string wiki = parameters["wiki"];
-        var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
+        // Use environment variables to read the credentials
+        var creds = Environment.GetEnvironmentVariable("WIKIBOTS_CREDENTIALS").Split('\n');
         var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(wiki)));
         connect.Open();
 

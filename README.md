@@ -32,3 +32,9 @@ mbh@toolforge> toolforge build start https://github.com/Saisengen/wikibots
 ```shell
 mbh@toolforge> toolforge webservice buildservice restart
 ```
+
+## Setting up credentials
+You can set the credentials by creating an environment variable in toolforge like:
+```shell
+cat p | toolforge envvars add WIKIBOT_CREDENTIALS
+```

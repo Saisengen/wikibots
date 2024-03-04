@@ -161,7 +161,11 @@ class Program
 
     static void Sendresponse(string response)
     {
-        var sr = new StreamReader("category-pathfinder.html");
+        // Get the path of the executable, and lead the html file from that same directory
+        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
+        string strHtmlPath = Path.Combine(strWorkPath!, "category-pathfinder.html");
+        var sr = new StreamReader(strHtmlPath);
         Console.WriteLine(sr.ReadToEnd().Replace("%page%", page).Replace("%uppercat%", category).Replace("%lang%", lang).Replace("%response%", response));
     }
 }
