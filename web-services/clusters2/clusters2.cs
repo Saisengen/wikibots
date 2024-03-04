@@ -11,10 +11,10 @@ class data
 }
 class Program
 {
-    static bool method_is_post = true;
+    static bool method_is_post = false;
     static void Sendresponse(string result, string users, int earlieryear, int lateryear, string type, bool sort, bool wikidim)
     {
-        var sr = new StreamReader(method_is_post ? "clusters-template2.5.txt" : "clusters-template2.txt");
+        var sr = new StreamReader(method_is_post ? "clusters2.5.html" : "clusters2.html");
         string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
         if (type == "d")
             result1 = result1.Replace("%checked_d%", "checked");
