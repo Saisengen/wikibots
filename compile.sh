@@ -42,11 +42,9 @@ build_all() {
     echo "#################################################"
     echo "## Building start ##"
     local dotnet_build="dotnet publish --self-contained --runtime linux-x64"
-    for solutions_file in $(find . -iname \*.sln); do
-        echo "#################################################"
-        echo "## Compiling $solutions_file ##"
-        $dotnet_build "$solutions_file"
-    done
+    echo "#################################################"
+    echo "## Compiling all.sln ##"
+    $dotnet_build all.sln
     echo "## Building end ##"
     echo "#################################################"
 }
