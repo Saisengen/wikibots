@@ -14,7 +14,7 @@ class Program
     static HttpClient discord = new HttpClient(), ru, uk;
     static double damaging;
     static Regex rowrx = new Regex(@"\|-");
-    static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","Рейму_Хакурей/Проблемные_правки"},{"uk","Рейму_Хакурей/Підозрілі редагування"}};
+    static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","Рейму_Хакурей/Проблемные_правки"},{"uk","Рейму_Хакурей/Підозрілі_редагування"}};
     static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
@@ -105,7 +105,8 @@ class Program
                     foreach (var g in ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Result.Split('\n'))
                         goodanons.Add(g);
                     patterns.Clear();
-                    patterns.Add(new Regex("\bСВО\b")); //его нельзя использовать в ignore case, как остальные
+                    patterns.Add(new Regex(@"\bСВО\b")); //нельзя использовать в ignore case, как остальные
+                    patterns.Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
                     var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
                     foreach (var pattern in pattern_source)
                         patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
@@ -113,7 +114,7 @@ class Program
                 bool runewle = false, ukrnewle = false;
                 string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
                     "ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddSeconds(-10)
-                    .ToString("yyyyMMddHHmmss") + " and rc_type=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
+                    .ToString("yyyyMMddHHmmss") + " and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
                 sqlreader = new MySqlCommand(commandtext, ruconnect).ExecuteReader();
                 while (sqlreader.Read())
                 {
@@ -164,7 +165,7 @@ class Program
                         }
                     }
 
-                    if (title != notifying_page_name["ru"] && title != notifying_page_name["uk"])
+                    if (user_is_anon)
                     {
                         try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=xml&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=unified").Result; }
                         catch { continue; }
@@ -180,28 +181,28 @@ class Program
                 sqlreader.Close();
                 rulasteditid = newrulasteditid;
 
-                sqlreader = new MySqlCommand(commandtext, ukrconnect).ExecuteReader();
-                while (sqlreader.Read())
-                {
-                    string user = sqlreader.GetString("user");
-                    if (goodanons.Contains(user))
-                        continue;
-                    double damaging = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
-                    string title = sqlreader.GetString("title").Replace('_', ' ');
-                    string editid = sqlreader.GetString("rc_this_oldid");
-                    if (!ukrnewle)
-                    {
-                        newrulasteditid = editid;
-                        ukrnewle = true;
-                    }
-                    if (editid == ukrlasteditid)
-                        break;
+                //sqlreader = new MySqlCommand(commandtext, ukrconnect).ExecuteReader();
+                //while (sqlreader.Read())
+                //{
+                //    string user = sqlreader.GetString("user");
+                //    if (goodanons.Contains(user))
+                //        continue;
+                //    double damaging = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
+                //    string title = sqlreader.GetString("title").Replace('_', ' ');
+                //    string editid = sqlreader.GetString("rc_this_oldid");
+                //    if (!ukrnewle)
+                //    {
+                //        newrulasteditid = editid;
+                //        ukrnewle = true;
+                //    }
+                //    if (editid == ukrlasteditid)
+                //        break;
 
-                    if (damaging > ukrlimit)
-                        post_suspicious_edit("uk", damaging.ToString());
-                }
-                sqlreader.Close();
-                ukrlasteditid = newukrlasteditid;
+                //    if (damaging > ukrlimit)
+                //        post_suspicious_edit("uk", damaging.ToString());
+                //}
+                //sqlreader.Close();
+                //ukrlasteditid = newukrlasteditid;
             }
             catch (Exception e)
             {
