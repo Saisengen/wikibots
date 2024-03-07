@@ -14,7 +14,7 @@ class Program
     static HttpClient discord = new HttpClient(), ru, uk;
     static double damaging;
     static Regex rowrx = new Regex(@"\|-");
-    static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","user:Рейму_Хакурей/Проблемные_правки"},{"uk","user:Рейму_Хакурей/Підозрілі редагування"}};
+    static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","Рейму_Хакурей/Проблемные_правки"},{"uk","Рейму_Хакурей/Підозрілі редагування"}};
     static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
@@ -59,13 +59,13 @@ class Program
     }
     static void post_suspicious_edit(string lang, string reason)
     {
-        string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
+        string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=user:" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ru.GetStringAsync(get_request).Result : uk.GetStringAsync(get_request).Result);
         notifying_page_text = notifying_page_text.Replace(notifying_header[lang], notifying_header[lang] + "\n|-\n|[[special:diff/" + newid + "|diff]]||[//" + lang + ".wikipedia.org/w/index.php?" +
             "title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + reason);
         var rows = rowrx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
-        Save(lang, (lang == "ru" ? ru : uk), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
+        Save(lang, (lang == "ru" ? ru : uk), "edit", "user:" + notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
             "[[special:contribs/" + user + "|" + user + "]], " + reason, edit_type.suspicious_edit);
 
         discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://ru.wikipedia.org/w/" +
@@ -75,10 +75,7 @@ class Program
     {
         var goodanons = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
-        var patterns = new List<Regex> { new Regex("\bСВО\b") };
-        foreach (var pattern in pattern_source)
-            patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
+        var patterns = new List<Regex>();
         var added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
         discord_token = creds[3];
         ru = Site("ru", creds[4], creds[5]);
@@ -107,6 +104,11 @@ class Program
                     ukrlimit = Convert.ToDouble(limits[2]);
                     foreach (var g in ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Result.Split('\n'))
                         goodanons.Add(g);
+                    patterns.Clear();
+                    patterns.Add(new Regex("\bСВО\b")); //его нельзя использовать в ignore case, как остальные
+                    var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
+                    foreach (var pattern in pattern_source)
+                        patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
                 }
                 bool runewle = false, ukrnewle = false;
                 string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
