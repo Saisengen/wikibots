@@ -11,8 +11,8 @@ DEST_DIR="/layers/heroku_php/wikibots/public_html"
 ## Otherwise they will be sent to stdout/stderr
 [[ "$TOOL_DATA_DIR" != "" ]] && {
     # shellcheck disable=SC2093
-    exec 1 >> "$TOOL_DATA_DIR/access.log"
-    exec 2 >> "$TOOL_DATA_DIR/error.log"
+    exec 1>> "$TOOL_DATA_DIR/access.log"
+    exec 2>> "$TOOL_DATA_DIR/error.log"
 }
 
 python \
