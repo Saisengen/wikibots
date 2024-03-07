@@ -11,9 +11,11 @@ using System.Xml;
 class Program
 {
     static string user, title, newid, oldid, discord_token;
-    static HttpClient discord, ru, uk;
+    static HttpClient discord = new HttpClient(), ru, uk;
     static double damaging;
     static Regex rowrx = new Regex(@"\|-");
+    static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","user:Рейму_Хакурей/Проблемные_правки"},{"uk","user:Рейму_Хакурей/Підозрілі редагування"}};
+    static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -55,14 +57,15 @@ class Program
             request.Add(new StringContent(customparam), "user");
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string reason)
+    static void post_suspicious_edit(string lang, string reason)
     {
-        string notify_page_text = ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Проблемные_правки&action=raw").Result.Replace(
-                                "!Дифф!!Статья!!Автор!!Причина", "!Дифф!!Статья!!Автор!!Причина\n|-\n|[[special:diff/" + newid + "|diff]]||[//ru.wikipedia.org" +
-                                "/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + reason);
-        var rows = rowrx.Matches(notify_page_text);
-        notify_page_text = notify_page_text.Substring(0, rows[rows.Count - 1].Index);
-        Save("ru", ru, "edit", "u:Рейму_Хакурей/Проблемные_правки", notify_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
+        string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
+        string notifying_page_text = (lang == "ru" ? ru.GetStringAsync(get_request).Result : uk.GetStringAsync(get_request).Result);
+        notifying_page_text = notifying_page_text.Replace(notifying_header[lang], notifying_header[lang] + "\n|-\n|[[special:diff/" + newid + "|diff]]||[//" + lang + ".wikipedia.org/w/index.php?" +
+            "title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||" + reason);
+        var rows = rowrx.Matches(notifying_page_text);
+        notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
+        Save(lang, (lang == "ru" ? ru : uk), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
             "[[special:contribs/" + user + "|" + user + "]], " + reason, edit_type.suspicious_edit);
 
         discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://ru.wikipedia.org/w/" +
@@ -73,7 +76,7 @@ class Program
         var goodanons = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
-        var patterns = new List<Regex>();
+        var patterns = new List<Regex> { new Regex("\bСВО\b") };
         foreach (var pattern in pattern_source)
             patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
         var added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
@@ -106,9 +109,9 @@ class Program
                         goodanons.Add(g);
                 }
                 bool runewle = false, ukrnewle = false;
-                string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join ores_classification " +
-                    "on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddSeconds(-10).ToString
-                    ("yyyyMMddHHmmss") + " and rc_type=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
+                string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
+                    "ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddSeconds(-10)
+                    .ToString("yyyyMMddHHmmss") + " and rc_type=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
                 sqlreader = new MySqlCommand(commandtext, ruconnect).ExecuteReader();
                 while (sqlreader.Read())
                 {
@@ -145,7 +148,7 @@ class Program
                         else badusers.Add(user);
 
                         if (damaging < mediumlimit)
-                            post_suspicious_edit(damaging.ToString());
+                            post_suspicious_edit("ru", damaging.ToString());
 
                         else
                         {
@@ -159,15 +162,18 @@ class Program
                         }
                     }
 
-                    try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=xml&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=unified").Result; }
-                    catch { continue; }
-                    foreach (Match added_string in added_string_rgx.Matches(diff_text))
-                        foreach (var pattern in patterns)
-                            if (pattern.IsMatch(added_string.Value))
-                            {
-                                post_suspicious_edit(pattern.Match(added_string.Value).Value);
-                                break;
-                            }
+                    if (title != notifying_page_name["ru"] && title != notifying_page_name["uk"])
+                    {
+                        try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=xml&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=unified").Result; }
+                        catch { continue; }
+                        foreach (Match added_string in added_string_rgx.Matches(diff_text))
+                            foreach (var pattern in patterns)
+                                if (pattern.IsMatch(added_string.Value))
+                                {
+                                    post_suspicious_edit("ru", pattern.Match(added_string.Value).Value);
+                                    break;
+                                }
+                    }
                 }
                 sqlreader.Close();
                 rulasteditid = newrulasteditid;
@@ -190,15 +196,7 @@ class Program
                         break;
 
                     if (damaging > ukrlimit)
-                    {
-                        string text = uk.GetStringAsync("https://uk.wikipedia.org/w/index.php?title=user:Рейму_Хакурей/Підозрілі редагування&action=raw").Result.Replace(
-                            "!Diff!!Стаття!!Автор!!Причина", "!Diff!!Стаття!!Автор!!Причина\n|-\n|[[special:diff/" + editid + "|diff]]||[//uk.wikipedia.org" +
-                            "/w/index.php?title=" + title.Replace(' ', '_') + "&action=history " + title + "]||[[special:contribs/" + user + "|" + user + "]]||damaging: " + damaging);
-                        var rows = rowrx.Matches(text);
-                        text = text.Substring(0, rowrx.Matches(text)[rowrx.Matches(text).Count - 1].Index);
-                        Save("uk", uk, "edit", "user:Рейму Хакурей/Підозрілі редагування", text, "[[special:diff/" + editid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
-                            "[[special:contribs/" + user + "|" + user + "]], " + damaging, edit_type.suspicious_edit);
-                    }
+                        post_suspicious_edit("uk", damaging.ToString());
                 }
                 sqlreader.Close();
                 ukrlasteditid = newukrlasteditid;
