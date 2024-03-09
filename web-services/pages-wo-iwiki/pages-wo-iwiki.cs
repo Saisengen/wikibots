@@ -51,7 +51,10 @@ class Program
     }
     static void sendresponse(string sourcewiki, string category, string template, string targetwiki, string type, string pagetype, string sort, bool wikilist, bool wikitable, int depth, int miniwiki, string result)
     {
-        var sr = new StreamReader("pages-wo-iwiki.html");
+        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
+        string strHtmlPath = Path.Combine(strWorkPath!, "pages-wo-iwiki.html");
+        var sr = new StreamReader(strHtmlPath);
         string resulttext;
 
         if (type == "exist")
