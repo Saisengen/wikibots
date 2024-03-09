@@ -68,8 +68,8 @@ class Program
         Save(lang, (lang == "ru" ? ru : uk), "edit", "user:" + notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
             "[[special:contribs/" + user + "|" + user + "]], " + reason, edit_type.suspicious_edit);
 
-        discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://ru.wikipedia.org/w/" +
-                "index.php?diff=" + newid + ">) / [" + user.Replace(' ', '_') + "](<https://ru.wikipedia.org/wiki/special:contribs/" + user.Replace(' ', '_') + ">) " + reason}}));
+        discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
+        ".wikipedia.org/w/index.php?diff=" + newid + ">) / [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + user.Replace(' ', '_') + ">) " + reason}}));
     }
     static int Main()
     {
@@ -89,7 +89,7 @@ class Program
         ruconnect.Open();
         var ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web"));
         ukrconnect.Open();
-        MySqlDataReader sqlreader;
+        MySqlDataReader rureader, ukrreader;//попытка решить проблему, что ру-правки постятся в укрвики
         string diff_text;
         while (true)
         {
@@ -115,17 +115,17 @@ class Program
                 string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
                     "ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddSeconds(-10)
                     .ToString("yyyyMMddHHmmss") + " and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
-                sqlreader = new MySqlCommand(commandtext, ruconnect).ExecuteReader();
-                while (sqlreader.Read())
+                rureader = new MySqlCommand(commandtext, ruconnect).ExecuteReader();
+                while (rureader.Read())
                 {
-                    user = sqlreader.GetString("user") ?? "";
+                    user = rureader.GetString("user") ?? "";
                     if (goodanons.Contains(user))
                         continue;
-                    bool user_is_anon = sqlreader.IsDBNull(0);
-                    damaging = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
-                    title = sqlreader.GetString("title").Replace('_', ' ');
-                    newid = sqlreader.GetString("rc_this_oldid");
-                    oldid = sqlreader.GetString("rc_last_oldid");
+                    bool user_is_anon = rureader.IsDBNull(0);
+                    damaging = Math.Round(rureader.GetDouble("oresc_probability"), 3);
+                    title = rureader.GetString("title").Replace('_', ' ');
+                    newid = rureader.GetString("rc_this_oldid");
+                    oldid = rureader.GetString("rc_last_oldid");
                     if (!runewle)
                     {
                         newrulasteditid = newid;
@@ -178,31 +178,29 @@ class Program
                                 }
                     }
                 }
-                sqlreader.Close();
+                rureader.Close();
                 rulasteditid = newrulasteditid;
 
-                //sqlreader = new MySqlCommand(commandtext, ukrconnect).ExecuteReader();
-                //while (sqlreader.Read())
-                //{
-                //    string user = sqlreader.GetString("user");
-                //    if (goodanons.Contains(user))
-                //        continue;
-                //    double damaging = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
-                //    string title = sqlreader.GetString("title").Replace('_', ' ');
-                //    string editid = sqlreader.GetString("rc_this_oldid");
-                //    if (!ukrnewle)
-                //    {
-                //        newrulasteditid = editid;
-                //        ukrnewle = true;
-                //    }
-                //    if (editid == ukrlasteditid)
-                //        break;
+                ukrreader = new MySqlCommand(commandtext, ukrconnect).ExecuteReader();
+                while (ukrreader.Read())
+                {
+                    string user = ukrreader.GetString("user");
+                    double damaging = Math.Round(ukrreader.GetDouble("oresc_probability"), 3);
+                    string title = ukrreader.GetString("title").Replace('_', ' ');
+                    string editid = ukrreader.GetString("rc_this_oldid");
+                    if (!ukrnewle)
+                    {
+                        newrulasteditid = editid;
+                        ukrnewle = true;
+                    }
+                    if (editid == ukrlasteditid)
+                        break;
 
-                //    if (damaging > ukrlimit)
-                //        post_suspicious_edit("uk", damaging.ToString());
-                //}
-                //sqlreader.Close();
-                //ukrlasteditid = newukrlasteditid;
+                    if (damaging > ukrlimit)
+                        post_suspicious_edit("uk", damaging.ToString());
+                }
+                ukrreader.Close();
+                ukrlasteditid = newukrlasteditid;
             }
             catch (Exception e)
             {
