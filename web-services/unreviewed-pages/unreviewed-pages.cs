@@ -21,7 +21,11 @@ class Program
     static Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
     static void sendresponse(string wiki, string cat, string template, int depth, string result)
     {
-        string resulttext = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "unreviewed-pages.html")).ReadToEnd();
+        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
+        string strHtmlPath = Path.Combine(strWorkPath!, "unreviewed-pages.html");
+        var sr = new StreamReader(strHtmlPath);
+        string resulttext = sr.ReadToEnd();
         string title = "";
         if (cat != "" && template != "")
             title = " (" + cat + ", " + template + ")";
