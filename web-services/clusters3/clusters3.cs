@@ -10,11 +10,11 @@ class Result
 }
 class Program
 {
-    static bool method_is_post = true;
+    static bool method_is_post = false;
     static void Sendresponse(string result, string users, string axisxuser, string axisyuser, int earlieryear, int lateryear, int square)
     {
-        var sr = new StreamReader(method_is_post ? "clusters3.5.html" : "clusters3.html");
-        Console.WriteLine(sr.ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString())
+        //var sr = new StreamReader(method_is_post ? "clusters3.5.html" : "clusters3.html");
+        Console.WriteLine(new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters3.html")).ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString())
             .Replace("%axisxuser%", axisxuser).Replace("%axisyuser%", axisyuser).Replace("%square%", square.ToString()));
     }
     static void Main()
