@@ -8,8 +8,7 @@ class Program
 {
     static void Sendresponse(string page, string result, bool loadfromtool)
     {
-        var r = new StreamReader("compare.html");
-        string answer = r.ReadToEnd().Replace("%result%", result).Replace("%page%", page).Replace("%ruwiki%", Uri.EscapeUriString(page)/*.Replace("%20", "_").Replace("%3A", ":").Replace("%2C", ",")*/);
+        string answer = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "compare.html")).ReadToEnd().Replace("%result%", result).Replace("%page%", page).Replace("%ruwiki%", Uri.EscapeUriString(page)/*.Replace("%20", "_").Replace("%3A", ":").Replace("%2C", ",")*/);
         string runi = page, bug = page;
         if (page.StartsWith("Википедия:"))
         {
