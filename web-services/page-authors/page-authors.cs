@@ -12,8 +12,7 @@ class Program
 {
     static void Sendresponse(string type, string source, int notless, string result)
     {
-        var sr = new StreamReader("page-authors.html");
-        string template = sr.ReadToEnd();
+        string template = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "page-authors.html")).ReadToEnd();
         if (type == "category")
             template = template.Replace("%checked_category%", "checked");
         else if (type == "template")
@@ -26,7 +25,7 @@ class Program
     }
     static void Main()
     {
-        var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
+        var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
         var cl = new WebClient();
         var srcpages = new List<string>();
         //Environment.SetEnvironmentVariable("QUERY_STRING", "type=links&source=Проект:Востоковедная неделя/Статьи&notless=1");
