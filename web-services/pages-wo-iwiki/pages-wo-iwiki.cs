@@ -10,8 +10,8 @@ using MySql.Data.MySqlClient;
 
 class pageinfo
 {
-    public string id, status;
-    public int numofiwiki;
+    public string status;
+    public int numofiwiki, id;
 }
 class Program
 {
@@ -146,7 +146,7 @@ class Program
     static void Main()
     {
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
-        //get = "sourcewiki=ru.wikipedia&category=NEC&subcats=on&template=&pagetype=articles&type=exist&targetwiki=ru.wikipedia&sort=iwiki";
+        //input = "sourcewiki=en.wikipedia&category=Metroidvania+games&depth=1&template=&pagetype=articles&type=nonexist&targetwiki=ru.wikipedia&miniwiki=5&sort=iwiki";
         if (input == "" || input == null)
         {
             sendresponse("en.wikipedia", "", "", "ru.wikipedia", "nonexist", "articles", "iwiki", false, false, 0, 5, "");
@@ -175,7 +175,7 @@ class Program
             return;
         }
         var targetpages = new Dictionary<string, pageinfo>();
-        var existentpageids = new List<string>();
+        var existentpageids = new List<int>();
 
         if (category != "")
             searchsubcats(category, 0);
@@ -220,13 +220,12 @@ class Program
             connect.Open();
             foreach (var pagename_on_sourcewiki in iterationlist)
             {
-                string itemid;
-                int numofiwiki = 0;
-                var query = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" + pagename_on_sourcewiki.Replace("\"", "\\\"") + "\";", connect);
-                MySqlDataReader r = query.ExecuteReader();
+                int numofiwiki = 0, itemid;
+                MySqlDataReader r = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" + 
+                    pagename_on_sourcewiki.Replace("\"", "\\\"") + "\";", connect).ExecuteReader();
                 if (r.Read())
                 {
-                    itemid = r.GetString(0);
+                    itemid = r.GetInt32(0);
                     processedpages[pagename_on_sourcewiki].id = itemid;
                     r.Close();
                 }
@@ -236,10 +235,9 @@ class Program
                     continue;
                 }
 
-                query = new MySqlCommand("select count(*) c from wb_items_per_site where ips_item_id=\"" + itemid + "\";", connect);
-                r = query.ExecuteReader();
+                r = new MySqlCommand("select count(*) c from wb_items_per_site where ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
                 r.Read();
-                numofiwiki = Convert.ToInt32(r.GetString(0));
+                numofiwiki = r.GetInt32(0);
                 processedpages[pagename_on_sourcewiki].numofiwiki = numofiwiki;
                 r.Close();
 
@@ -247,8 +245,7 @@ class Program
 
                 if (type == "exist")
                 {
-                    query = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect);
-                    r = query.ExecuteReader();
+                    r = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
                     if (r.Read())
                     {
                         string pagename_on_targetwiki = r.GetString(0);
@@ -259,8 +256,7 @@ class Program
 
                 else
                 {
-                    query = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect);
-                    r = query.ExecuteReader();
+                    r = new MySqlCommand("select cast(ips_site_page as char) from wb_items_per_site where ips_site_id=\"" + url2db(targetwiki) + "\" and ips_item_id=\"" + itemid + "\";", connect).ExecuteReader();
                     if (r.Read())
                         existentpageids.Add(itemid);
                     r.Close();
