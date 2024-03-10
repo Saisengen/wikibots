@@ -13,14 +13,12 @@ class Program
 {
     static void Sendresponse(string result, string elections, string type)
     {
-        var sr = new StreamReader("clusters4.html");
-        string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%elections%", elections);
+        string result1 = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters4.html")).ReadToEnd().Replace("%result%", result).Replace("%elections%", elections);
         if (type == "d")
             result1 = result1.Replace("%checked_d%", "checked").Replace("%checked_dn%", "");
         else
             result1 = result1.Replace("%checked_d%", "").Replace("%checked_dn%", "checked");
         Console.WriteLine(result1);
-        Console.WriteLine();
     }
     static void Main()
     {
