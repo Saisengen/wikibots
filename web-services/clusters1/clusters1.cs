@@ -22,8 +22,7 @@ class Program
     static int highlimit, lowlimit, commonvotings, earlieryear, lateryear;
     static void Sendresponse(string result, string user, int earlieryear, int lateryear, int highlimit, int lowlimit, double highlimitdn, double lowlimitdn, int commonvotings, string sort)
     {
-        var sr = new StreamReader("clusters1.html");
-        string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%user%", user).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString())
+        string result1 = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters1.html")).ReadToEnd().Replace("%result%", result).Replace("%user%", user).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString())
             .Replace("%highlimit%", highlimit.ToString()).Replace("%lowlimit%", lowlimit.ToString()).Replace("%highlimitdn%", highlimitdn.ToString("G2")).Replace("%lowlimitdn%",
             lowlimitdn.ToString("G3")).Replace("%commonvotings%", commonvotings.ToString());
         if (sort == "d")
@@ -32,7 +31,6 @@ class Program
             Console.WriteLine(result1.Replace("%selected_dn%", "selected"));
         else if (sort == "wkdm")
             Console.WriteLine(result1.Replace("%selected_wkdm%", "selected"));
-        Console.WriteLine();
     }
 
     static void showtable(KeyValuePair<string, voterdata> voter)
