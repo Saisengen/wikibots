@@ -16,10 +16,7 @@ class Program
 {
     static void Sendresponse(string inwikiproject, int startyear, int endyear, string result)
     {
-        var sr = new StreamReader("resized-pages.html");
-        Console.WriteLine(sr.ReadToEnd().Replace("%result%", result).Replace("%inwikiproject%", inwikiproject).Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()));
-        Console.WriteLine();
-        return;
+        Console.WriteLine(new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "resized-pages.html")).ReadToEnd().Replace("%result%", result).Replace("%inwikiproject%", inwikiproject).Replace("%startyear%", startyear.ToString()).Replace("%endyear%", endyear.ToString()));
     }
     static void Main()
     {
