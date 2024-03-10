@@ -41,7 +41,7 @@ class Program
                 using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&eicontinue=" + Uri.EscapeDataString(cont))))))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
-                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
+                    r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
                     while (r.Read())
                         if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
                             list_of_quality_pages.Add(r.GetAttribute("title"));
@@ -51,16 +51,11 @@ class Program
     }
     static void sendresponse(string sourcewiki, string category, string template, string targetwiki, string type, string pagetype, string sort, bool wikilist, bool wikitable, int depth, int miniwiki, string result)
     {
-        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
-        string strHtmlPath = Path.Combine(strWorkPath!, "pages-wo-iwiki.html");
-        var sr = new StreamReader(strHtmlPath);
-        string resulttext;
-
+        string resulttext = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "pages-wo-iwiki.html")).ReadToEnd();
         if (type == "exist")
-            resulttext = sr.ReadToEnd().Replace("%selected_exist%", "selected");
+            resulttext = resulttext.Replace("%selected_exist%", "selected");
         else
-            resulttext = sr.ReadToEnd().Replace("%selected_nonexist%", "selected");
+            resulttext = resulttext.Replace("%selected_nonexist%", "selected");
 
         if (pagetype == "articles")
             resulttext = resulttext.Replace("%selected_articles%", "selected");
@@ -220,7 +215,7 @@ class Program
             gather_quality_pages(FLs, "Q5857568");
             gather_quality_pages(RAs, "Q13402307");
 
-            var creds = new StreamReader("../../p").ReadToEnd().Split('\n');
+            var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
             var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
             connect.Open();
             foreach (var pagename_on_sourcewiki in iterationlist)
