@@ -14,8 +14,8 @@ class Program
     static bool method_is_post = false;
     static void Sendresponse(string result, string users, int earlieryear, int lateryear, string type, bool sort, bool wikidim)
     {
-        var sr = new StreamReader(method_is_post ? "clusters2.5.html" : "clusters2.html");
-        string result1 = sr.ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
+        //var sr = new StreamReader(method_is_post ? "clusters2.5.html" : "clusters2.html");
+        string result1 = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters2.html")).ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
         if (type == "d")
             result1 = result1.Replace("%checked_d%", "checked");
         else
@@ -25,7 +25,6 @@ class Program
         if (wikidim)
             result1 = result1.Replace("%checked_wikidim%", "checked");
         Console.WriteLine(result1);
-        Console.WriteLine();
     }
     static void Main()
     {
