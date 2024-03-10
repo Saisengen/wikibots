@@ -30,7 +30,7 @@ class voterspercandidate
 }
 class Program
 {
-    static bool method_is_post = true;
+    static bool method_is_post = false;
     static Dictionary<string, voterspercandidate> candidates = new Dictionary<string, voterspercandidate>();
     static HashSet<string> unimportant_flags = new HashSet<string>() { "*", "user", "autoconfirmed", "rollbacker", "suppressredirect", "uploader" };
     static string result = "<table border=\"1\" cellspacing=\"0\"><tr><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Голосующий</th><th style=\"writing-mode:horizontal-tb;transform:rotate(0);\">Регистрация</th>" +
@@ -43,8 +43,8 @@ class Program
     static Regex yearrgx = new Regex(@"\d{4}");
     static void Sendresponse(string result, string elections, string users, string sort, bool allvoters, string mode, int earlieryear, int lateryear)
     {
-        var sr = new StreamReader(method_is_post ? "clusters5.5.html" : "clusters5.html");
-        string output = sr.ReadToEnd().Replace("%result%", result).Replace("%elections%", elections).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
+        //var sr = new StreamReader(method_is_post ? "clusters5.5.html" : "clusters5.html");
+        string output = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters5.html")).ReadToEnd().Replace("%result%", result).Replace("%elections%", elections).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
         if (mode == "years")
             output = output.Replace("%checked_years%", "checked");
         else
