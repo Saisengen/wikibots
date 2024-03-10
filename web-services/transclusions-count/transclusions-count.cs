@@ -12,15 +12,7 @@ class Program
     static HashSet<string> pagenames = new HashSet<string>();
     static void sendresponse(string wiki, string cat, int depth, string result)
     {
-        // Get the path of the executable, and lead the html file from that same directory
-        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
-        string strHtmlPath = Path.Combine(strWorkPath!, "transclusions-count.html");
-        var sr = new StreamReader(strHtmlPath);
-        string resulttext = sr.ReadToEnd();
-        resulttext = resulttext.Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", depth.ToString());
-        Console.WriteLine(resulttext);
-        return;
+        Console.WriteLine(new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "transclusions-count.html")).ReadToEnd().Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%depth%", depth.ToString()));
     }
     static void searchsubcats(string category, int currentdepth)
     {
