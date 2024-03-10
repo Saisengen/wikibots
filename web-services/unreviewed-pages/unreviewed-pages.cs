@@ -21,11 +21,6 @@ class Program
     static Dictionary<string, pageinfo> pages = new Dictionary<string, pageinfo>();
     static void sendresponse(string wiki, string cat, string template, int depth, string result)
     {
-        string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        string? strWorkPath = Path.GetDirectoryName(strExeFilePath);
-        string strHtmlPath = Path.Combine(strWorkPath!, "unreviewed-pages.html");
-        var sr = new StreamReader(strHtmlPath);
-        string resulttext = sr.ReadToEnd();
         string title = "";
         if (cat != "" && template != "")
             title = " (" + cat + ", " + template + ")";
@@ -33,7 +28,7 @@ class Program
             title = " (" + cat + ")";
         else if (template != "")
             title = " (" + template + ")";
-        resulttext = resulttext.Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%template%", template).Replace("%depth%", depth.ToString()).Replace("%title%", title);
+        string resulttext = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "unreviewed-pages.html")).ReadToEnd().Replace("%result%", result).Replace("%wiki%", wiki).Replace("%cat%", cat).Replace("%template%", template).Replace("%depth%", depth.ToString()).Replace("%title%", title);
         if (talks)
             resulttext = resulttext.Replace("%checked_talks%", "checked");
         Console.WriteLine(resulttext);
