@@ -69,8 +69,6 @@ class Program
         lowlimit = Convert.ToInt16(parameters["lowlimit"]);
         highlimitdn = Convert.ToSingle(parameters["highlimitdn"].Replace(',', '.'));
         lowlimitdn = Convert.ToSingle(parameters["lowlimitdn"].Replace(',', '.'));
-        //highlimitdn = Convert.ToSingle(parameters["highlimitdn"].Replace('.', ','));
-        //lowlimitdn = Convert.ToSingle(parameters["lowlimitdn"].Replace('.', ','));
         commonvotings = Convert.ToInt16(parameters["commonvotings"]);
         sort = parameters["sort"];
         var allvoters = new HashSet<string>();
@@ -80,7 +78,6 @@ class Program
         var results = new Dictionary<string, voterdata>();
 
         var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
-        Sendresponse(rdr.ReadToEnd() + "</table>", searcheduser, earlieryear, lateryear, highlimit, lowlimit, highlimitdn, lowlimitdn, commonvotings, sort);
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();
