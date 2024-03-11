@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Кластерный анализ сообщества рувики</title>
+<style>a, abbr { text-decoration: none; }
+td { text-align: center }
+th { width:1em; writing-mode:vertical-lr; transform:rotate(180deg) }</style>
+</head><body>
+<a href="/clusters.html">Другие инструменты</a><center>
+<form action="clusters2" method="post">
+<textarea name="users" placeholder="Введите ники участников, каждый на новой строке" wrap="soft" rows="30" cols="30" required>%users%</textarea>
+<br>
+<br>
+С года <input type="number" name="earlieryear" value="%earlieryear%" style="width:5em" required>
+по год <input type="number" name="lateryear" value="%lateryear%" style="width:5em" required>
+Выводить значения <label><input type="radio" name="type" value="d" required %checked_d%>абсолютные</label> 
+<label><input type="radio" name="type" value="dn" required %checked_dn%>относительные</label>
+<br>
+<br>
+<label>Отсортировать по близости к первому участнику в списке <input type="checkbox" name="sort" %checked_sort%></label> 
+<label>Расчёт по Викидиму <input type="checkbox" name="wikidim" %checked_wikidim%></label>
+<button type="submit">Пуск</button>
+</form><br>
+%result%
+</center></body></html>
