@@ -55,7 +55,7 @@ class Program
         var yearrgx = new Regex(@"\d{4}");
         var votings = new HashSet<string>();
 
-        var rdr = new StreamReader("elections.txt");
+        var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();
