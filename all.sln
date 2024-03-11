@@ -33,7 +33,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters3", "web-services\c
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters4", "web-services\clusters4\clusters4.csproj", "{F25A342B-BB86-43D5-AB91-909197514C71}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters5", "web-services\clusters5\clusters5.csproj", "{0FA2AF48-5180-41E4-97C8-BDBF582EB184}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "test", "web-services\test\test.csproj", "{5608053A-4267-4EF5-9FB9-077975423601}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -104,9 +104,9 @@ Global
 		{F25A342B-BB86-43D5-AB91-909197514C71}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F25A342B-BB86-43D5-AB91-909197514C71}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F25A342B-BB86-43D5-AB91-909197514C71}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0FA2AF48-5180-41E4-97C8-BDBF582EB184}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0FA2AF48-5180-41E4-97C8-BDBF582EB184}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0FA2AF48-5180-41E4-97C8-BDBF582EB184}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0FA2AF48-5180-41E4-97C8-BDBF582EB184}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
