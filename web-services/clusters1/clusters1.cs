@@ -80,6 +80,7 @@ class Program
         var results = new Dictionary<string, voterdata>();
 
         var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
+        Sendresponse(rdr.ReadToEnd() + "</table>", searcheduser, earlieryear, lateryear, highlimit, lowlimit, highlimitdn, lowlimitdn, commonvotings, sort);
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();
