@@ -30,7 +30,7 @@ class voterspercandidate
 }
 class Program
 {
-    static bool method_is_post = false;
+    static bool method_is_post = Environment.GetEnvironmentVariable("REQUEST_METHOD") == "POST";
     static Dictionary<string, voterspercandidate> candidates = new Dictionary<string, voterspercandidate>();
     static HashSet<string> unimportant_flags = new HashSet<string>() { "*", "user", "autoconfirmed", "rollbacker", "suppressredirect", "uploader" };
     static string result = "<table border=\"1\" cellspacing=\"0\"><tr><th style=\"writing-mode:horizontal-tb; transform:rotate(0);\">Голосующий</th><th style=\"writing-mode:horizontal-tb;transform:rotate(0);\">Регистрация</th>" +
@@ -117,7 +117,7 @@ class Program
     }
     static void Main()
     {
-        rdr = new StreamReader("electionnames.txt");
+        rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/electionnames.txt"));
         var electionnumbers = new Dictionary<string, int>();
         while (!rdr.EndOfStream)
         {
@@ -126,7 +126,7 @@ class Program
         }
 
         var electionslist = new Dictionary<string, int>();
-        rdr = new StreamReader("elections.txt");
+        rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();//Весна 2008/Sairam
@@ -177,8 +177,6 @@ class Program
             while (!rdr.EndOfStream)
             {
                 string voting = rdr.ReadLine();
-                //if (voting.StartsWith("Зима 2019—2020"))
-                //    voting = voting.Replace("Зима 2019—2020", "Зима 2020");
                 int year;
                 if (voting.StartsWith("2"))
                     year = Convert.ToInt16(voting.Substring(0, 4));
