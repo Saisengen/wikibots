@@ -27,6 +27,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "unreviewed-pages", "web-ser
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters1", "web-services\clusters1\clusters1.csproj", "{19ABA964-670E-4929-AF2B-DF801EA29A87}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters2", "web-services\clusters2\clusters2.csproj", "{4E1D2C63-E239-473D-A53A-AD2ABBC64868}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters3", "web-services\clusters3\clusters3.csproj", "{72BEE794-0317-4837-979D-6A9600C75FBB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters4", "web-services\clusters4\clusters4.csproj", "{F25A342B-BB86-43D5-AB91-909197514C71}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters5", "web-services\clusters5\clusters5.csproj", "{0FA2AF48-5180-41E4-97C8-BDBF582EB184}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -84,5 +92,9 @@ Global
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E1D2C63-E239-473D-A53A-AD2ABBC64868}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E1D2C63-E239-473D-A53A-AD2ABBC64868}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E1D2C63-E239-473D-A53A-AD2ABBC64868}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E1D2C63-E239-473D-A53A-AD2ABBC64868}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
