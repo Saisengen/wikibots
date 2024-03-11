@@ -7,6 +7,5 @@ internal class Program
         var a = Environment.GetEnvironmentVariables();
         foreach (var v in a.Keys)
             Console.WriteLine(v.ToString() + " = " + Environment.GetEnvironmentVariable(v.ToString()));
-        Console.ReadLine();
     }
 }
