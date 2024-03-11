@@ -11,16 +11,17 @@ class data
 }
 class Program
 {
-    static bool method_is_post = false;
+    static bool method_is_post = Environment.GetEnvironmentVariable("REQUEST_METHOD") == "POST";
     static void Sendresponse(string result, string users, int earlieryear, int lateryear, string type, bool sort, bool wikidim)
     {
-        //var sr = new StreamReader(method_is_post ? "clusters2.5.html" : "clusters2.html");
-        string result1 = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "clusters2.html")).ReadToEnd().Replace("%result%", result).Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
+        string template_src = method_is_post ? "clusters2.5.html" : "clusters2.html";
+        string result1 = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), template_src)).ReadToEnd().Replace("%result%", result)
+            .Replace("%users%", users).Replace("%earlieryear%", earlieryear.ToString()).Replace("%lateryear%", lateryear.ToString());
         if (type == "d")
             result1 = result1.Replace("%checked_d%", "checked");
         else
             result1 = result1.Replace("%checked_dn%", "checked");
-        if(sort)
+        if (sort)
             result1 = result1.Replace("%checked_sort%", "checked");
         if (wikidim)
             result1 = result1.Replace("%checked_wikidim%", "checked");
@@ -117,7 +118,7 @@ class Program
 
         string result = "За указанный период времени прошло " + votings.Count + " голосований. Прочерк означает, что за этот период нет выборов, на которых проголосовали бы оба участника " +
             "(а по методу Викидима - что нет выборов, где проголосовал бы хоть один из участников).<br><br><table border=\"1\" cellspacing=\"0\"><tr><th></th>";
-        
+
         if (sort)
         {
             var sortedarray = new Dictionary<string, float>();
@@ -139,11 +140,11 @@ class Program
                         {
                             float dn = (float)table[voters[s1.Key], voters[s2.Key]].diff / table[voters[s1.Key], voters[s2.Key]].total;
                             string antisaturation = Convert.ToInt32(Math.Round(255 * (1 - (dn > 0 ? dn : -dn)))).ToString("X2");
-                            string color = (dn == 1 ? "080" : (dn < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation));
+                            string color = dn < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation;
                             string dn_string = dn.ToString("G2");
                             if (dn_string.StartsWith("0.") || dn_string.StartsWith("-0."))
                                 dn_string = dn_string.Replace("0.", ".");
-                            result += "<td style=\"background-color:#" + color + (color == "080" ? "; color:white" : "") + "\"><abbr title=\"⇈:\n" + table[voters[s1.Key], voters[s2.Key]].coinciding_votings_list + "⇅:\n" + 
+                            result += "<td style=\"background-color:#" + color + "\"><abbr title=\"⇈:\n" + table[voters[s1.Key], voters[s2.Key]].coinciding_votings_list + "⇅:\n" +
                                 table[voters[s1.Key], voters[s2.Key]].opposite_votings_list + "\">" + (type == "d" ? table[voters[s1.Key], voters[s2.Key]].diff.ToString() : dn_string) + "</abbr></td>\n";
                         }
                         else
@@ -169,11 +170,11 @@ class Program
                         {
                             float dn = (float)table[v1.Value, v2.Value].diff / table[v1.Value, v2.Value].total;
                             string antisaturation = Convert.ToInt32(Math.Round(255 * (1 - (dn > 0 ? dn : -dn)))).ToString("X2");
-                            string color = (dn == 1 ? "080" : (dn < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation));
+                            string color = dn < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation;
                             string dn_string = dn.ToString("G2");
                             if (dn_string.StartsWith("0.") || dn_string.StartsWith("-0."))
                                 dn_string = dn_string.Replace("0.", ".");
-                            result += "<td style=\"background-color:#" + color + (color == "080" ? "; color:white" : "") + "\"><abbr title=\"⇈:\n" + table[voters[v1.Key], voters[v2.Key]].coinciding_votings_list + "⇅:\n" + 
+                            result += "<td style=\"background-color:#" + color + "\"><abbr title=\"⇈:\n" + table[voters[v1.Key], voters[v2.Key]].coinciding_votings_list + "⇅:\n" +
                                 table[voters[v1.Key], voters[v2.Key]].opposite_votings_list + "\">" +
                                 (type == "d" ? table[v1.Value, v2.Value].diff.ToString() : dn_string) + "</abbr></td>\n";
                         }
