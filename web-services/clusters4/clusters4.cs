@@ -22,7 +22,7 @@ class Program
     }
     static void Main()
     {
-        var rdr = new StreamReader("electionnames.txt");
+        var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/electionnames.txt"));
         var electionnumbers = new Dictionary<string, int>();
         while (!rdr.EndOfStream)
         {
