@@ -13,18 +13,17 @@ class Program
         if (addauthor)
             answer = answer.Replace("%checked_author%", "checked");
         Console.WriteLine(answer);
-        return;
     }
     static void Main()
     {
         string source = "", default_author = "", result = "";
         bool addauthor = false;
-        string input = Console.ReadLine();
-        if (input == null)
+        bool method_is_post = Environment.GetEnvironmentVariable("REQUEST_METHOD") == "POST";
+        if (!method_is_post)
             Sendresponse("", false, "", "");
         else
         { 
-            var inputdata = input.Split('&');
+            var inputdata = Console.ReadLine().Split('&');
             foreach (var param in inputdata)
             {
                 var data = param.Split('=');
