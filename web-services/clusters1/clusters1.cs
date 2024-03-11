@@ -79,7 +79,7 @@ class Program
         var votings = new Dictionary<string, votes_on_election>();
         var results = new Dictionary<string, voterdata>();
 
-        var rdr = new StreamReader("elections.txt");
+        var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();
