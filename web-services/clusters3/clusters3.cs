@@ -10,7 +10,7 @@ class Result
 }
 class Program
 {
-    static bool method_is_post = false;
+    static bool method_is_post = Environment.GetEnvironmentVariable("REQUEST_METHOD") == "POST";
     static void Sendresponse(string result, string users, string axisxuser, string axisyuser, int earlieryear, int lateryear, int square)
     {
         //var sr = new StreamReader(method_is_post ? "clusters3.5.html" : "clusters3.html");
@@ -40,7 +40,7 @@ class Program
         var yearrgx = new Regex(@"\d{4}");
         var votings = new HashSet<string>();
 
-        var rdr = new StreamReader("elections.txt");
+        var rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();
