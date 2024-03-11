@@ -27,6 +27,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "unreviewed-pages", "web-ser
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters1", "web-services\clusters1\clusters1.csproj", "{19ABA964-670E-4929-AF2B-DF801EA29A87}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "test", "web-services\test\test.csproj", "{5608053A-4267-4EF5-9FB9-077975423601}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -84,5 +86,9 @@ Global
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{19ABA964-670E-4929-AF2B-DF801EA29A87}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5608053A-4267-4EF5-9FB9-077975423601}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
