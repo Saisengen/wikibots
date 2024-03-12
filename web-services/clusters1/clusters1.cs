@@ -42,7 +42,7 @@ class Program
                 float dn_for_color = (sort == "wkdm" ? voter.Value.wkdm_normal : voter.Value.normalized_diff);
                 string antisaturation = Convert.ToInt32(Math.Round(255 * (1 - Math.Abs(dn_for_color)))).ToString("X2");
                 string color = (dn_for_color < 0 ? "FF" + antisaturation + antisaturation : antisaturation + "FF" + antisaturation);
-                result += "<tr style=\"background-color:#" + color + "\"><td><a href=\"https://mbh.toolforge.org/clusters1.cgi?user=" + Uri.EscapeDataString(voter.Key) + "&earlieryear=" + earlieryear + "&lateryear=" + lateryear + "&highlimit=" + 
+                result += "<tr style=\"background-color:#" + color + "\"><td><a href=\"https://mbh.toolforge.org/cgi-bin/clusters1?user=" + Uri.EscapeDataString(voter.Key) + "&earlieryear=" + earlieryear + "&lateryear=" + lateryear + "&highlimit=" + 
                     highlimit + "&lowlimit=" + lowlimit + "&highlimitdn=" + highlimitdn + "&lowlimitdn=" + lowlimitdn + "&commonvotings=" + commonvotings + "&sort=" + sort + "\">" + voter.Key + "</a></td><td><abbr title=\"" + 
                     voter.Value.coinciding_votings_list + "\">" + voter.Value.samevotes + "</abbr></td><td><abbr title=\"" + voter.Value.opposite_votings_list + "\">" + voter.Value.oppositevotes + "</abbr></td><td>" + 
                     voter.Value.diff.ToString().Replace('-', '−') + "</td><td>" + voter.Value.commonvotings + "</td><td>" + voter.Value.wkdmtotal + "</td><td>" + voter.Value.normalized_diff.ToString("G2").Replace('-', '−') + "</td><td>" +
