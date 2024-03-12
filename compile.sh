@@ -4,12 +4,12 @@ set -o errexit
 set -o pipefail
 shopt -s nullglob
 
-if [[ "${CNB_PLATFORM_API:-}" == "" ]]; then
+LAYERS_DIR="/layers/heroku_php"
+if ! [[ -d "$LAYERS_DIR" ]]; then
     IN_TOOLFORGE_BUILD="no"
     LAYERS_DIR="/tmp/wikibots_build"
 else
     IN_TOOLFORGE_BUILD="yes"
-    LAYERS_DIR="/layers/heroku_php"
 fi
 LAYER_DIR="$LAYERS_DIR/wikibots"
 PUBLIC_HTML="$LAYER_DIR/public_html"
