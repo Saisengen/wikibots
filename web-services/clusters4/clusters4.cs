@@ -31,7 +31,7 @@ class Program
         }
 
         var electionslist = new Dictionary<string, int>();
-        rdr = new StreamReader("elections.txt");
+        rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         while (!rdr.EndOfStream)
         {
             string voting = rdr.ReadLine();//Весна 2008/Sairam
