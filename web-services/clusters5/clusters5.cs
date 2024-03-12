@@ -157,7 +157,7 @@ class Program
         int lateryear = Convert.ToInt16(parameters["lateryear"]);
         if (lateryear < 2006 || lateryear > DateTime.Now.Year) lateryear = DateTime.Now.Year;
         electionsstring = electionsstring.Replace('s' + electionforanalyze + '>', "selected>");
-        var rawvoterslist = parameters["users"].Replace("\u200E", "").Replace("\r\n", "\t").Replace("\n", "\t").Replace("\r", "\t").Split('\t');
+        var rawvoterslist = parameters["users"].Replace("\u200E", "").Replace("\r", "").Replace("\n", "\t").Split('\t');
         var voterslist = new HashSet<string>();
         foreach(var voter in rawvoterslist)
             if (voter != "")
@@ -165,7 +165,7 @@ class Program
         string sort = parameters["sort"];
         bool showallvoters = parameters["allvoters"] != null;
 
-        rdr = new StreamReader("elections.txt");
+        rdr = new StreamReader(Path.Combine(Environment.GetEnvironmentVariable("TOOL_DATA_DIR"), "www/static/elections.txt"));
         if (mode == "varb")
             while (!rdr.EndOfStream)
             {
