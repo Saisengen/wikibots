@@ -4,7 +4,14 @@ set -o errexit
 set -o pipefail
 shopt -s nullglob
 
-LAYER_DIR="/layers/heroku_php/wikibots"
+if [[ "${CNB_PLATFORM_API:-}" == "" ]]; then
+    IN_TOOLFORGE_BUILD="no"
+    LAYERS_DIR="/tmp/wikibots_build"
+else
+    IN_TOOLFORGE_BUILD="yes"
+    LAYERS_DIR="/layers/heroku_php"
+fi
+LAYER_DIR="$LAYERS_DIR/wikibots"
 PUBLIC_HTML="$LAYER_DIR/public_html"
 PROJECTS=(
     web-services/*
@@ -105,6 +112,9 @@ main() {
     populate_procfile
     add_buildpack_layer_config
     cleanup
+    if [[ "$IN_TOOLFORGE_BUILD" == "no" ]]; then
+        echo "Local build, you can find the output at $LAYER_DIR"
+    fi
 }
 
 
