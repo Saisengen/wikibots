@@ -215,8 +215,7 @@ class Program
             gather_quality_pages(FLs, "Q5857568");
             gather_quality_pages(RAs, "Q13402307");
 
-            var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
-            var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
+            var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", "wikidatawiki"));
             connect.Open();
             foreach (var pagename_on_sourcewiki in iterationlist)
             {
