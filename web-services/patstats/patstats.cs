@@ -97,56 +97,55 @@ class Program
 
         if (type == "db")
         {
-            var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
-            var connect = new MySqlConnection(creds[2].Replace("%project%", url2db(project)));
+            var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", url2db(project)));
             connect.Open();
-            var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and log_timestamp >" + startdate.Replace("-", "") +
-                "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect);
+            var squery = new MySqlCommand("select log_action, log_namespace, cast(actor_name as char) user from logging join actor on log_actor=actor_id where log_type=\"review\" and " +
+                "log_timestamp >" + startdate.Replace("-", "") + "000000 and log_timestamp<" + enddate.Replace("-", "") + "235959", connect);
             var r = squery.ExecuteReader();
             while (r.Read())
             {
                 string user = r.GetString("user");
                 if (user == null)
                     continue;
-                string action = r.GetString("log_action");
+                byte[] buffer = new byte[15];
+                r.GetBytes(0,0,buffer,0,15);
                 int ns = r.GetInt16("log_namespace");
-                put_new_action(user, action, ns);
+                put_new_action(user, buffer.ToString(), ns);
             }
         }
 
         if (type == "api")
         {
-            foreach (var action in new string[] { "approve", "approve-i", "unapprove" })
-            {
-                string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user&leaction=review/" + action + "&leend=" + startdate +
+            string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user&letype=review&leend=" + startdate +
                     "T00%3A00%3A00.000Z&lestart=" + enddate + "T23%3A59%3A59.999Z&lelimit=500";
-                while (cont != null)
+            while (cont != null)
+            {
+                var rawapiout = (cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&lecontinue=" + cont));
+                using (var xr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(rawapiout))))
                 {
-                    var rawapiout = (cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&lecontinue=" + cont));
-                    using (var xr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(rawapiout))))
-                    {
-                        xr.WhitespaceHandling = WhitespaceHandling.None;
-                        xr.Read(); xr.Read(); xr.Read();
-                        cont = xr.GetAttribute("lecontinue");
-                        while (xr.Read())
-                            if (xr.Name == "item")
-                            {
-                                string user = xr.GetAttribute("user");
-                                if (user == null)
-                                    continue;
-                                put_new_action(user, action, Convert.ToInt16(xr.GetAttribute("ns")));
-                            }
-                    }
+                    xr.WhitespaceHandling = WhitespaceHandling.None;
+                    xr.Read(); xr.Read(); xr.Read();
+                    cont = xr.GetAttribute("lecontinue");
+                    while (xr.Read())
+                        if (xr.Name == "item")
+                        {
+                            string user = xr.GetAttribute("user");
+                            if (user == null)
+                                continue;
+                            put_new_action(user, xr.GetAttribute("action"), Convert.ToInt16(xr.GetAttribute("ns")));
+                        }
                 }
             }
         }
 
         int c = 0;
-        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Всего действий</th><th>В статьях</th><th>шаблонах</th><th>категориях</th><th>файлах</th><th>порталах</th><th>модулях</th><th>Из них распатрулирований</th></tr>\n";
-        foreach (var u in usertable.OrderByDescending(u => sort == "main" ? u.Value.main : (sort == "template" ? u.Value.template : (sort == "cat" ? u.Value.cat : (sort == "file" ? u.Value.file : (sort == "portal" ? u.Value.portal : (sort == "module" ? u.Value.module : 
-        (sort == "unpat" ? u.Value.unpat : u.Value.sum))))))))
-            result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" +
-                u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" + u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
+        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Всего действий</th><th>В статьях</th><th>шаблонах</th><th>категориях</th><th>файлах</th><th>порталах" +
+            "</th><th>модулях</th><th>Из них распатрулирований</th></tr>\n";
+        foreach (var u in usertable.OrderByDescending(u => sort == "main" ? u.Value.main : (sort == "template" ? u.Value.template : (sort == "cat" ? u.Value.cat : (sort == "file" ? u.Value.file : 
+        (sort == "portal" ? u.Value.portal : (sort == "module" ? u.Value.module : (sort == "unpat" ? u.Value.unpat : u.Value.sum))))))))
+            result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" +
+                u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" + u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" +
+                u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
         Sendresponse(type, project, startdate, enddate, sort, result + "</table>");
     }
 }
