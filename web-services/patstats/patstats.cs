@@ -95,6 +95,7 @@ class Program
         string sort = parameters["sort"];
         string result = "";
 
+        string nakopitel = "";
         if (type == "db")
         {
             var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", url2db(project)));
@@ -111,12 +112,13 @@ class Program
                 r.GetBytes(0,0,buffer,0,15);
                 int ns = r.GetInt16("log_namespace");
                 put_new_action(user, buffer.ToString(), ns);
+                nakopitel += " " + buffer.ToString();
             }
         }
 
         if (type == "api")
         {
-            string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user&letype=review&leend=" + startdate +
+            string cont = "", query = "https://" + project + ".org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|type&letype=review&leend=" + startdate +
                     "T00%3A00%3A00.000Z&lestart=" + enddate + "T23%3A59%3A59.999Z&lelimit=500";
             while (cont != null)
             {
@@ -146,6 +148,6 @@ class Program
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" +
                 u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" + u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" +
                 u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
-        Sendresponse(type, project, startdate, enddate, sort, result + "</table>");
+        Sendresponse(type, project, startdate, enddate, sort, result + "</table>" + nakopitel);
     }
 }
