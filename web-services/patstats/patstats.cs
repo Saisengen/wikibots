@@ -111,8 +111,8 @@ class Program
                 byte[] buffer = new byte[15];
                 r.GetBytes(0,0,buffer,0,15);
                 int ns = r.GetInt16("log_namespace");
-                put_new_action(user, BitConverter.ToString(buffer), ns);
-                nakopitel += " " + BitConverter.ToString(buffer);
+                put_new_action(user, Encoding.UTF8.GetString(buffer, 0, buffer.Length), ns);
+                nakopitel += " " + Encoding.UTF8.GetString(buffer, 0, buffer.Length);
             }
         }
 
