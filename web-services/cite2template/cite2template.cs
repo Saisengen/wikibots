@@ -19,10 +19,24 @@ class Program
         bool addauthor = false;
         bool method_is_post = Environment.GetEnvironmentVariable("REQUEST_METHOD") == "POST";
         if (!method_is_post)
+        {
             Sendresponse("", false, "", "");
+        }
         else
         { 
-            var inputdata = Console.ReadLine().Split('&');
+            string[] inputdata;
+            // The CGI 1.1 standard does not specify that the input will be terminated with EOF
+            // So if there's content length, we have to read just as many chars
+            var inputLength = int.Parse(Environment.GetEnvironmentVariable("CONTENT_LENGTH")!);
+            var inputstring = "";
+            for (int i = 0; i < inputLength; i++){
+                var nextChar = Console.Read();
+                if (nextChar == -1) {
+                    break;
+                }
+                inputstring += (char)nextChar;
+            }
+            inputdata = inputstring.Split('&');
             foreach (var param in inputdata)
             {
                 var data = param.Split('=');
