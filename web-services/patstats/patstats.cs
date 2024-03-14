@@ -22,7 +22,7 @@ class Program
         if (usertable.ContainsKey(user))
         {
             usertable[user].sum++;
-            if (type == "unapprove")
+            if (type.Contains("un"))
                 usertable[user].unpat++;
             if (ns == 0)
                 usertable[user].main++;
@@ -40,7 +40,7 @@ class Program
         else
         {
             int main, template, file, cat, portal, module, unpat, sum;
-            unpat = (type == "unapprove" ? 1 : 0);
+            unpat = (type.Contains("un") ? 1 : 0);
             main = (ns == 0 ? 1 : 0);
             file = (ns == 6 ? 1 : 0);
             template = (ns == 10 ? 1 : 0);
@@ -95,7 +95,6 @@ class Program
         string sort = parameters["sort"];
         string result = "";
 
-        string nakopitel = "";
         if (type == "db")
         {
             var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", url2db(project)));
@@ -108,11 +107,10 @@ class Program
                 string user = r.GetString("user");
                 if (user == null)
                     continue;
-                byte[] buffer = new byte[15];
-                r.GetBytes(0,0,buffer,0,15);
+                var buffer = new byte[10];
+                r.GetBytes(0, 0, buffer, 0, 10);
                 int ns = r.GetInt16("log_namespace");
                 put_new_action(user, Encoding.UTF8.GetString(buffer, 0, buffer.Length), ns);
-                nakopitel += " " + Encoding.UTF8.GetString(buffer, 0, buffer.Length);
             }
         }
 
@@ -143,11 +141,11 @@ class Program
         int c = 0;
         result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Всего действий</th><th>В статьях</th><th>шаблонах</th><th>категориях</th><th>файлах</th><th>порталах" +
             "</th><th>модулях</th><th>Из них распатрулирований</th></tr>\n";
-        foreach (var u in usertable.OrderByDescending(u => sort == "main" ? u.Value.main : (sort == "template" ? u.Value.template : (sort == "cat" ? u.Value.cat : (sort == "file" ? u.Value.file : 
+        foreach (var u in usertable.OrderByDescending(u => sort == "main" ? u.Value.main : (sort == "template" ? u.Value.template : (sort == "cat" ? u.Value.cat : (sort == "file" ? u.Value.file :
         (sort == "portal" ? u.Value.portal : (sort == "module" ? u.Value.module : (sort == "unpat" ? u.Value.unpat : u.Value.sum))))))))
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/special:log?type=review&user=" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" +
                 u.Value.sum + "</td><td>" + u.Value.main + "</td><td>" + u.Value.template + "</td><td>" + u.Value.cat + "</td><td>" + u.Value.file + "</td><td>" + u.Value.portal + "</td><td>" +
                 u.Value.module + "</td><td>" + u.Value.unpat + "</td></tr>";
-        Sendresponse(type, project, startdate, enddate, sort, result + "</table>" + nakopitel);
+        Sendresponse(type, project, startdate, enddate, sort, result + "</table>");
     }
 }
