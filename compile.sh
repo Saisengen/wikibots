@@ -15,7 +15,6 @@ LAYER_DIR="$LAYERS_DIR/wikibots"
 PUBLIC_HTML="$LAYER_DIR/public_html"
 PROJECTS=(
     web-services/*
-    cluster-analysis/*
 )
 
 
