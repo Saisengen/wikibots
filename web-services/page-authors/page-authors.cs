@@ -25,7 +25,6 @@ class Program
     }
     static void Main()
     {
-        var creds = Environment.GetEnvironmentVariable("CREDS").Split('\n');
         var cl = new WebClient();
         var srcpages = new List<string>();
         //Environment.SetEnvironmentVariable("QUERY_STRING", "type=links&source=Проект:Востоковедная неделя/Статьи&notless=1");
@@ -38,7 +37,7 @@ class Program
         var parameters = HttpUtility.ParseQueryString(input);
         string type = parameters[0];
         var rawsource = parameters[1];
-        var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r\n", "\t").Replace("\n", "\t").Replace("\r", "\t").Split('\t');//удаляем пробел нулевой ширины
+        var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Replace("\n", "\t").Split('\t');//удаляем пробел нулевой ширины
         foreach (var s in source)
         {
             string upcased = char.ToUpper(s[0]) + s.Substring(1);
@@ -50,7 +49,7 @@ class Program
         var pageids = new HashSet<string>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
-        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
+        var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", "ruwiki"));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
