@@ -131,7 +131,7 @@
 - name: pageview-peaks
   command: mono /data/project/mbh/bots/pageview_peaks.exe
   image: tf-mono68
-  schedule: "17 19 3 * *"
+  schedule: "51 6 1 * *"
   emails: onfailure
 
 #- name: extlinks-counter
@@ -189,7 +189,7 @@
 - name: rollbacker
   command: mono /data/project/mbh/bots/vand_rollbacker.exe
   image: tf-mono68
-  emails: none
+  emails: onfailure
   continuous: true
 
 - name: file-renaming
@@ -202,7 +202,7 @@
 - name: checkbot
   command: mono /data/project/mbh/d89bots/check-bot.exe
   image: tf-mono68
-  schedule: "58 * * * *"
+  schedule: "58 4 * * *"
   emails: onfailure
 
 - name: image-bot
@@ -214,25 +214,25 @@
 - name: inc-bot
   command: mono /data/project/mbh/d89bots/inc-bot.exe
   image: tf-mono68
-  schedule: "58 9 * * *"
+  schedule: "58 8 * * *"
   emails: onfailure
 
 - name: stat-bot
   command: mono /data/project/mbh/d89bots/inc-stat-bot.exe
   image: tf-mono68
-  schedule: "58 9 * * *"
+  schedule: "58 12 * * *"
   emails: onfailure
 
 - name: remind-bot
   command: mono /data/project/mbh/d89bots/remind-inc-bot.exe
   image: tf-mono68
-  schedule: "58 9 * * *"
+  schedule: "58 5 * * *"
   emails: onfailure
 
 - name: nullbot
   command: mono /data/project/mbh/d89bots/null-editor.exe
   image: tf-mono68
-  schedule: "58 9 * * *"
+  schedule: "58 3 * * *"
   emails: onfailure
 
 - name: minirec-summary
