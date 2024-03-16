@@ -17,27 +17,27 @@ class pageinfo
 
 public class Continue
 {
-    public string eicontinue { get; set; }
-    public string @continue { get; set; }
+    public string eicontinue;
+    public string @continue;
 }
 
 public class Embeddedin
 {
-    public int pageid { get; set; }
-    public int ns { get; set; }
-    public string title { get; set; }
+    public int pageid;
+    public int ns;
+    public string title;
 }
 
 public class Query
 {
-    public List<Embeddedin> embeddedin { get; set; }
+    public List<Embeddedin> embeddedin;
 }
 
 public class Root
 {
-    public bool batchcomplete { get; set; }
-    public Continue @continue { get; set; }
-    public Query query { get; set; }
+    public bool batchcomplete;
+    public Continue @continue;
+    public Query query;
 }
 
 class Program
@@ -318,7 +318,7 @@ class Program
                 result += "<br>|}";
             }
 
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, FAs.Count + " " + GAs.Count + " " + result);
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, result);
         }
     }
 }
