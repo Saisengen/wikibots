@@ -117,9 +117,8 @@ class Program
         var monthnumbers = new Dictionary<string, int>{{ "января", 1 },{ "февраля", 2 },{ "марта", 3 },{ "апреля", 4 },{ "мая", 5 },{ "июня", 6 },{ "июля", 7 },{ "августа", 8 },
             { "сентября", 9 },{ "октября", 10 },{ "ноября", 11 },{ "декабря", 12 }};
         var stats_per_year = new Dictionary<string, Dictionary<string, int>>();
-        var stats_per_month = new Dictionary<string, Dictionary<string, int>>();
-        var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)
-\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var stats_per_month = new Dictionary<string, Dictionary<string, int>>();//НЕ ПЕРЕНОСИТЬ СТРОКУ НИЖЕ, ОНА ЛОМАЕТСЯ
+        var summary_rgx = new Regex(@"={1,}\s*Итог[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var yearrgx = new Regex(@"\d{4}");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
@@ -148,12 +147,12 @@ class Program
                     if (correctpage)
                     {
                         string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + pagetitle + "?action=raw").Result;
-                        var matches = summary_rgx.Matches(pagetext);
-                        foreach (Match m in matches)
+                        var summaries = summary_rgx.Matches(pagetext);
+                        foreach (Match summary in summaries)
                         {
-                            int signature_year = Convert.ToInt16(m.Groups[6].Value);
-                            int signature_month = monthnumbers[m.Groups[5].Value];
-                            string user = m.Groups[3].ToString().Replace('_', ' ');
+                            int signature_year = Convert.ToInt16(summary.Groups[6].Value);
+                            int signature_month = monthnumbers[summary.Groups[5].Value];
+                            string user = summary.Groups[3].ToString().Replace('_', ' ');
                             if (user.Contains("/"))
                                 continue;
                             if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
