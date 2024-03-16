@@ -63,10 +63,13 @@ class Program
         if (quality_template_name != "")
         {
             string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=json&formatversion=2&list=embeddedin&eititle=" + Uri.EscapeDataString(quality_template_name) + "&eilimit=max";
-            while (cont != null)
+            while (cont != "-")
             {
                 Root response = JsonConvert.DeserializeObject<Root>(Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&eicontinue=" + Uri.EscapeDataString(cont))));
-                cont = response.@continue.eicontinue;
+                if (response.@continue != null)
+                    cont = response.@continue.eicontinue;
+                else
+                    cont = "-";
                 foreach (var name in response.query.embeddedin)
                     list_of_quality_pages.Add(name.title);
             }
