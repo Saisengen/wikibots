@@ -220,7 +220,7 @@ class Program
             foreach (var pagename_on_sourcewiki in iterationlist)
             {
                 int numofiwiki = 0, itemid;
-                MySqlDataReader r = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" + 
+                MySqlDataReader r = new MySqlCommand("select ips_item_id from wb_items_per_site where ips_site_id=\"" + url2db(sourcewiki) + "\" and ips_site_page=\"" +
                     pagename_on_sourcewiki.Replace("\"", "\\\"") + "\";", connect).ExecuteReader();
                 if (r.Read())
                 {
@@ -292,7 +292,7 @@ class Program
                 result += "<br>|}";
             }
 
-            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, result);
+            sendresponse(sourcewiki, category, template, targetwiki, type, pagetype, sort, wikilist, wikitable, requireddepth, miniwiki, FAs.Count + " " + GAs.Count + " " + result);
         }
     }
 }
