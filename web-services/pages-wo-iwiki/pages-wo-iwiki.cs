@@ -7,12 +7,39 @@ using System.Web;
 using System.Xml;
 using System.Text;
 using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
 
 class pageinfo
 {
     public string status;
     public int numofiwiki, id;
 }
+
+public class Continue
+{
+    public string eicontinue { get; set; }
+    public string @continue { get; set; }
+}
+
+public class Embeddedin
+{
+    public int pageid { get; set; }
+    public int ns { get; set; }
+    public string title { get; set; }
+}
+
+public class Query
+{
+    public List<Embeddedin> embeddedin { get; set; }
+}
+
+public class Root
+{
+    public bool batchcomplete { get; set; }
+    public Continue @continue { get; set; }
+    public Query query { get; set; }
+}
+
 class Program
 {
     static string sourcewiki, category, template, pagetype, type, targetwiki, sort, requestedwiki;
@@ -35,17 +62,13 @@ class Program
 
         if (quality_template_name != "")
         {
-            string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + Uri.EscapeDataString(quality_template_name) + "&eilimit=max";
+            string cont = "", query = "https://" + requestedwiki + ".org/w/api.php?action=query&format=json&formatversion=2&list=embeddedin&eititle=" + Uri.EscapeDataString(quality_template_name) + "&eilimit=max";
             while (cont != null)
             {
-                using (var r = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&eicontinue=" + Uri.EscapeDataString(cont))))))
-                {
-                    r.WhitespaceHandling = WhitespaceHandling.None;
-                    r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
-                    while (r.Read())
-                        if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
-                            list_of_quality_pages.Add(r.GetAttribute("title"));
-                }
+                Root response = JsonConvert.DeserializeObject<Root>(Encoding.UTF8.GetString(cont == "" ? cl.DownloadData(query) : cl.DownloadData(query + "&eicontinue=" + Uri.EscapeDataString(cont))));
+                cont = response.@continue.eicontinue;
+                foreach (var name in response.query.embeddedin)
+                    list_of_quality_pages.Add(name.title);
             }
         }
     }
