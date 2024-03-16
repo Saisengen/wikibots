@@ -52,8 +52,10 @@ class Program
     static void Main()
     {
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
-        connect.Open();
+        var ru = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
+        var global = new MySqlConnection(creds[2].Replace("%project%", "centralauth"));
+        ru.Open();
+        global.Open();
         MySqlCommand command;
         MySqlDataReader rdr;
         var pats = new HashSet<string>();
@@ -61,7 +63,7 @@ class Program
         var apats = new HashSet<string>();
         var fmovers = new HashSet<string>();
 
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\";", connect) { CommandTimeout = 99999 };
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\";", ru);
         rdr = command.ExecuteReader();
         while (rdr.Read())
             pats.Add(rdr.GetString(0));
@@ -97,6 +99,12 @@ class Program
             }
             rdr.Close();
         }
+
+        command = new MySqlCommand("SELECT cast(gu_name as char) user FROM global_user_groups JOIN globaluser ON gu_id=gug_user WHERE gug_group=\"global-rollbacker\"", global);
+        rdr = command.ExecuteReader();
+        while (rdr.Read())
+            if (!rolls.Contains(rdr.GetString(0)))
+                rolls.Add(rdr.GetString(0));
 
         var patnotrolls = new HashSet<string>(pats);
         patnotrolls.ExceptWith(rolls);
