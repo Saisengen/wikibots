@@ -10,13 +10,18 @@ using System.Xml;
 
 class Program
 {
-    static string user, title, newid, oldid, discord_token;
-    static HttpClient discord = new HttpClient(), ru, uk;
-    static double damaging;
+    static string user, title, newid, oldid, liftwing_token, commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
+            "rc_last_oldid from recentchanges join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" +
+            "%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
+    static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ru, uk;
+    static double damaging, ru_high = 1, ru_low = 1, uk_low = 1, agnostic = 1;
     static Regex rowrx = new Regex(@"\|-");
     static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","Рейму_Хакурей/Проблемные_правки"},{"uk","Рейму_Хакурей/Підозрілі_редагування"}};
     static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
-    static Dictionary<string, bool> users_by_apat_flag = new Dictionary<string, bool>();
+    static Dictionary<string,string> discord_tokens = new Dictionary<string, string>();
+    static Dictionary<string,string> last_checked_edit_time = new Dictionary<string, string>();
+    static Dictionary<string,string> new_last_checked_edit_time = new Dictionary<string, string>();
+    static Dictionary<string,bool> users_by_apat_flag = new Dictionary<string, bool>();
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -70,8 +75,9 @@ class Program
         Save(lang, (lang == "ru" ? ru : uk), "edit", "user:" + notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|diff]], [[special:history/" + title + "|" + title + "]]," +
             "[[special:contribs/" + user + "|" + user + "]], " + reason, edit_type.suspicious_edit);
 
-        discord.PostAsync("https://discord.com/api/webhooks/" + discord_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
-        ".wikipedia.org/w/index.php?diff=" + newid + ">) / [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + user.Replace(' ', '_') + ">) " + reason}}));
+        discord_client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[diff](<https://" + lang +
+                ".wikipedia.org/w/index.php?diff=" + newid + ">), [" + title + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">), [" + user.Replace(' ', '_') +
+                "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">) " + reason}}));
     }
     static bool isApat(string user)
     {
@@ -91,16 +97,23 @@ class Program
     }
     static int Main()
     {
-        var goodanons = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var patterns = new List<Regex>();
-        var added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
-        discord_token = creds[3];
+        discord_tokens.Add("ru", creds[10]); discord_tokens.Add("uk", creds[11]);
+        //liftwing_token = creds[3];
+        //liftwing_client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
+        //liftwing_client.DefaultRequestHeaders.Add("User-Agent", "vandalism detection tool by user MBH");
+        //var result = liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict", new FormUrlEncodedContent(new Dictionary<string, string>{ { "lang", "ru"},
+        //    { "rev_id", "136742461" } }));
+
+
+        var goodanons = new HashSet<string>();
         ru = Site("ru", creds[4], creds[5]);
         uk = Site("uk", creds[4], creds[5]);
+        var patterns = new List<Regex>();
+        var added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
+        last_checked_edit_time.Add("ru", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss"));
+        last_checked_edit_time.Add("uk", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss"));
         var reportedusersrx = new Regex(@"\| вопрос = u/(.*)");
-        string rulasteditid = "", newrulasteditid = "", ukrlasteditid = "", newukrlasteditid = "", commandtext;
-        double mediumlimit = 1, lowlimit = 1, ukrlimit = 1;
         int currminute = -1;
         var badusers = new HashSet<string>();
         var ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web"));
@@ -115,9 +128,18 @@ class Program
             {
                 currminute = DateTime.UtcNow.Minute / 10;
                 var limits = ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/limits.css&action=raw").Result.Split('\n');
-                lowlimit = Convert.ToDouble(limits[0]);
-                mediumlimit = Convert.ToDouble(limits[1]);
-                ukrlimit = Convert.ToDouble(limits[2]);
+                foreach (var row in limits)
+                {
+                    var keyvalue = row.Split(':');
+                    if (keyvalue[0] == "ru-low")
+                        ru_low = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "ru-high")
+                        ru_high = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "uk-low")
+                        uk_low = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "agnostic")
+                        agnostic = Convert.ToDouble(keyvalue[1]);
+                }
                 foreach (var g in ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Result.Split('\n'))
                     goodanons.Add(g);
                 patterns.Clear();
@@ -125,14 +147,12 @@ class Program
                 patterns.Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
                 var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
                 foreach (var pattern in pattern_source)
-                    patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
+                    if (pattern != "")
+                        patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
             }
-            bool runewle = false, ukrnewle = false;
-            commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
-                "ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" + DateTime.UtcNow.AddSeconds(-10)
-                .ToString("yyyyMMddHHmmss") + " and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
+            bool new_last_time_saved = false;
 
-            sqlreader = new MySqlCommand(commandtext, ruconnect).ExecuteReader();
+            sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time["ru"]), ruconnect).ExecuteReader();
             while (sqlreader.Read())
             {
                 user = sqlreader.GetString("user") ?? "";
@@ -143,16 +163,16 @@ class Program
                 title = sqlreader.GetString("title").Replace('_', ' ');
                 newid = sqlreader.GetString("rc_this_oldid");
                 oldid = sqlreader.GetString("rc_last_oldid");
-                if (!runewle)
+                if (!new_last_time_saved)
                 {
-                    newrulasteditid = newid;
-                    runewle = true;
+                    new_last_checked_edit_time["ru"] = sqlreader.GetString("rc_timestamp");
+                    new_last_time_saved = true;
                 }
-                if (newid == rulasteditid)
-                    break;
 
-                if (damaging > lowlimit)
+                bool processed_by_ores = false;
+                if (damaging > ru_low)
                 {
+                    processed_by_ores = true;
                     if (badusers.Contains(user))
                     {
                         string zkab = ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
@@ -167,8 +187,8 @@ class Program
                     }
                     else badusers.Add(user);
 
-                    if (damaging < mediumlimit)
-                        post_suspicious_edit("ru", damaging.ToString());
+                    if (damaging < ru_high)
+                        post_suspicious_edit("ru", "ores:" + damaging.ToString());
 
                     else
                     {
@@ -182,7 +202,7 @@ class Program
                     }
                 }
 
-                if (user_is_anon || !isApat(user))
+                if (!processed_by_ores && (user_is_anon || !isApat(user)))
                 {
                     try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=xml&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=unified").Result; }
                     catch { continue; }
@@ -196,28 +216,27 @@ class Program
                 }
             }
             sqlreader.Close();
-            rulasteditid = newrulasteditid;
+            last_checked_edit_time["ru"] = new_last_checked_edit_time["ru"];
 
-            sqlreader = new MySqlCommand(commandtext, ukrconnect).ExecuteReader();
+            new_last_time_saved = false;
+            sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time["uk"]), ukrconnect).ExecuteReader();
             while (sqlreader.Read())
             {
                 user = sqlreader.GetString("user");
                 damaging = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
                 title = sqlreader.GetString("title").Replace('_', ' ');
                 newid = sqlreader.GetString("rc_this_oldid");
-                if (!ukrnewle)
+                if (!new_last_time_saved)
                 {
-                    newrulasteditid = newid;
-                    ukrnewle = true;
+                    new_last_checked_edit_time["uk"] = sqlreader.GetString("rc_timestamp");
+                    new_last_time_saved = true;
                 }
-                if (newid == ukrlasteditid)
-                    break;
 
-                if (damaging > ukrlimit)
+                if (damaging > uk_low)
                     post_suspicious_edit("uk", damaging.ToString());
             }
             sqlreader.Close();
-            ukrlasteditid = newukrlasteditid;
+            last_checked_edit_time["uk"] = new_last_checked_edit_time["uk"];
 
             Thread.Sleep(5000);
         }
