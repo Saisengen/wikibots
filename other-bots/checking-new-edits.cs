@@ -16,7 +16,7 @@ class Program
             "%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
     static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ru, uk;
     static double ores_risk, lw_risk, ru_high = 1, ru_low = 1, uk_low = 1, agnostic_low = 1, agnostic_high = 1;
-    static Regex row_rgx = new Regex(@"\|-");
+    static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)");
     static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru","Рейму_Хакурей/Проблемные_правки"},{"uk","Рейму_Хакурей/Підозрілі_редагування"}};
     static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string,string> discord_tokens = new Dictionary<string, string>();
@@ -81,6 +81,23 @@ class Program
                 ".wikipedia.org/w/index.php?diff=" + newid + ">), [" + title + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">), [" + user.Replace(' ', '_') +
                 "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">) " + reason}}));
     }
+    static void liftwing_check(string lang)
+    {
+        string raw = "";
+        try
+        {
+            raw = liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
+                new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
+            lw_risk = Math.Round(Convert.ToDouble(raw), 3);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("raw=" + raw + "\n" + e.ToString());
+            return;
+        }
+        if (lw_risk > agnostic_low)
+            post_suspicious_edit(lang, "liftwing:" + lw_risk.ToString());
+    }
     static bool isRuApat(string user)
     {
         if (ru_users_by_apat_flag.ContainsKey(user))
@@ -121,8 +138,7 @@ class Program
         liftwing_client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
         liftwing_client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
-        var liftwing_rgx = new Regex(@"""true"":(0.\d+)");
-        var goodanons = new HashSet<string>();
+        var goodanons = new List<string>();
         ru = Site("ru", creds[4], creds[5]);
         uk = Site("uk", creds[4], creds[5]);
         var patterns = new List<Regex>();
@@ -142,8 +158,8 @@ class Program
             if (currminute != DateTime.UtcNow.Minute / 10)
             {
                 currminute = DateTime.UtcNow.Minute / 10;
-                var limits = ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/limits.css&action=raw").Result.Split('\n');
-                foreach (var row in limits)
+                var settings = ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+                foreach (var row in settings)
                 {
                     var keyvalue = row.Split(':');
                     if (keyvalue[0] == "ru-low")
@@ -156,11 +172,12 @@ class Program
                         agnostic_low = Convert.ToDouble(keyvalue[1]);
                     else if (keyvalue[0] == "agnostic-high")
                         agnostic_high = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "goodanons")
+                        foreach (var g in keyvalue[1].Split('|'))
+                            goodanons.Add(g);
                 }
-                foreach (var g in ru.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/goodanons.css&action=raw").Result.Split('\n'))
-                    goodanons.Add(g);
                 patterns.Clear();
-                patterns.Add(new Regex(@"\bСВО\b")); //нельзя использовать в ignore case, как остальные
+                patterns.Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
                 patterns.Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
                 var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
                 foreach (var pattern in pattern_source)
@@ -188,24 +205,9 @@ class Program
                     post_suspicious_edit("uk", "ores:" + ores_risk.ToString());
                     continue;
                 }
-                    
+
                 if (user_is_anon || !isUkApat(user))
-                {
-                    string raw = "";
-                    try
-                    {
-                        raw = liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
-                            new StringContent("{\"lang\":\"uk\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
-                        lw_risk = Math.Round(Convert.ToDouble(raw), 3);
-                    }
-                    catch (Exception e)
-                    {
-                        Console.WriteLine(raw + "\n" + e.ToString());
-                        continue;
-                    }
-                    if (lw_risk > agnostic_low)
-                        post_suspicious_edit("uk", "liftwing:" + lw_risk.ToString());
-                }
+                    liftwing_check("uk");
             }
             sqlreader.Close();
             last_checked_edit_time["uk"] = new_last_checked_edit_time["uk"];
@@ -275,20 +277,7 @@ class Program
                             }
 
                     if (!processed_by_patterns)
-                    {
-                        try
-                        {
-                            lw_risk = Math.Round(Convert.ToDouble(liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
-                                new StringContent("{\"lang\":\"ru\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value), 3);
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e.ToString());
-                            continue;
-                        }
-                        if (lw_risk > agnostic_low)
-                            post_suspicious_edit("ru", "liftwing:" + lw_risk.ToString());
-                    }
+                        liftwing_check("ru");
                 }
             }
             sqlreader.Close();
