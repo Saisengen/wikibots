@@ -58,7 +58,7 @@ http.server.test(
     ServerClass=SillyServer,
     port='"${PORT:-8000}"',
     bind='0.0.0.0',
-    protocol='HTTP/1.1',
+    protocol='HTTP/1.0',
 )
 "
 
