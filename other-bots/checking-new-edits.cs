@@ -28,6 +28,7 @@ class Program
     static List<string> suspicious_users = new List<string>();
     static List<Regex> patterns = new List<Regex>();
     static bool processed_by_patterns;
+    static int max_diff_length_for_show = 80;
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -70,7 +71,7 @@ class Program
             request.Add(new StringContent(customparam), "user");
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string lang, string reason)
+    static void post_suspicious_edit_short(string lang, string reason)
     {
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ru.GetStringAsync(get_request).Result : uk.GetStringAsync(get_request).Result);
@@ -85,7 +86,7 @@ class Program
                 ".wikipedia.org/w/index.php?diff=" + newid + ">) ([" + (lang == "ru" ? "история" : "історія") + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) +
                 ">)), [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + reason}}));
     }
-    static void post_suspicious_edit(string lang, string ins, string del)
+    static void post_suspicious_edit_long(string lang, string ins, string del)
     {
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ru.GetStringAsync(get_request).Result : uk.GetStringAsync(get_request).Result);
@@ -118,7 +119,7 @@ class Program
     }
     static void liftwing_check(string lang)
     {
-        string raw = "1";
+        string raw;
         try
         {
             raw = liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
@@ -128,14 +129,10 @@ class Program
             else
                 return;
         }
-        catch (Exception e)
-        {
-            Console.WriteLine("raw=" + raw + "\n" + e.ToString());
-            return;
-        }
+        catch {return;}
         if (lw_risk > agnostic_low)
         {
-            post_suspicious_edit(lang, "liftwing:" + lw_risk.ToString());
+            process_diff(lang, "liftwing:" + lw_risk.ToString());
             if (lang == "ru")
                 report_suspicious_user_if_needed();
         }
@@ -144,21 +141,45 @@ class Program
     {
         if (processed_by_patterns)
             return;
-        try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
+        try { diff_text = ru.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
         catch { return; }
         var all_ins = ins_rgx.Matches(diff_text);
         var all_del = del_rgx.Matches(diff_text);
         foreach (Match ins in all_ins)
             foreach (var pattern in patterns)
                 if (pattern.IsMatch(ins.Value))
-                {
-                    if (all_ins.Count < 2 && all_del.Count < 2 && ((all_del.Count == 0 && ins.Value.Length < 30) || (ins.Value.Length + all_del[0].Value.Length < 30)))
-                        post_suspicious_edit("ru", ins.Value, all_del[0].Value);
-                    else
-                        post_suspicious_edit("ru", pattern.Match(ins.Value).Value);
-                    processed_by_patterns = true;
-                }
-
+                    //if (all_ins.Count < 2 && all_del.Count < 2)
+                    {
+                        int ins_length = ins.Value.Length;
+                        int del_length = all_del.Count == 0 ? 0 : all_del[0].Length;
+                        if (ins_length + del_length <= max_diff_length_for_show)
+                            post_suspicious_edit_long(lang, ins.Value, all_del[0].Value);
+                        else
+                            post_suspicious_edit_short(lang, pattern.Match(ins.Value).Value);
+                    }
+                    //else
+                    //    post_suspicious_edit_short(lang, pattern.Match(ins.Value).Value);
+        processed_by_patterns = true;
+    }
+    static void process_diff(string lang, string reason)
+    {
+        try { diff_text = ru.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
+        catch { return; }
+        var all_ins = ins_rgx.Matches(diff_text);
+        var all_del = del_rgx.Matches(diff_text);
+        int ins_length = all_ins.Count == 0 ? 0 : all_ins[0].Length;
+        int del_length = all_del.Count == 0 ? 0 : all_del[0].Length;
+        if (/*all_ins.Count < 2 && all_del.Count < 2 && */ins_length + del_length <= max_diff_length_for_show)
+            {
+                if (all_ins.Count == 1 && all_del.Count == 0)
+                    post_suspicious_edit_long(lang, all_ins[0].Value, "");
+                else if (all_ins.Count == 0 && all_del.Count == 1)
+                    post_suspicious_edit_long(lang, "", all_del[0].Value);
+                else
+                    post_suspicious_edit_long(lang, all_ins[0].Value, all_del[0].Value);
+            }
+        else
+            post_suspicious_edit_short(lang, reason);
     }
     static bool isRuApat(string user)
     {
@@ -259,7 +280,7 @@ class Program
 
                 if (ores_risk > uk_low)
                 {
-                    post_suspicious_edit("uk", "ores:" + ores_risk.ToString());
+                    process_diff("uk", "ores:" + ores_risk.ToString());
                     continue;
                 }
 
@@ -291,7 +312,7 @@ class Program
                 {
                     report_suspicious_user_if_needed();
                     if (ores_risk < ru_high)
-                        post_suspicious_edit("ru", "ores:" + ores_risk.ToString());
+                        process_diff("ru", "ores:" + ores_risk.ToString());
 
                     else
                     {
