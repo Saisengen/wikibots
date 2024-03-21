@@ -15,7 +15,7 @@ class Program
             "rc_last_oldid from recentchanges join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>" +
             "%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
     static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ru, uk;
-    static double ores_risk, lw_risk, ru_high = 1, ru_low = 1, uk_low = 1, agnostic_low = 1, agnostic_high = 1;
+    static double ores_risk, lw_risk, ru_high = 1, ru_low = 1, uk_low = 1, agnostic_low = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
         ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru", "user:Рейму_Хакурей/Проблемные_правки" },{"uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
@@ -28,7 +28,7 @@ class Program
     static List<string> suspicious_users = new List<string>();
     static List<Regex> patterns = new List<Regex>();
     static bool processed_by_patterns;
-    static int max_diff_length_for_show = 80;
+    static int max_diff_length_for_show;
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -147,15 +147,15 @@ class Program
         var all_del = del_rgx.Matches(diff_text);
         foreach (Match ins in all_ins)
             foreach (var pattern in patterns)
-                if (pattern.IsMatch(ins.Value))
+                if (pattern.IsMatch(ins.Groups[1].Value))
                     //if (all_ins.Count < 2 && all_del.Count < 2)
                     {
-                        int ins_length = ins.Value.Length;
-                        int del_length = all_del.Count == 0 ? 0 : all_del[0].Length;
+                        int ins_length = ins.Groups[1].Value.Length;
+                        int del_length = all_del.Count == 0 ? 0 : all_del[0].Groups[1].Value.Length;
                         if (ins_length + del_length <= max_diff_length_for_show)
-                            post_suspicious_edit_long(lang, ins.Value, all_del[0].Value);
+                            post_suspicious_edit_long(lang, ins.Groups[1].Value, all_del[0].Groups[1].Value);
                         else
-                            post_suspicious_edit_short(lang, pattern.Match(ins.Value).Value);
+                            post_suspicious_edit_short(lang, pattern.Match(ins.Groups[1].Value).Value);
                     }
                     //else
                     //    post_suspicious_edit_short(lang, pattern.Match(ins.Value).Value);
@@ -163,20 +163,27 @@ class Program
     }
     static void process_diff(string lang, string reason)
     {
-        try { diff_text = ru.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
+        string request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
+        try
+        { 
+            if (lang == "ru")
+                diff_text = ru.GetStringAsync(request).Result;
+            else
+                diff_text = uk.GetStringAsync(request).Result;
+        }
         catch { return; }
         var all_ins = ins_rgx.Matches(diff_text);
         var all_del = del_rgx.Matches(diff_text);
-        int ins_length = all_ins.Count == 0 ? 0 : all_ins[0].Length;
-        int del_length = all_del.Count == 0 ? 0 : all_del[0].Length;
+        int ins_length = all_ins.Count == 0 ? 0 : all_ins[0].Groups[1].Value.Length;
+        int del_length = all_del.Count == 0 ? 0 : all_del[0].Groups[1].Value.Length;
         if (/*all_ins.Count < 2 && all_del.Count < 2 && */ins_length + del_length <= max_diff_length_for_show)
             {
                 if (all_ins.Count == 1 && all_del.Count == 0)
-                    post_suspicious_edit_long(lang, all_ins[0].Value, "");
+                    post_suspicious_edit_long(lang, all_ins[0].Groups[1].Value, "");
                 else if (all_ins.Count == 0 && all_del.Count == 1)
-                    post_suspicious_edit_long(lang, "", all_del[0].Value);
+                    post_suspicious_edit_long(lang, "", all_del[0].Groups[1].Value);
                 else
-                    post_suspicious_edit_long(lang, all_ins[0].Value, all_del[0].Value);
+                    post_suspicious_edit_long(lang, all_ins[0].Groups[1].Value, all_del[0].Groups[1].Value);
             }
         else
             post_suspicious_edit_short(lang, reason);
@@ -248,8 +255,8 @@ class Program
                         uk_low = Convert.ToDouble(keyvalue[1]);
                     else if (keyvalue[0] == "agnostic-low")
                         agnostic_low = Convert.ToDouble(keyvalue[1]);
-                    else if (keyvalue[0] == "agnostic-high")
-                        agnostic_high = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "max-diff-size")
+                        max_diff_length_for_show = Convert.ToInt16(keyvalue[1]);
                     else if (keyvalue[0] == "goodanons")
                         foreach (var g in keyvalue[1].Split('|'))
                             goodanons.Add(g);
