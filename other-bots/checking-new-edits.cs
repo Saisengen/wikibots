@@ -16,7 +16,8 @@ class Program
             "%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;";
     static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ru, uk;
     static double ores_risk, lw_risk, ru_high = 1, ru_low = 1, uk_low = 1, agnostic_low = 1, agnostic_high = 1;
-    static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), added_string_rgx = new Regex(@"^\+.*", RegexOptions.Multiline);
+    static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
+        ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string,string> notifying_page_name = new Dictionary<string,string>(){{"ru", "user:Рейму_Хакурей/Проблемные_правки" },{"uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string,string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string,string> discord_tokens = new Dictionary<string, string>();
@@ -77,12 +78,27 @@ class Program
             "[[special:contribs/" + user + "|" + user + "]]||" + reason);
         var rows = row_rgx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
-        string result = Save(lang, (lang == "ru" ? ru : uk), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" +
-            Uri.EscapeDataString(title) + "|история]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason, edit_type.suspicious_edit);
+        Save(lang, (lang == "ru" ? ru : uk), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
+            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason, edit_type.suspicious_edit);
 
         discord_client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
-                ".wikipedia.org/w/index.php?diff=" + newid + ">) ([история](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)), [" + user.Replace(' ', '_') +
-                "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + reason}}));
+                ".wikipedia.org/w/index.php?diff=" + newid + ">) ([" + (lang == "ru" ? "история" : "історія") + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) +
+                ">)), [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + reason}}));
+    }
+    static void post_suspicious_edit(string lang, string ins, string del)
+    {
+        string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
+        string notifying_page_text = (lang == "ru" ? ru.GetStringAsync(get_request).Result : uk.GetStringAsync(get_request).Result);
+        notifying_page_text = notifying_page_text.Replace(notifying_header[lang], notifying_header[lang] + "\n|-\n|[[special:diff/" + newid + "|diff]]||[[special:history/" + title + "|" + title + "]]||" +
+            "[[special:contribs/" + user + "|" + user + "]]||<b><span class=del><nowiki>" + del + "</nowiki></span><span class=ins><nowiki>" + ins + "</nowiki></span></b>");
+        var rows = row_rgx.Matches(notifying_page_text);
+        notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
+        Save(lang, (lang == "ru" ? ru : uk), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
+            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + del + " => " + ins, edit_type.suspicious_edit);
+
+        discord_client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
+                ".wikipedia.org/w/index.php?diff=" + newid + ">) ([" + (lang == "ru" ? "история" : "історія") + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) +
+                ">)), [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + del + " => " + ins}}));
     }
     static void report_suspicious_user_if_needed()
     {
@@ -102,13 +118,15 @@ class Program
     }
     static void liftwing_check(string lang)
     {
-        string raw = "";
+        string raw = "1";
         try
         {
             raw = liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
                 new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
-            if (raw != null)
+            if (raw != null && raw != "")
                 lw_risk = Math.Round(Convert.ToDouble(raw), 3);
+            else
+                return;
         }
         catch (Exception e)
         {
@@ -124,16 +142,23 @@ class Program
     }
     static void patterns_check(string lang)
     {
-        try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=xml&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=unified").Result; }
+        if (processed_by_patterns)
+            return;
+        try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
         catch { return; }
-        foreach (Match added_string in added_string_rgx.Matches(diff_text))
+        var all_ins = ins_rgx.Matches(diff_text);
+        var all_del = del_rgx.Matches(diff_text);
+        foreach (Match ins in all_ins)
             foreach (var pattern in patterns)
-                if (pattern.IsMatch(added_string.Value))
+                if (pattern.IsMatch(ins.Value))
                 {
-                    post_suspicious_edit("ru", pattern.Match(added_string.Value).Value);
+                    if (all_ins.Count < 2 && all_del.Count < 2 && ((all_del.Count == 0 && ins.Value.Length < 30) || (ins.Value.Length + all_del[0].Value.Length < 30)))
+                        post_suspicious_edit("ru", ins.Value, all_del[0].Value);
+                    else
+                        post_suspicious_edit("ru", pattern.Match(ins.Value).Value);
                     processed_by_patterns = true;
-                    break;
                 }
+
     }
     static bool isRuApat(string user)
     {
