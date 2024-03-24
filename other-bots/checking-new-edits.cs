@@ -12,24 +12,22 @@ class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid from recentchanges join " +
         "ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and " +
-        "oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, newid, oldid, liftwing_token, diff_response, wiki_diff, comment_diff, discord_diff;
+        "oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, newid, oldid, liftwing_token, diff_text, wiki_diff, comment_diff, discord_diff;
     static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ru, uk;
-    static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
+    static double ores_risk, lw_risk, ru_low = 1, uk_low = 1, agnostic_low = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
-        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</"), diffsize_rgx = new Regex(@"""diffsize"":\s*(\d*)");
+        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> discord_tokens = new Dictionary<string, string>();
-    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss") }, { "uk", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss") } };
+    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>();
     static Dictionary<string, string> new_last_checked_edit_time = new Dictionary<string, string>();
     static Dictionary<string, bool> ru_users_by_apat_flag = new Dictionary<string, bool>();
     static Dictionary<string, bool> uk_users_by_apat_flag = new Dictionary<string, bool>();
-    static MySqlDataReader sqlreader;
-    static MySqlConnection ruconnect, ukrconnect;
     static List<string> suspicious_users = new List<string>();
     static List<Regex> patterns = new List<Regex>();
     static List<string> goodanons = new List<string>();
-    static bool processed_by_patterns, new_last_time_saved, user_is_anon;
+    static bool processed_by_patterns;
     static int max_diff_length_for_show, diff_length, currminute = -1;
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
@@ -145,7 +143,7 @@ class Program
                 return;
         }
         catch { return; }
-        if (lw_risk > agnostic_limit)
+        if (lw_risk > agnostic_low)
         {
             process_diff(lang, "liftwing:" + lw_risk.ToString());
             if (lang == "ru")
@@ -158,12 +156,12 @@ class Program
         try
         {
             if (lang == "ru")
-                diff_response = ru.GetStringAsync(request).Result;
+                diff_text = ru.GetStringAsync(request).Result;
             else
-                diff_response = uk.GetStringAsync(request).Result;
+                diff_text = uk.GetStringAsync(request).Result;
         }
         catch { return; }
-        var all_changes = ins_del_rgx.Matches(diff_response);
+        var all_changes = ins_del_rgx.Matches(diff_text);
         diff_length = 0;
         foreach (Match change in all_changes)
             diff_length += change.Groups[2].Length;
@@ -214,10 +212,12 @@ class Program
             foreach (var row in settings)
             {
                 var keyvalue = row.Split(':');
-                if (keyvalue[0] == "ores")
-                    ores_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "agnostic")
-                    agnostic_limit = Convert.ToDouble(keyvalue[1]);
+                if (keyvalue[0] == "ru-low")
+                    ru_low = Convert.ToDouble(keyvalue[1]);
+                else if (keyvalue[0] == "uk-low")
+                    uk_low = Convert.ToDouble(keyvalue[1]);
+                else if (keyvalue[0] == "agnostic-low")
+                    agnostic_low = Convert.ToDouble(keyvalue[1]);
                 else if (keyvalue[0] == "max-diff-size")
                     max_diff_length_for_show = Convert.ToInt16(keyvalue[1]);
                 else if (keyvalue[0] == "goodanons")
@@ -242,19 +242,22 @@ class Program
         liftwing_client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         ru = Site("ru", creds[4], creds[5]);
         uk = Site("uk", creds[4], creds[5]);
-        ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web"));
+        last_checked_edit_time.Add("ru", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss"));
+        last_checked_edit_time.Add("uk", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss"));
+        var ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web"));
         ruconnect.Open();
-        ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web"));
+        var ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web"));
         ukrconnect.Open();
+        MySqlDataReader sqlreader;
         while (true)
         {
             update_settings();
 
-            new_last_time_saved = false;
+            bool new_last_time_saved = false;
             sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time["uk"]), ukrconnect).ExecuteReader();
             while (sqlreader.Read())
             {
-                user_is_anon = sqlreader.IsDBNull(0);
+                bool user_is_anon = sqlreader.IsDBNull(0);
                 user = sqlreader.GetString("user");
                 ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
                 title = sqlreader.GetString("title").Replace('_', ' ');
@@ -266,7 +269,7 @@ class Program
                     new_last_time_saved = true;
                 }
 
-                if (ores_risk > ores_limit)
+                if (ores_risk > uk_low)
                 {
                     process_diff("uk", "ores:" + ores_risk.ToString());
                     continue;
@@ -285,7 +288,7 @@ class Program
                 user = sqlreader.GetString("user") ?? "";
                 if (goodanons.Contains(user))
                     continue;
-                user_is_anon = sqlreader.IsDBNull(0);
+                bool user_is_anon = sqlreader.IsDBNull(0);
                 ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
                 title = sqlreader.GetString("title").Replace('_', ' ');
                 newid = sqlreader.GetString("rc_this_oldid");
@@ -296,7 +299,7 @@ class Program
                     new_last_time_saved = true;
                 }
 
-                if (ores_risk > ores_limit)
+                if (ores_risk > ru_low)
                 {
                     report_suspicious_user_if_needed();
                     process_diff("ru", "ores:" + ores_risk.ToString());
@@ -306,15 +309,14 @@ class Program
                 if (user_is_anon || !isRuApat(user))
                 {
                     processed_by_patterns = false;
-                    try { diff_response = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff|diffsize&difftype=inline").Result; }
+                    try { diff_text = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result; }
                     catch { continue; }
-                    var all_ins = ins_rgx.Matches(diff_response);
-                    string diffsize = diffsize_rgx.Match(diff_response).Groups[1].Value;
+                    var all_ins = ins_rgx.Matches(diff_text);
                     foreach (Match ins in all_ins)
                         foreach (var pattern in patterns)
                             if (pattern.IsMatch(ins.Groups[1].Value))
                             {
-                                process_diff("ru", pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diffsize);
+                                process_diff("ru", pattern.Match(ins.Groups[1].Value).Value);
                                 processed_by_patterns = true;
                             }
 
