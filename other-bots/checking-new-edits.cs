@@ -8,30 +8,28 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Text;
+using System.Diagnostics;
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, rc_old_len, rc_new_len from " +
         "recentchanges join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and " +
-        "rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, newid, oldid, liftwing_token, diff_text, wiki_diff, comment_diff, discord_diff;
-    static HttpClient discord_client = new HttpClient(), liftwing_client = new HttpClient(), ruwiki, ukwiki;
+        "rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, newid, oldid, liftwing_token, swviewer_token, diff_text;
+    static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
-        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</");
+        del_rgx = new Regex(@"<del[^>]*>([^<>]*)</"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> discord_tokens = new Dictionary<string, string>();
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss") }, { "uk", DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss") } };
     static Dictionary<string, string> new_last_checked_edit_time = new Dictionary<string, string>();
-    static Dictionary<string, bool> ru_users_by_apat_flag = new Dictionary<string, bool>();
-    static Dictionary<string, bool> uk_users_by_apat_flag = new Dictionary<string, bool>();
-    static List<string> suspicious_users = new List<string>();
+    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>();
     static List<Regex> patterns = new List<Regex>();
     static List<string> goodanons = new List<string>();
     static MySqlDataReader sqlreader;
     static MySqlConnection ruconnect, ukrconnect;
     static bool user_is_anon, new_last_time_saved;
     static int max_diff_length_for_show, sum_of_ins_del_lengths, currminute = -1, diff_size;
-    enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -47,30 +45,15 @@ class Program
             return null;
         return client;
     }
-    static string Save(string lang, HttpClient site, string action, string title, string customparam, string comment, edit_type type)
+    static string Save(string lang, HttpClient site, string action, string title, string customparam, string comment, bool zkab)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf|rollback").Result;
         if (!result.IsSuccessStatusCode)
             return "";
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var request = new MultipartFormDataContent { { new StringContent(action), "action" }, { new StringContent(title), "title" }, { new StringContent(comment), "summary" } };
-        if (type == edit_type.rollback)
-            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@rollbacktoken").Value), "token");
-        else
-            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token");
-        request.Add(new StringContent("xml"), "format");
-        if (type == edit_type.zkab_report)
-            request.Add(new StringContent(customparam), "appendtext");
-        else if (type == edit_type.talkpage_warning)
-        {
-            request.Add(new StringContent(customparam), "text");
-            request.Add(new StringContent("new"), "section");
-        }
-        else if (type == edit_type.suspicious_edit)
-            request.Add(new StringContent(customparam), "text");
-        else if (type == edit_type.rollback)
-            request.Add(new StringContent(customparam), "user");
+        var request = new MultipartFormDataContent{{new StringContent(action),"action"},{new StringContent(title),"title"},{new StringContent(comment),"summary"},{new StringContent("xml"),"format" },
+            { new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token" }, { new StringContent(customparam), zkab ? "appendtext" : "text" } };
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
     static void post_suspicious_edit_short(string lang, string reason)
@@ -82,28 +65,26 @@ class Program
         var rows = row_rgx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
         Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
-            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason, edit_type.suspicious_edit);
-        discord_client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
+            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason, false);
+        client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
                 ".wikipedia.org/w/index.php?diff=" + newid + ">) ([" + (lang == "ru" ? "история" : "історія") + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) +
                 ">)), [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + reason}}));
     }
-    static void post_suspicious_edit_long(string lang, MatchCollection changes)
+    static void post_suspicious_edit_long(string lang, MatchCollection all_ins, MatchCollection all_del)
     {
-        wiki_diff = ""; comment_diff = ""; discord_diff = "";
-        foreach (Match change in changes)
-            if (change.Groups[1].Value == "ins")
-            {
-                wiki_diff += "<span class=ins><nowiki>" + change.Groups[2].Value + "</nowiki></span>";
-                comment_diff += "+" + change.Groups[2].Value;
-                discord_diff += change.Groups[2].Value;
-            }
-            else
-            {
-                wiki_diff += "<span class=del><nowiki>" + change.Groups[2].Value + "</nowiki></span>";
-                comment_diff += "-" + change.Groups[2].Value;
-                discord_diff += "~~" + change.Groups[2].Value + "~~";
-            }
-
+        string wiki_diff = "", comment_diff = "", discord_diff = "";
+        if (all_del.Count != 0)
+        {
+            wiki_diff += "<span class=del><nowiki>"; comment_diff += "-"; discord_diff += "~~";
+            foreach (Match change in all_del) { wiki_diff += change.Groups[1].Value; comment_diff += change.Groups[1].Value; discord_diff += change.Groups[1].Value; }
+            wiki_diff += "</nowiki></span>"; discord_diff += "~~";
+        }
+        if (all_ins.Count != 0)
+        {
+            wiki_diff += "<span class=ins><nowiki>"; comment_diff += "+";
+            foreach (Match change in all_del) { wiki_diff += change.Groups[1].Value; comment_diff += change.Groups[1].Value; discord_diff += change.Groups[1].Value; }
+            wiki_diff += "</nowiki></span>";
+        }
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ruwiki.GetStringAsync(get_request).Result : ukwiki.GetStringAsync(get_request).Result);
         notifying_page_text = notifying_page_text.Replace(notifying_header[lang], notifying_header[lang] + "\n|-\n|[[special:diff/" + newid + "|diff]]||[[special:history/" + title + "|" + title + "]]||" +
@@ -111,8 +92,8 @@ class Program
         var rows = row_rgx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
         Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
-            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + comment_diff, edit_type.suspicious_edit);
-        discord_client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
+            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + comment_diff, false);
+        client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + title + "](<https://" + lang +
                 ".wikipedia.org/w/index.php?diff=" + newid + ">) ([" + (lang == "ru" ? "история" : "історія") + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) +
                 ">)), [" + user.Replace(' ', '_') + "](<https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + ">), " + discord_diff}}));
     }
@@ -127,8 +108,7 @@ class Program
                 if (user == r.Groups[1].Value)
                     reportedyet = true;
             if (!reportedyet)
-                Save("ru", ruwiki, "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user +
-                    "]] - новый запрос", edit_type.zkab_report);
+                Save("ru",ruwiki,"edit","ВП:Запросы к администраторам/Быстрые","\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}","[[special:contribs/" + user + "]] - новый запрос", true);
         }
         else suspicious_users.Add(user);
     }
@@ -137,7 +117,7 @@ class Program
         string raw;
         try
         {
-            raw = liftwing_rgx.Match(liftwing_client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
+            raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
                 new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
             if (raw != null && raw != "")
                 lw_risk = Math.Round(Convert.ToDouble(raw), 3);
@@ -155,54 +135,21 @@ class Program
     static void process_diff(string lang, string reason)
     {
         string request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
-        try
-        {
-            if (lang == "ru")
-                diff_text = ruwiki.GetStringAsync(request).Result;
-            else
-                diff_text = ukwiki.GetStringAsync(request).Result;
-        }
-        catch { return; }
-        var all_changes = ins_del_rgx.Matches(diff_text);
+        if (lang == "ru")
+            diff_text = ruwiki.GetStringAsync(request).Result;
+        else
+            diff_text = ukwiki.GetStringAsync(request).Result;
+        var all_ins = ins_rgx.Matches(diff_text);
+        var all_del = del_rgx.Matches(diff_text);
         sum_of_ins_del_lengths = 0;
-        foreach (Match change in all_changes)
-            sum_of_ins_del_lengths += change.Groups[2].Length;
+        foreach (Match change in all_ins)
+            sum_of_ins_del_lengths += change.Groups[1].Length;
+        foreach (Match change in all_del)
+            sum_of_ins_del_lengths += change.Groups[1].Length;
         if (sum_of_ins_del_lengths <= max_diff_length_for_show)
-            post_suspicious_edit_long(lang, all_changes);
+            post_suspicious_edit_long(lang, all_ins, all_del);
         else
             post_suspicious_edit_short(lang, reason);
-    }
-    static bool isRuApat(string user)
-    {
-        if (ru_users_by_apat_flag.ContainsKey(user))
-            return ru_users_by_apat_flag[user];
-        else
-            if (ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&list=users&usprop=rights&ususers=" + Uri.EscapeDataString(user)).Result.Contains("autoreview"))
-        {
-            ru_users_by_apat_flag.Add(user, true);
-            return true;
-        }
-        else
-        {
-            ru_users_by_apat_flag.Add(user, false);
-            return false;
-        }
-    }
-    static bool isUkApat(string user)
-    {
-        if (uk_users_by_apat_flag.ContainsKey(user))
-            return uk_users_by_apat_flag[user];
-        else
-            if (ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=json&list=users&usprop=rights&ususers=" + Uri.EscapeDataString(user)).Result.Contains("autoreview"))
-        {
-            uk_users_by_apat_flag.Add(user, true);
-            return true;
-        }
-        else
-        {
-            uk_users_by_apat_flag.Add(user, false);
-            return false;
-        }
     }
     static void update_settings()
     {
@@ -233,21 +180,37 @@ class Program
                     patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
         }
     }
+    static void gather_trusted_users()
+    {
+        var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
+        foreach (var g in global_flags_bearers)
+            trusted_users.Add(g);
+        foreach (string flag in new string[] { "editor", "autoreview", "bot" })
+            using (var r = new XmlTextReader(new StringReader(ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max").Result)))
+                while (r.Read())
+                    if (r.Name == "u")
+                        if (!trusted_users.Contains(r.GetAttribute("name")))
+                            trusted_users.Add(r.GetAttribute("name"));
+        foreach (string flag in new string[] { "editor", "autoreview" })
+            using (var r = new XmlTextReader(new StringReader(ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max").Result)))
+                while (r.Read())
+                    if (r.Name == "u")
+                        if (!trusted_users.Contains(r.GetAttribute("name")))
+                            trusted_users.Add(r.GetAttribute("name"));
+    }
     static int Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        discord_tokens.Add("ru", creds[10]); discord_tokens.Add("uk", creds[11]);
-        liftwing_token = creds[3];
-        liftwing_client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
-        liftwing_client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
-        ruwiki = Site("ru", creds[4], creds[5]);
-        ukwiki = Site("uk", creds[4], creds[5]);
-        ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web"));
-        ruconnect.Open();
-        ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web"));
-        ukrconnect.Open();
+        discord_tokens.Add("ru", creds[10]); discord_tokens.Add("uk", creds[11]); liftwing_token = creds[3]; swviewer_token = creds[12];
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
+        ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
+        gather_trusted_users();
+        ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web")); ruconnect.Open();
+        ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open();
         while (true)
         {
+            var sw = new Stopwatch();
+            sw.Start();
             update_settings();
 
             new_last_time_saved = false;
@@ -273,7 +236,7 @@ class Program
                     continue;
                 }
 
-                if (user_is_anon || !isUkApat(user))
+                if (user_is_anon || !trusted_users.Contains(user))
                     liftwing_check("uk", diff_size);
             }
             sqlreader.Close();
@@ -305,7 +268,7 @@ class Program
                     continue;
                 }
 
-                if (user_is_anon || !isRuApat(user))
+                if (user_is_anon || !trusted_users.Contains(user))
                 {
                     try { diff_text = ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result; }
                     catch { continue; }
@@ -323,7 +286,8 @@ class Program
             }
             sqlreader.Close();
             last_checked_edit_time["ru"] = new_last_checked_edit_time["ru"];
-
+            sw.Stop();
+            Console.WriteLine(sw.Elapsed);
             Thread.Sleep(5000);
         }
     }
