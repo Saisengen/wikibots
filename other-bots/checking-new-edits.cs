@@ -8,6 +8,18 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Text;
+public class color
+{
+    public byte r, g, b;
+    public color(byte r, byte g, byte b)
+    {
+        this.r = r; this.b = b; this.g = g;
+    }
+    public long convert()
+    {
+        return 256 * 256 * r + 256 * g + b;
+    }
+}
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, rc_old_len, rc_new_len from " +
@@ -24,10 +36,13 @@ class Program
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>();
     static List<Regex> patterns = new List<Regex>();
     static List<string> goodanons = new List<string>();
+    static color[] colors = { new color(255,0,0), new color(0, 255, 0), new color( 0,0,255), new color(255, 0, 255), new color(255, 255, 0), new color(0, 255, 255),
+        new color(255, 128, 0 ), new color( 255, 0, 128 ), new color(128, 255, 0 ), new color(0, 255, 128 ), new color(0, 128, 255), new color(128, 0, 255 ) };
+    static Random rnd = new Random();
     static MySqlDataReader sqlreader;
     static MySqlConnection ruconnect, ukrconnect;
     static bool user_is_anon, new_last_time_saved;
-    static int max_diff_length_for_show, sum_of_ins_del_lengths, currminute = -1, diff_size;
+    static int max_diff_length_for_show, currminute = -1, diff_size;
     enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -104,12 +119,13 @@ class Program
         Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
             (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + comment_diff, edit_type.suspicious_edit);
 
-        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new StringContent("{\"embeds\":[{\"author\":{\"name\":\"" + user +
+        string request = "{\"embeds\":[{\"author\":{\"name\":\"" + user +
             "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title + "\",\"description\":" +
-            "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"url\":\"https://" + lang +
-            ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"\",\"value\":\"" + discord_diff + "\"}]}]}", Encoding.UTF8, "application/json")).Result;
+            "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[rnd.Next(12)].convert() +
+            ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"\",\"value\":\"" + discord_diff.Replace("\"", "") + "\"}]}]}";
+        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new StringContent(request, Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
-            Console.WriteLine(res.StatusCode);
+            Console.WriteLine(res.StatusCode + " " + request);
     }
     static void report_suspicious_user_if_needed()
     {
@@ -209,7 +225,7 @@ class Program
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         discord_tokens.Add("ru", creds[10]); discord_tokens.Add("uk", creds[11]); liftwing_token = creds[3]; swviewer_token = creds[12];
 
-        //var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens["ru"], new StringContent("{\"embeds\":[{\"author\":{\"name\":\"reason\",\"url\":\"https://ru.wikipedia.org\"},\"title\":\"статья\",\"description\":\"ores 456\",\"url\":\"https://ru.wikipedia.org\",\"fields\":[{\"name\":\"\",\"value\":\"frgnhtyrj\"}]}]}", Encoding.UTF8, "application/json")).Result;
+        //int c = rnd.Next(12); var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens["ru"], new StringContent("{\"embeds\":[{\"author\":{\"name\":\"reason\",\"url\":\"https://ru.wikipedia.org\"},\"title\":\"статья\",\"description\":\"ores 456gtbtrhthr\",\"url\":\"https://ru.wikipedia.org\",\"color\":" + convert_color(happy_colors[c,0], happy_colors[c, 1], happy_colors[c, 2]) + ",\"fields\":[{\"name\":\"\",\"value\":\"frgnhtyrj\"}]}]}", Encoding.UTF8, "application/json")).Result;
         
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
@@ -272,19 +288,17 @@ class Program
                 if (ores_risk > ores_limit)
                 {
                     report_suspicious_user_if_needed();
-                    if (ores_risk < ru_high)
-                        process_diff("ru", "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size);
-
-                    else
-                    {
-                        string answer = Save("ru", ruwiki, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" +
-                            ores_risk + ")", edit_type.rollback);
-                        if (answer.Contains("<rollback title="))
-                            Save("ru", ruwiki, "edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + newid + "|" + title + "|" + ores_risk + "|" + (user_is_anon ? "1" : "") +
-                                "}}", (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена", edit_type.talkpage_warning);
-                        else
-                            Console.WriteLine(title + "\n" + answer);
-                    }
+                    process_diff("ru", "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size);
+                    //else
+                    //{
+                    //    string answer = Save("ru", ruwiki, "rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" +
+                    //        ores_risk + ")", edit_type.rollback);
+                    //    if (answer.Contains("<rollback title="))
+                    //        Save("ru", ruwiki, "edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + newid + "|" + title + "|" + ores_risk + "|" + (user_is_anon ? "1" : "") +
+                    //            "}}", (user_is_anon ? "Правка с вашего IP-адреса" : "Ваша правка") + " в статье [[" + title + "]] " + "автоматически отменена", edit_type.talkpage_warning);
+                    //    else
+                    //        Console.WriteLine(title + "\n" + answer);
+                    //}
                     continue;
                 }
 
