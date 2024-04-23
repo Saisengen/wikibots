@@ -35,6 +35,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "clusters5", "web-services\c
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "test", "web-services\test\test.csproj", "{5608053A-4267-4EF5-9FB9-077975423602}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "other-bots", "other-bots", "{4D7EDC41-3391-4C6A-B405-51D684B888D4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "checking-new-edits", "other-bots\checking-new-edits\checking-new-edits.csproj", "{1321B78D-E1A1-4DF1-B8DC-66A251128CD6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -108,5 +112,12 @@ Global
 		{5608053A-4267-4EF5-9FB9-077975423602}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5608053A-4267-4EF5-9FB9-077975423602}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5608053A-4267-4EF5-9FB9-077975423602}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1321B78D-E1A1-4DF1-B8DC-66A251128CD6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1321B78D-E1A1-4DF1-B8DC-66A251128CD6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1321B78D-E1A1-4DF1-B8DC-66A251128CD6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1321B78D-E1A1-4DF1-B8DC-66A251128CD6}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{1321B78D-E1A1-4DF1-B8DC-66A251128CD6} = {4D7EDC41-3391-4C6A-B405-51D684B888D4}
 	EndGlobalSection
 EndGlobal
