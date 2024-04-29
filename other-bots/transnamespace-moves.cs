@@ -52,10 +52,10 @@ class Program
         var table = new List<record>();
         var apatusers = new HashSet<string>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var header = new Dictionary<string, string>() { 
+        var header = new Dictionary<string, string>() {
             { "ru", "<center>{{Плавающая шапка таблицы}}{{shortcut|ВП:TRANSMOVE}}Красным выделены неавтопатрулируемые.{{clear}}\n{|class=\"standard sortable ts-stickytableheader\"\n!Дата!!Источник!!Название в ОП!!Переносчик!!Коммент" },
             { "en", "<center>Красным выделены неавтопатрулируемые.\n{|class=\"wikitable sortable\"\n!Дата!!Источник!!Название в ОП!!Переносчик!!Коммент" } };
-        foreach (var lang in new string[] { "ru", "en"})
+        foreach (var lang in new string[] { "ru", "en" })
         {
             var site = Site(creds[0], creds[1], lang);
             string apiout = site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|type|user|timestamp|comment|details&letype=move&lelimit=max").Result;
@@ -66,7 +66,7 @@ class Program
                     if (r.NodeType == XmlNodeType.Element && r.Name == "item")
                     {
                         string user = r.GetAttribute("user");
-                        if (user.StartsWith("IncubatorBot"))
+                        if (user != null && user.StartsWith("IncubatorBot"))
                             continue;
                         if (!apatusers.Contains(user))
                             using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=rights&ususers=" + user).Result)))
