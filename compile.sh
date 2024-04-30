@@ -13,14 +13,42 @@ else
 fi
 LAYER_DIR="$LAYERS_DIR/wikibots"
 PUBLIC_HTML="$LAYER_DIR/public_html"
-PROJECTS=(
+BIN_DIR="$LAYER_DIR/bin"
+# Add here any new directories you want to compile
+CGI_PROJECTS=(
     web-services/*
 )
+BIN_PROJECTS=(
+    other-bots/*
+)
 
+export_to_bin_dir() {
+    echo "#################################################"
+    echo "## BIN Export start ##"
+    local dest_dir="${1?}"
+    mkdir -p "$dest_dir"
+    # Compiled files
+    for project in "${BIN_PROJECTS[@]}"; do
+        if [[ -d "$project" ]]; then
+            if [[ -d "$project/bin/Release" ]]; then
+                echo "## Gathering $project"
+                echo "  Getting binaries and libs"
+                cp -a "$project"/bin/Release/*/linux-x64/publish/* "$dest_dir/"
+            else
+                echo "Unable to find release for project $project, did you forget to add it to the solutions file?"
+                echo "   dotnet sln add $project"
+            fi
+        fi
+    done
+
+    echo "## Export end ##"
+    echo "#################################################"
+
+}
 
 export_to_html_dir() {
     echo "#################################################"
-    echo "## Export start ##"
+    echo "## CGI-BIN Export start ##"
     local dest_dir="${1?}"
     local static_files
     mkdir -p "$dest_dir/cgi-bin"
@@ -32,7 +60,7 @@ export_to_html_dir() {
     done
 
     # Compiled files
-    for project in "${PROJECTS[@]}"; do
+    for project in "${CGI_PROJECTS[@]}"; do
         if [[ -d "$project" ]]; then
             if [[ -d "$project/bin/Release" ]]; then
                 echo "## Gathering $project"
@@ -40,7 +68,7 @@ export_to_html_dir() {
                 cp -a "$project"/bin/Release/*/linux-x64/publish/* "$dest_dir/cgi-bin/"
                 echo "  Getting static content if any"
                 static_files=("$project"/*.html)
-                if [[ "${static_files[@]}" != "" ]]; then
+                if [[ "${static_files[*]}" != "" ]]; then
                     cp "$project"/*.html "$dest_dir/cgi-bin/"
                 fi
             else
@@ -79,6 +107,13 @@ populate_procfile() {
             echo "${executable##*/}: $executable" >> Procfile
         fi
     done
+    for executable in $(find "$BIN_DIR" -type f -executable -print); do
+        # skip files with extensions
+        if ! [[ "$executable" == *.* ]]; then
+            echo "Creating Procfile entry point ${executable##*/}"
+            echo "${executable##*/}: $executable" >> Procfile
+        fi
+    done
     echo "#################################################"
 }
 
@@ -108,6 +143,7 @@ cleanup() {
 main() {
     build_all
     export_to_html_dir "$PUBLIC_HTML"
+    export_to_bin_dir "$BIN_DIR"
     populate_procfile
     add_buildpack_layer_config
     cleanup
