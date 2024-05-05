@@ -22,9 +22,10 @@ public class color
 }
 class Program
 {
-    static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, rc_old_len, rc_new_len from " +
-        "recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and " +
-        "rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, newid, oldid, liftwing_token, swviewer_token, diff_text, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+    static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, ctd_name," +
+        "rc_last_oldid, rc_old_len, rc_new_len from recentchanges join change_tag on ct_rc_id=rc_id join change_tag_def on ct_tag_id=ctd_id join comment on rc_comment_id=comment_id join ores_classification " +
+        "on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=" +
+        "\"damaging\" order by rc_this_oldid desc;", user, title, comment, newid, oldid, tag_name, liftwing_token, swviewer_token, diff_text, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1, ru_high = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
@@ -224,6 +225,7 @@ class Program
             newid = sqlreader.GetString("rc_this_oldid");
             oldid = sqlreader.GetString("rc_last_oldid");
             comment = sqlreader.GetString("comment");
+            tag_name = sqlreader.GetString("ctd_name");
             diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
             if (!new_last_time_saved)
             {
@@ -239,6 +241,14 @@ class Program
                 continue;
             }
 
+            if (tag_name.Contains("ожлив") || tag_name.Contains("Тест") || tag_name.Contains("тест"))
+            {
+                if (lang == "ru")
+                    report_suspicious_user_if_needed();
+                process_diff(lang, tag_name + ", diffsize:" + diff_size);
+                continue;
+            }
+
             if (user_is_anon || !trusted_users.Contains(user))
             {
                 var all_ins = ins_rgx.Matches(ruwiki.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result);
@@ -246,6 +256,8 @@ class Program
                     foreach (var pattern in patterns)
                         if (pattern.IsMatch(ins.Groups[1].Value))
                         {
+                            if (lang == "ru")
+                                report_suspicious_user_if_needed();
                             process_diff(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size);
                             goto End;
                         }
