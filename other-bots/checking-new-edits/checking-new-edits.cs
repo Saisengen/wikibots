@@ -29,7 +29,7 @@ class Program
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</"),
-        tag_rgx = new Regex(@"<tag>[^<>]*</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
+        tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> discord_tokens = new Dictionary<string, string>();
@@ -154,6 +154,8 @@ class Program
     }
     static void process_diff(string lang, string reason)
     {
+        if (lang == "ru")
+            report_suspicious_user_if_needed();
         string request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         if (lang == "ru")
             diff_text = ruwiki.GetStringAsync(request).Result;
@@ -234,40 +236,34 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    if (lang == "ru")
-                        report_suspicious_user_if_needed();
                     process_diff(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size);
                     continue;
                 }
 
-                MatchCollection edit_tags;
-                if (lang == "ru")
-                    edit_tags = tag_rgx.Matches(ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
-                else
-                    edit_tags = tag_rgx.Matches(ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
-                foreach (Match edit_tag in edit_tags)
-                    foreach (string susp_tag in suspicious_tags)
-                        if (edit_tag.Value.Contains(susp_tag))
-                        {
-                            if (lang == "ru")
-                                report_suspicious_user_if_needed();
-                            process_diff(lang, edit_tag.Value + ", diffsize:" + diff_size);
-                            goto End2;
-                        }
-                    End2:;
-
                 if (user_is_anon || !trusted_users.Contains(user))
                 {
+                    MatchCollection edit_tags;
+                    if (lang == "ru")
+                        edit_tags = tag_rgx.Matches(ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
+                    else
+                        edit_tags = tag_rgx.Matches(ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
+                    foreach (Match edit_tag in edit_tags)
+                        foreach (string susp_tag in suspicious_tags)
+                            if (edit_tag.Groups[1].Value.Contains(susp_tag))
+                            {
+                                process_diff(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size);
+                                goto End;
+                            }
+
                     var all_ins = ins_rgx.Matches(ruwiki.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result);
                     foreach (Match ins in all_ins)
                         foreach (var pattern in patterns)
                             if (pattern.IsMatch(ins.Groups[1].Value))
                             {
-                                if (lang == "ru")
-                                    report_suspicious_user_if_needed();
                                 process_diff(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size);
                                 goto End;
                             }
+
                     liftwing_check(lang, diff_size);
                 End:;
                 }
