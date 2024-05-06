@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Text;
-using System.Security.Policy;
 public class color
 {
     public byte r, g, b;
@@ -30,14 +29,14 @@ class Program
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</"),
-        tag_rgx = new Regex(@"<tag>.*</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
+        tag_rgx = new Regex(@"<tag>[^<>]*</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> discord_tokens = new Dictionary<string, string>();
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
-    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>();
+    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
+    { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static List<Regex> patterns = new List<Regex>();
-    static List<string> goodanons = new List<string>();
     static color[] colors = { new color(255,0,0), new color(0, 255, 0), new color( 0,0,255), new color(255, 0, 255), new color(255, 255, 0), new color(0, 255, 255),
         new color(255, 128, 0 ), new color( 255, 0, 128 ), new color(128, 255, 0 ), new color(0, 255, 128 ), new color(0, 128, 255), new color(128, 0, 255 ) };
     static Random rnd = new Random();
@@ -241,19 +240,21 @@ class Program
                     continue;
                 }
 
-                MatchCollection tags;
+                MatchCollection edit_tags;
                 if (lang == "ru")
-                    tags = tag_rgx.Matches(ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
+                    edit_tags = tag_rgx.Matches(ruwiki.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
                 else
-                    tags = tag_rgx.Matches(ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
-                foreach (Match tag in tags)
-                    if (tag.Value.Contains("ожлив") || tag.Value.Contains("Тест") || tag.Value.Contains("тест"))
-                    {
-                        if (lang == "ru")
-                            report_suspicious_user_if_needed();
-                        process_diff(lang, tag.Value + ", diffsize:" + diff_size);
-                        continue;
-                    }
+                    edit_tags = tag_rgx.Matches(ukwiki.GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result);
+                foreach (Match edit_tag in edit_tags)
+                    foreach (string susp_tag in suspicious_tags)
+                        if (edit_tag.Value.Contains(susp_tag))
+                        {
+                            if (lang == "ru")
+                                report_suspicious_user_if_needed();
+                            process_diff(lang, edit_tag.Value + ", diffsize:" + diff_size);
+                            goto End2;
+                        }
+                    End2:;
 
                 if (user_is_anon || !trusted_users.Contains(user))
                 {
