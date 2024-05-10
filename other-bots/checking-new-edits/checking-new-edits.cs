@@ -25,14 +25,13 @@ class Program
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
         "rc_last_oldid, rc_old_len, rc_new_len from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor " +
         "on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;",
-        user, title, comment, newid, oldid, liftwing_token, swviewer_token, diff_text, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        user, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</"),
         tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
-    static Dictionary<string, string> discord_tokens = new Dictionary<string, string>();
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
@@ -82,21 +81,21 @@ class Program
         int increment = 0;
         foreach (Match change in changes)
         {
-            string new_addition = change.Groups[2].Value.Replace("&lt;", "<").Replace("&gt;", ">").Replace("\\\"", "\"");
+            string new_addition = change.Groups[2].Value.Replace("&lt;", "<").Replace("&gt;", ">").Replace("&#160;", " ").Replace("\\\"", "\"");
             increment += new_addition.Length;
             if (increment > max_diff_length_for_show)
                 break;
             if (change.Groups[1].Value == "ins")
             {
                 wiki_diff += "<b><span class=ins><nowiki>" + new_addition + "</nowiki></span></b>";
-                comment_diff += "+" + new_addition;
-                discord_diff += "`" + new_addition + "`";
+                comment_diff += " +" + new_addition;
+                discord_diff += " `" + new_addition + "`";
             }
             else
             {
                 wiki_diff += "<b><span class=del><nowiki>" + new_addition + "</nowiki></span></b>";
-                comment_diff += "-" + new_addition;
-                discord_diff += "~~" + new_addition + "~~";
+                comment_diff += " -" + new_addition;
+                discord_diff += " ~~" + new_addition + "~~";
             }
         }
 
@@ -107,13 +106,12 @@ class Program
         var rows = row_rgx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
         Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
-            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + comment_diff, false);
+            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]]," + comment_diff, false);
 
-        string request = "{\"embeds\":[{\"author\":{\"name\":\"" + user +
-            "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title + "\",\"description\":" +
-            "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[rnd.Next(12)].convert() +
+        string request = "{\"embeds\":[{\"author\":{\"name\":\"" + user + "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title +
+            "\",\"description\":" + "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[rnd.Next(12)].convert() +
             ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"" + comment + "\",\"value\":\"" + discord_diff.Replace("\"", "") + "\"}]}]}";
-        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_tokens[lang], new StringContent(request, Encoding.UTF8, "application/json")).Result;
+        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(request, Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + request);
     }
@@ -210,7 +208,7 @@ class Program
                         if (!trusted_users.Contains(r.GetAttribute("name")))
                             trusted_users.Add(r.GetAttribute("name"));
     }
-    static void check(string lang)
+    static bool check(string lang)
     {
         new_last_time_saved = false;
         try
@@ -273,12 +271,15 @@ class Program
         catch(Exception e)
         {
             Console.WriteLine(DateTime.Now.ToString() + e.ToString());
+            if (e.ToString().Contains("valid"))
+                return false;
         }
+        return true;
     }
-    static int Main()
+    static void Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        discord_tokens.Add("ru", creds[10]); discord_tokens.Add("uk", creds[11]); liftwing_token = creds[3]; swviewer_token = creds[12];
+        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
         collect_trusted_users();
@@ -287,8 +288,8 @@ class Program
         while (true)
         {
             update_settings();
-            check("ru");
-            check("uk");
+            if (!check("ru") || !check("uk"))
+                break;
             Thread.Sleep(5000);
         }
     }
