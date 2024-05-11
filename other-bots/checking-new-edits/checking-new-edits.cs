@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Text;
+using Newtonsoft.Json;
 public class color
 {
     public byte r, g, b;
@@ -20,16 +21,18 @@ public class color
         return 256 * 256 * r + 256 * g + b;
     }
 }
+public class Compare{ public string body; }
+public class Root { public Compare compare; }
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
         "rc_last_oldid, rc_old_len, rc_new_len from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor " +
         "on actor_id=rc_actor join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;",
-        user, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        user, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1, agnostic_limit = 1;
-    static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</"),
-        tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</");
+    static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), tag_rgx = 
+        new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
@@ -74,14 +77,14 @@ class Program
             request.Add(new StringContent(customparam), "text");
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string lang, string reason, MatchCollection changes)
+    static void post_suspicious_edit(string lang, string reason, MatchCollection changes, string changes_for_discord)
     {
-        string wiki_diff, comment_diff, discord_diff;
-        wiki_diff = reason + ", "; comment_diff = reason + ", "; discord_diff = "";
+        string wiki_diff, comment_diff;
+        wiki_diff = reason + ", "; comment_diff = reason + ", ";
         int increment = 0;
         foreach (Match change in changes)
         {
-            string new_addition = change.Groups[2].Value.Replace("&lt;", "<").Replace("&gt;", ">").Replace("&#160;", " ").Replace("\\\"", "\"");
+            string new_addition = change.Groups[2].Value.Replace("&lt;", "<").Replace("&gt;", ">");
             increment += new_addition.Length;
             if (increment > max_diff_length_for_show)
                 break;
@@ -89,15 +92,15 @@ class Program
             {
                 wiki_diff += "<b><span class=ins><nowiki>" + new_addition + "</nowiki></span></b>";
                 comment_diff += " +" + new_addition;
-                discord_diff += " `" + new_addition + "`";
             }
             else
             {
                 wiki_diff += "<b><span class=del><nowiki>" + new_addition + "</nowiki></span></b>";
                 comment_diff += " -" + new_addition;
-                discord_diff += " ~~" + new_addition + "~~";
             }
         }
+        if (changes_for_discord.Length > 1024)
+            changes_for_discord.Substring(0, 1023);
 
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ruwiki.GetStringAsync(get_request).Result : ukwiki.GetStringAsync(get_request).Result);
@@ -110,7 +113,7 @@ class Program
 
         string request = "{\"embeds\":[{\"author\":{\"name\":\"" + user + "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title +
             "\",\"description\":" + "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[rnd.Next(12)].convert() +
-            ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"" + comment + "\",\"value\":\"" + discord_diff.Replace("\"", "") + "\"}]}]}";
+            ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"" + comment + "\",\"value\":\"" + changes_for_discord + "\"}]}]}";
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(request, Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + request);
@@ -159,7 +162,15 @@ class Program
             diff_text = ruwiki.GetStringAsync(request).Result;
         else
             diff_text = ukwiki.GetStringAsync(request).Result;
-        post_suspicious_edit(lang, reason, ins_del_rgx.Matches(diff_text));
+        diff_text = diff_text.Replace("&#160;", " ").Replace("\\\"", "\"");
+
+        strings_with_changes = "";
+        string a = div_rgx.Replace(diff_text, "").Replace("&lt;", "<").Replace("&gt;", ">");
+        foreach (string str in JsonConvert.DeserializeObject<Root>(a).compare.body.Split('\n'))
+            if (ins_del_rgx.IsMatch(str))
+                strings_with_changes += str;
+
+        post_suspicious_edit(lang, reason, ins_del_rgx.Matches(diff_text), ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~"), "`$1`"));
     }
     static void update_settings()
     {
