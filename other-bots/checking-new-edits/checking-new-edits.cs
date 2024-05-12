@@ -102,12 +102,12 @@ class Program
         foreach (string str in prepared_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
                 strings_with_changes += str;
-        wiki_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "<b><span class=del><nowiki>1</nowiki></span></b>"), "<b><span class=ins><nowiki>1</nowiki></span></b>");
-        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-1 "), "+1 ");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~1~~ "), "`1` ");
+        wiki_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "<b><span class=del><nowiki>$1</nowiki></span></b>"), "<b><span class=ins><nowiki>$1</nowiki></span></b>");
+        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
 
         if (discord_diff.Length > 1024)
-            discord_diff.Substring(0, 1023);
+            discord_diff = discord_diff.Substring(0, 1023);
 
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ruwiki.GetStringAsync(get_request).Result : ukwiki.GetStringAsync(get_request).Result);
