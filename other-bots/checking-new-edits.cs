@@ -27,22 +27,21 @@ class Program
         "on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and rc_namespace=0 and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, newid, oldid,
         liftwing_token, discord_token, swviewer_token, diff_text, wiki_diff, comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
-    static double ores_risk, agnostic_risk, multilang_risk, ores_limit = 1, agnostic_limit = 1, multilang_limit = 1;
+    static double ores_risk, lw_risk, ores_limit = 1;
+    static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, {"multilang", 1 } };
     static Regex row_rgx = new Regex(@"\|-"), liftwing_rgx = new Regex(@"""true"":(0.9\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), tag_rgx = 
-        new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)</"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
+        new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> notifying_header = new Dictionary<string, string>() { { "ru", "!Дифф!!Статья!!Автор!!Причина" }, { "uk", "!Diff!!Стаття!!Автор!!Причина" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static List<Regex> patterns = new List<Regex>();
-    static color[] colors = { new color(255,0,0), new color(0, 255, 0), new color( 0,0,255), new color(255, 0, 255), new color(255, 255, 0), new color(0, 255, 255),
-        new color(255, 128, 0 ), new color( 255, 0, 128 ), new color(128, 255, 0 ), new color(0, 255, 128 ), new color(0, 128, 255), new color(128, 0, 255 ) };
-    static Random rnd = new Random();
     static MySqlDataReader sqlreader;
     static MySqlConnection ruconnect, ukrconnect;
     static bool user_is_anon, new_last_time_saved;
-    static int currminute = -1, diff_size;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 15;
+    static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) },{ "liftwing", new color(255, 255, 0) },{ "ores", new color(255, 0, 255) },{ "tag", new color(0, 255, 0) }};
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -74,7 +73,7 @@ class Program
             request.Add(new StringContent(customparam), "text");
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string lang, string reason)
+    static void post_suspicious_edit(string lang, string reason, string type)
     {
         if (lang == "ru")
             if (suspicious_users.Contains(user))
@@ -95,19 +94,29 @@ class Program
             diff_text = ruwiki.GetStringAsync(diff_request).Result;
         else
             diff_text = ukwiki.GetStringAsync(diff_request).Result;
-        diff_text = diff_text.Replace("&#160;", " ").Replace("\\\"", "\"");
+        diff_text = diff_text.Replace("&#160;", " ");
 
         strings_with_changes = "";
         string prepared_text = div_rgx.Replace(diff_text, "").Replace("&lt;", "<").Replace("&gt;", ">").Replace("\\n", "\n");
         foreach (string str in prepared_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
-                strings_with_changes += str;
+            {
+                int startpos, endpos;
+                var matches = ins_del_rgx.Matches(str);
+                startpos = matches[0].Index - num_of_surrounding_chars;
+                if (startpos < 0) startpos = 0;
+                endpos = matches[matches.Count - 1].Index + matches[matches.Count - 1].Length + num_of_surrounding_chars;
+                if (endpos > str.Length) endpos = str.Length - 1;
+                strings_with_changes += str.Substring(startpos, endpos) + "<...>";
+            }
         wiki_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "<b><span class=del><nowiki>$1</nowiki></span></b>"), "<b><span class=ins><nowiki>$1</nowiki></span></b>");
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("\"", "''");
 
-        if (discord_diff.Length > 1024)
-            discord_diff = discord_diff.Substring(0, 1023);
+        if (discord_diff.Length > 1020)
+            discord_diff = discord_diff.Substring(0, 1020).Replace("\"", "\\\"");
+        if (comment.Length > 250)
+            comment = comment.Substring(0, 250).Replace("\"", "\\\"");
 
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ruwiki.GetStringAsync(get_request).Result : ukwiki.GetStringAsync(get_request).Result);
@@ -115,44 +124,15 @@ class Program
             "[[special:contribs/" + user + "|" + user + "]]||" + reason + ", " + wiki_diff);
         var rows = row_rgx.Matches(notifying_page_text);
         notifying_page_text = notifying_page_text.Substring(0, rows[rows.Count - 1].Index);
-        Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title + "|" +
-            (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]]," + reason + ", " + comment_diff, false);
+        Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], notifying_page_text, /*"[[toollabs:swviewer/r.php/" + newid + "|.]] "*/ "[[special:diff/" + newid + "|" + title + "]] " +
+            "([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]]," + reason + ", " + comment_diff, false);
 
         string discord_request = "{\"embeds\":[{\"author\":{\"name\":\"" + user + "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title +
-            "\",\"description\":" + "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[rnd.Next(12)].convert() +
+            "\",\"description\":" + "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[type].convert() +
             ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"" + comment + "\",\"value\":\"" + discord_diff + "\"}]}]}";
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(discord_request, Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + discord_request);
-    }
-    static void update_settings()
-    {
-        if (currminute != DateTime.UtcNow.Minute / 10)
-        {
-            goodanons.Clear();
-            currminute = DateTime.UtcNow.Minute / 10;
-            var settings = ruwiki.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
-            foreach (var row in settings)
-            {
-                var keyvalue = row.Split(':');
-                if (keyvalue[0] == "ores")
-                    ores_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "agnostic")
-                    agnostic_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "multilang")
-                    multilang_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "goodanons")
-                    foreach (var g in keyvalue[1].Split('|'))
-                        goodanons.Add(g);
-            }
-            patterns.Clear();
-            patterns.Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
-            patterns.Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
-            var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
-            foreach (var pattern in pattern_source)
-                if (pattern != "")
-                    patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
-        }
     }
     static void collect_trusted_users()
     {
@@ -198,7 +178,7 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size);
+                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, "ores");
                     continue;
                 }
 
@@ -213,7 +193,7 @@ class Program
                         foreach (string susp_tag in suspicious_tags)
                             if (edit_tag.Groups[1].Value.Contains(susp_tag))
                             {
-                                post_suspicious_edit(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size);
+                                post_suspicious_edit(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size, "tag");
                                 goto End;
                             }
 
@@ -222,35 +202,25 @@ class Program
                         foreach (var pattern in patterns)
                             if (pattern.IsMatch(ins.Groups[1].Value))
                             {
-                                post_suspicious_edit(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size);
+                                post_suspicious_edit(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, "pattern");
                                 goto End;
                             }
 
-                    try
+                    foreach (string type in new string[] { "agnostic", "multilang" })
                     {
-                        lw_raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-language-agnostic:predict",
-                            new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
-                        if (lw_raw != null && lw_raw != "")
-                            agnostic_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
-                        else
-                            goto End;
+                        try
+                        {
+                            lw_raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-" + (type == "agnostic" ? "language-agnostic" : "multilingual") +
+                                ":predict", new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
+                            if (lw_raw != null && lw_raw != "")
+                                lw_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
+                            else
+                                goto End;
+                        }
+                        catch { goto End; }
+                        if (lw_risk > lw_limit[type])
+                            post_suspicious_edit(lang, "lw-" + type + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, "liftwing");
                     }
-                    catch { goto End; }
-                    if (agnostic_risk > agnostic_limit)
-                        post_suspicious_edit(lang, "lw-agnostic:" + agnostic_risk.ToString() + ", diffsize:" + diff_size);
-
-                    try
-                    {
-                        lw_raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-multilang:predict",
-                            new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
-                        if (lw_raw != null && lw_raw != "")
-                            multilang_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
-                        else
-                            goto End;
-                    }
-                    catch { goto End; }
-                    if (multilang_risk > multilang_limit)
-                        post_suspicious_edit(lang, "lw-multilang:" + multilang_risk.ToString() + ", diffsize:" + diff_size);
                     End:;
                 }
             }
@@ -264,7 +234,7 @@ class Program
         }
         return true;
     }
-    static void Main()
+    static int Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
@@ -275,9 +245,34 @@ class Program
         ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open();
         while (true)
         {
-            update_settings();
+            if (currminute != DateTime.UtcNow.Minute / 10)
+            {
+                goodanons.Clear();
+                currminute = DateTime.UtcNow.Minute / 10;
+                var settings = ruwiki.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+                foreach (var row in settings)
+                {
+                    var keyvalue = row.Split(':');
+                    if (keyvalue[0] == "ores")
+                        ores_limit = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "agnostic")
+                        lw_limit["agnostic"] = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "multilang")
+                        lw_limit["multilang"] = Convert.ToDouble(keyvalue[1]);
+                    else if (keyvalue[0] == "goodanons")
+                        foreach (var g in keyvalue[1].Split('|'))
+                            goodanons.Add(g);
+                }
+                patterns.Clear();
+                patterns.Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
+                patterns.Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
+                var pattern_source = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
+                foreach (var pattern in pattern_source)
+                    if (pattern != "")
+                        patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
+            }
             if (!check("ru") || !check("uk"))
-                break;
+                return 1;
             Thread.Sleep(5000);
         }
     }
