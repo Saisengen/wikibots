@@ -40,7 +40,7 @@ class Program
     static MySqlDataReader sqlreader;
     static MySqlConnection ruconnect, ukrconnect;
     static bool user_is_anon, new_last_time_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 15;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 15, startpos, endpos;
     static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) },{ "liftwing", new color(255, 255, 0) },{ "ores", new color(255, 0, 255) },{ "tag", new color(0, 255, 0) }};
     static HttpClient Site(string lang, string login, string password)
     {
@@ -97,26 +97,25 @@ class Program
         diff_text = diff_text.Replace("&#160;", " ");
 
         strings_with_changes = "";
-        string prepared_text = div_rgx.Replace(diff_text, "").Replace("&lt;", "<").Replace("&gt;", ">").Replace("\\n", "\n");
+        string prepared_text = div_rgx.Replace(diff_text, "").Replace("\\n", "\n");
         foreach (string str in prepared_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
             {
-                int startpos, endpos;
                 var matches = ins_del_rgx.Matches(str);
                 startpos = matches[0].Index - num_of_surrounding_chars;
                 if (startpos < 0) startpos = 0;
                 endpos = matches[matches.Count - 1].Index + matches[matches.Count - 1].Length + num_of_surrounding_chars;
-                if (endpos > str.Length) endpos = str.Length - 1;
-                strings_with_changes += str.Substring(startpos, endpos) + "<...>";
+                if (endpos >= str.Length) endpos = str.Length - 1;
+                strings_with_changes += str.Substring(startpos, endpos - startpos).Replace("&lt;", "<").Replace("&gt;", ">") + "<...>";
             }
         wiki_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "<b><span class=del><nowiki>$1</nowiki></span></b>"), "<b><span class=ins><nowiki>$1</nowiki></span></b>");
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
         discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("\"", "''");
 
         if (discord_diff.Length > 1020)
-            discord_diff = discord_diff.Substring(0, 1020).Replace("\"", "\\\"");
+            discord_diff = discord_diff.Substring(0, 1020);
         if (comment.Length > 250)
-            comment = comment.Substring(0, 250).Replace("\"", "\\\"");
+            comment = comment.Substring(0, 250);
 
         string get_request = "https://" + lang + ".wikipedia.org/w/index.php?title=" + notifying_page_name[lang] + "&action=raw";
         string notifying_page_text = (lang == "ru" ? ruwiki.GetStringAsync(get_request).Result : ukwiki.GetStringAsync(get_request).Result);
@@ -234,15 +233,13 @@ class Program
         }
         return true;
     }
-    static int Main()
+    static void Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
         collect_trusted_users();
-        ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web")); ruconnect.Open();
-        ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open();
         while (true)
         {
             if (currminute != DateTime.UtcNow.Minute / 10)
@@ -271,8 +268,8 @@ class Program
                     if (pattern != "")
                         patterns.Add(new Regex(pattern, RegexOptions.IgnoreCase));
             }
-            if (!check("ru") || !check("uk"))
-                return 1;
+            ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web")); ruconnect.Open(); check("ru"); ruconnect.Close();
+            ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open(); check("uk"); ukrconnect.Close();
             Thread.Sleep(5000);
         }
     }
