@@ -8,18 +8,15 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Xml;
 using System.Text;
+using Newtonsoft.Json;
 public class color
 {
-    public byte r, g, b;
-    public color(byte r, byte g, byte b)
-    {
-        this.r = r; this.b = b; this.g = g;
-    }
-    public long convert()
-    {
-        return 256 * 256 * r + 256 * g + b;
-    }
+    public byte r, g, b; public color(byte r, byte g, byte b) { this.r = r; this.b = b; this.g = g; } public long convert() { return 256 * 256 * r + 256 * g + b; }
 }
+public class Author { public string name, url; }
+public class Embed { public Author author; public string title, description, url; public long color; public List<Field> fields; }
+public class Field { public string name, value; }
+public class Root { public List<Embed> embeds; }
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
@@ -97,11 +94,11 @@ class Program
                 startpos = matches[0].Index - num_of_surrounding_chars;
                 if (startpos < 0) startpos = 0;
                 endpos = matches[matches.Count - 1].Index + matches[matches.Count - 1].Length + num_of_surrounding_chars;
-                if (endpos >= str.Length) endpos = str.Length;
-                strings_with_changes += str.Substring(startpos, endpos - startpos).Replace("&lt;", "<").Replace("&gt;", ">") + "<...>";
+                if (endpos >= str.Length) endpos = str.Length - 1;
+                strings_with_changes += str.Substring(startpos, endpos - startpos + 1).Replace("&lt;", "<").Replace("&gt;", ">") + "<...>";
             }
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("\"", "''");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
 
         if (discord_diff.Length > 1020)
             discord_diff = discord_diff.Substring(0, 1020);
@@ -111,12 +108,12 @@ class Program
         Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], ".", /*"[[toollabs:rv/r.php/" + newid + "|.]] "*/ "[[special:diff/" + newid + "|" + title + "]] " +
             "([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]]," + reason + ", " + comment_diff);
 
-        string discord_request = "{\"embeds\":[{\"author\":{\"name\":\"" + user + "\",\"url\":\"https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) + "\"},\"title\":\"" + title +
-            "\",\"description\":" + "\"[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)\",\"color\":" + colors[type].convert() +
-            ",\"url\":\"https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid + "\",\"fields\":[{\"name\":\"" + comment + "\",\"value\":\"" + discord_diff + "\"}]}]}";
-        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(discord_request, Encoding.UTF8, "application/json")).Result;
+        var json = new Root() { embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
+            "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }},
+            author = new Author(){ name = user, url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } } };
+        var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
-            Console.WriteLine(res.StatusCode + " " + discord_request);
+            Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
     }
     static void check(string lang)
     {
@@ -178,12 +175,13 @@ class Program
                             ":predict", new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
                         if (lw_raw != null && lw_raw != "")
                             lw_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
-                        else
-                            goto End;
                     }
                     catch { goto End; }
                     if (lw_risk > lw_limit[type])
+                    {
                         post_suspicious_edit(lang, "lw-" + type + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, "liftwing");
+                        goto End;
+                    }
                 }
             End:;
             }
