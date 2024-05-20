@@ -20,10 +20,10 @@ public class Root { public List<Embed> embeds; }
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
-        "rc_last_oldid, rc_old_len, rc_new_len from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor join ores_model " +
-        "on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100 or rc_namespace=102 " +
-        "or rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, 
-        discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
+        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100 or " +
+        "rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, discord_diff,
+        lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1;
     static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, {"multilang", 1 } };
@@ -31,6 +31,7 @@ class Program
         (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
+    static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, {"6", "file:" }, { "10", "template:"}, {"14", "category:" }, { "100", "portal:" }, { "104", "проект:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
@@ -106,12 +107,12 @@ class Program
         if (comment.Length > 250)
             comment = comment.Substring(0, 250);
 
-        Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "]]] [[special:diff/" + newid + "|" +
-            title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]]," + reason + ", " + comment_diff);
+        Save(lang, (lang == "ru" ? ruwiki : ukwiki), "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
+            title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
-        var json = new Root() { embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }},
-            author = new Author(){ name = user, url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } } };
+        var json = new Root() { embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid,
+            description = "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name =
+            comment, value = discord_diff }}, author = new Author(){ name = user, url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } } };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
@@ -128,6 +129,7 @@ class Program
             user_is_anon = sqlreader.IsDBNull(0);
             ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
             title = sqlreader.GetString("title").Replace('_', ' ');
+            ns = sqlreader.GetString("rc_namespace");
             newid = sqlreader.GetString("rc_this_oldid");
             oldid = sqlreader.GetString("rc_last_oldid");
             comment = sqlreader.GetString("comment");
@@ -189,14 +191,40 @@ class Program
         }
         sqlreader.Close();
     }
-    static void Main()
+    static void update_settings()
     {
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
-        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
-        ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
-        patterns.Add("ru", new List<Regex>()); patterns.Add("uk", new List<Regex>());
-
+        if (currminute != DateTime.UtcNow.Minute / 10)
+        {
+            goodanons.Clear();
+            currminute = DateTime.UtcNow.Minute / 10;
+            var settings = ruwiki.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+            foreach (var row in settings)
+            {
+                var keyvalue = row.Split(':');
+                if (keyvalue[0] == "ores")
+                    ores_limit = Convert.ToDouble(keyvalue[1]);
+                else if (keyvalue[0] == "agnostic")
+                    lw_limit["agnostic"] = Convert.ToDouble(keyvalue[1]);
+                else if (keyvalue[0] == "multilang")
+                    lw_limit["multilang"] = Convert.ToDouble(keyvalue[1]);
+                else if (keyvalue[0] == "goodanons")
+                    foreach (var g in keyvalue[1].Split('|'))
+                        goodanons.Add(g);
+            }
+            foreach (string lang in new string[] { "ru", "uk" })
+            {
+                patterns[lang].Clear();
+                patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
+                patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
+                var pattern_source = new StreamReader("patterns-" + lang + ".txt").ReadToEnd().Split('\n');
+                foreach (var pattern in pattern_source)
+                    if (pattern != "")
+                        patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
+            }
+        }
+    }
+    static void collect_trusted_users()
+    {
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in global_flags_bearers)
             trusted_users.Add(g);
@@ -211,37 +239,19 @@ class Program
                             if (!trusted_users.Contains(r.GetAttribute("name")))
                                 trusted_users.Add(r.GetAttribute("name"));
             }
+    }
+    static void Main()
+    {
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
+        ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
+        patterns.Add("ru", new List<Regex>()); patterns.Add("uk", new List<Regex>());
+
+        collect_trusted_users();
         while (true)
         {
-            if (currminute != DateTime.UtcNow.Minute / 10)
-            {
-                goodanons.Clear();
-                currminute = DateTime.UtcNow.Minute / 10;
-                var settings = ruwiki.GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
-                foreach (var row in settings)
-                {
-                    var keyvalue = row.Split(':');
-                    if (keyvalue[0] == "ores")
-                        ores_limit = Convert.ToDouble(keyvalue[1]);
-                    else if (keyvalue[0] == "agnostic")
-                        lw_limit["agnostic"] = Convert.ToDouble(keyvalue[1]);
-                    else if (keyvalue[0] == "multilang")
-                        lw_limit["multilang"] = Convert.ToDouble(keyvalue[1]);
-                    else if (keyvalue[0] == "goodanons")
-                        foreach (var g in keyvalue[1].Split('|'))
-                            goodanons.Add(g);
-                }
-                foreach (string lang in new string[] {"ru", "uk" })
-                {
-                    patterns[lang].Clear();
-                    patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
-                    patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
-                    var pattern_source = new StreamReader("patterns-" + lang + ".txt").ReadToEnd().Split('\n');
-                    foreach (var pattern in pattern_source)
-                        if (pattern != "")
-                            patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
-                }
-            }
+            update_settings();
             ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web")); ruconnect.Open(); check("ru"); ruconnect.Close();
             ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open(); check("uk"); ukrconnect.Close();
             Thread.Sleep(4000);
