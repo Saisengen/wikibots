@@ -21,9 +21,10 @@ class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
         "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
-        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100 or " +
-        "rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, discord_diff,
-        lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or " +
+        "rc_namespace=100 or rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, 
+        comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+    static string[] creds;
     static HttpClient client = new HttpClient(), ruwiki, ukwiki;
     static double ores_risk, lw_risk, ores_limit = 1;
     static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, {"multilang", 1 } };
@@ -31,14 +32,15 @@ class Program
         (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
+    static Dictionary<string, string> last_checked_id = new Dictionary<string, string>() { { "ru", "0" }, { "uk", "0" } };
     static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, {"6", "file:" }, { "10", "template:"}, {"14", "category:" }, { "100", "portal:" }, { "104", "проект:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
-    static MySqlConnection ruconnect, ukrconnect;
-    static bool user_is_anon, new_last_time_saved;
+    static bool user_is_anon, new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos;
+    static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) },{ "liftwing", new color(255, 255, 0) },{ "ores", new color(255, 0, 255) },{ "tag", new color(0, 255, 0) }};
     static HttpClient Site(string lang, string login, string password)
     {
@@ -119,8 +121,10 @@ class Program
     }
     static void check(string lang)
     {
-        new_last_time_saved = false;
-        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]), lang == "ru" ? ruconnect : ukrconnect).ExecuteReader();
+        connection[lang] = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
+        connection[lang].Open();
+        new_timestamp_saved = false; new_id_saved = false;
+        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang]), connection[lang]).ExecuteReader();
         while (sqlreader.Read())
         {
             user = sqlreader.GetString("user") ?? "";
@@ -134,10 +138,13 @@ class Program
             oldid = sqlreader.GetString("rc_last_oldid");
             comment = sqlreader.GetString("comment");
             diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
-            if (!new_last_time_saved)
+            if (!new_timestamp_saved)
             {
-                last_checked_edit_time[lang] = sqlreader.GetString("rc_timestamp");
-                new_last_time_saved = true;
+                last_checked_edit_time[lang] = sqlreader.GetString("rc_timestamp"); new_timestamp_saved = true;
+            }
+            if (!new_id_saved)
+            {
+                last_checked_id[lang] = newid; new_id_saved = true;
             }
 
             if (ores_risk > ores_limit)
@@ -190,6 +197,7 @@ class Program
             }
         }
         sqlreader.Close();
+        connection[lang].Close();
     }
     static void update_settings()
     {
@@ -242,18 +250,19 @@ class Program
     }
     static void Main()
     {
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         ruwiki = Site("ru", creds[4], creds[5]); ukwiki = Site("uk", creds[4], creds[5]);
         patterns.Add("ru", new List<Regex>()); patterns.Add("uk", new List<Regex>());
+        connection.Add("ru", new MySqlConnection()); connection.Add("uk", new MySqlConnection());
 
         collect_trusted_users();
         while (true)
         {
             update_settings();
-            ruconnect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki").Replace("analytics", "web")); ruconnect.Open(); check("ru"); ruconnect.Close();
-            ukrconnect = new MySqlConnection(creds[2].Replace("%project%", "ukwiki").Replace("analytics", "web")); ukrconnect.Open(); check("uk"); ukrconnect.Close();
+            check("ru");
+            check("uk");
             Thread.Sleep(4000);
         }
     }
