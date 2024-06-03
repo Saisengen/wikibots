@@ -104,6 +104,12 @@
   schedule: "38 2 1 * *"
   emails: onfailure
 
+- name: popular-scripts
+  command: mono /data/project/mbh/bots/popular_userscripts.exe
+  image: tf-mono68
+  schedule: "45 0 1 * *"
+  emails: onfailure
+
 - name: likes
   command: mono /data/project/mbh/bots/thanksgivers.exe
   image: tf-mono68
@@ -189,7 +195,7 @@
 - name: rollbacker
   command: mono /data/project/mbh/bots/vand_rollbacker.exe
   image: tf-mono68
-  emails: onfailure
+  emails: none
   continuous: true
 
 - name: file-renaming
