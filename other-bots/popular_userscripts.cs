@@ -87,7 +87,7 @@ class Program
         scriptname = Uri.UnescapeDataString(scriptname).Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
             .Replace("википедия:", "project:").Replace("U:", "user:").Replace("У:", "user:").Replace("Участник:", "user:").Replace("Участница:", "user:").Replace("ВП:", "project:")
             .Replace("Википедия:", "project:").Replace("User:", "user:").Replace("Project:", "project:");
-        debug_result += "\n|-\n|" + Uri.UnescapeDataString(g_url).Replace(' ', '_') + "||[[:" + scriptname + "]]";
+        debug_result += "\n|-\n|[[:" + g_invoking_page + "]]||[[:" + scriptname + "]]";
         if (user_is_active() && scripts[g_lang].ContainsKey(scriptname))
             scripts[g_lang][scriptname].active++;
         else if (user_is_active() && !scripts[g_lang].ContainsKey(scriptname))
@@ -99,7 +99,6 @@ class Program
     }
     static void process_site(string url)
     {
-        g_url = url;
         string content = "";
         try
         {
@@ -113,14 +112,14 @@ class Program
                 Console.WriteLine(e.ToString());
         }
         Thread.Sleep(900);
-        content = Uri.UnescapeDataString(multiline_comment.Replace(content, "")).Replace("(\n", "(");
+        content = Uri.UnescapeDataString(multiline_comment.Replace(content, "")).Replace("(\n", "(").Replace("{\n", "{");
         foreach (var s in content.Split('\n'))
             if (!s.TrimStart(' ').StartsWith("//"))
             {
                 if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
-                    Console.WriteLine(s);
+                    e.WriteLine(s);
                 if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
-                    Console.WriteLine(s);
+                    e.WriteLine(s);
 
                 if (is_foreign_rgx.IsMatch(s))
                     foreach (Match m in is_foreign_rgx.Matches(s))
@@ -157,7 +156,7 @@ class Program
                 }
             }
     }
-
+    static StreamWriter e = new StreamWriter("errors.txt");
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static Dictionary<string, HashSet<string>> invoking_pages = new Dictionary<string, HashSet<string>>(), script_users = new Dictionary<string, HashSet<string>>();
     static Dictionary<string, Dictionary<string, bool>> users_activity = new Dictionary<string, Dictionary<string, bool>>();
@@ -169,31 +168,45 @@ class Program
     loader_foreign_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
         loader_foreign2_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/([^?]*)\?", RegexOptions.IgnoreCase),
         r1 = new Regex("importscript", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline);
-    static string g_username, g_url, g_lang, debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт";
+    static string g_username, g_lang, g_invoking_page, debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт";
     static void Main()
     {
-        var result = new Dictionary<string, string>() { { "ru", "[[К:Википедия:Статистика и прогнозы]]{{shortcut|ВП:СИС}}<center>Статистика собирается по незакомментированным (//, /**/) включениям " +
-                "importScript и разнообразным методам load/using/getscript на скриптовых страницах участников рувики, а также их global.js-файлах на Мете. Отсортировано по числу активных участников - " +
-                "сделавших хоть одно действие за последний месяц.\n{|class=\"standard sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" }, { "en", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active" +
-                "!!Inactive!!Total"} };
+        var result = new Dictionary<string, string>() { { "ru", "[[К:Википедия:Статистика и прогнозы]]{{shortcut|ВП:СИС}}<center>Статистика собирается по незакомментированным включениям " +
+                "importScript/.load/.using/.getscript на скриптовых страницах участников рувики, а также их global.js-файлах на Мете. Отсортировано по числу активных участников - " +
+                "сделавших хоть одно действие за последний месяц. Показаны лишь скрипты, имеющие более одного включения.\n{|class=\"standard sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" },
+            { "en", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active!!Inactive!!Total"} };
         var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Самые используемые скрипты" }, { "en", "User:MBH/sandbox" } };
         var w = new StreamWriter("result.txt");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        foreach (string lang in new string[] { "ru", "en" })
+
+        foreach (string lang in new string[] { "ru"/*, "en"*/ })
         {
             invoking_pages.Add(lang, new HashSet<string>()); script_users.Add(lang, new HashSet<string>());
             users_activity.Add(lang, new Dictionary<string, bool>()); scripts.Add(lang, new Dictionary<string, data>());
             g_lang = lang;
             site[lang] = Site(creds[0], creds[1]);
             foreach (string skin in new string[] { "common", "monobook", "vector", "cologneblue", "minerva", "timeless", "simple", "myskin", "modern" })
-                using (var r = new XmlTextReader(new StringReader(site[g_lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + skin + ".js&srnamespace=2&srlimit=max&srprop=").Result)))
-                    while (r.Read())
-                        if (r.Name == "p" && r.GetAttribute("title").EndsWith(skin + ".js") && !invoking_pages[lang].Contains(r.GetAttribute("title")))
-                            invoking_pages[lang].Add(r.GetAttribute("title"));
+            {
+
+                string offset = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + skin + ".js&srnamespace=2&srlimit=max&srprop=";
+                while (offset != null)
+                {
+                    string apiout = (offset == "" ? site[lang].GetStringAsync(query).Result : site[lang].GetStringAsync(query + "&sroffset=" + Uri.EscapeDataString(offset)).Result);
+                    using (var r = new XmlTextReader(new StringReader(apiout)))
+                    {
+                        r.WhitespaceHandling = WhitespaceHandling.None;
+                        r.Read(); r.Read(); r.Read(); offset = r.GetAttribute("sroffset");
+                        while (r.Read())
+                            if (r.Name == "p" && r.GetAttribute("title").EndsWith(skin + ".js") && !invoking_pages[lang].Contains(r.GetAttribute("title")))
+                                invoking_pages[lang].Add(r.GetAttribute("title"));
+                    }
+                }
+            }
 
             foreach (var invoking_page in invoking_pages[lang])
             {
                 g_username = invoking_page.Substring(invoking_page.IndexOf(':') + 1, invoking_page.IndexOf('/') - 1 - invoking_page.IndexOf(':'));
+                g_invoking_page = invoking_page;
                 process_site("https://" + g_lang + ".wikipedia.org/wiki/" + Uri.EscapeUriString(invoking_page) + "?action=raw");
                 if (!script_users[g_lang].Contains(g_username))
                     script_users[g_lang].Add(g_username);
@@ -202,16 +215,21 @@ class Program
             foreach (var username in script_users[lang])
             {
                 g_username = username;
+                g_invoking_page = "meta:" + username + "/global.js";
                 process_site("https://meta.wikimedia.org/wiki/user:" + Uri.EscapeUriString(username) + "/global.js?action=raw");
             }
 
             foreach (var s in scripts[lang].OrderByDescending(s => s.Value.active))
-                result[lang] += "\n|-\n|[[:" + s.Key + "]]||" + s.Value.active + "||" + s.Value.inactive + "||" + (s.Value.active + s.Value.inactive);
-            //Save(site, "ВП:Самые используемые скрипты", result + "\n|}", "update");
+                if ((s.Value.active + s.Value.inactive) > 1)
+                    result[lang] += "\n|-\n|[[:" + s.Key + "]]||" + s.Value.active + "||" + s.Value.inactive + "||" + (s.Value.active + s.Value.inactive);
+            Save(site[lang], resultpage[lang], result[lang] + "\n|}", "update");
             if (lang == "ru")
+            {
+                w.WriteLine(debug_result);
                 Save(site[lang], "ВП:Самые используемые скрипты/details", debug_result + "\n|}", "update");
+            }
             w.WriteLine(result[lang]);
         }
-        w.Close();
+        w.Close(); e.Close();
     }
 }
