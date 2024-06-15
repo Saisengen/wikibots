@@ -84,16 +84,18 @@ class Program
     {
         if (scriptname.StartsWith(":"))
             scriptname = scriptname.Substring(1);
-        if (scriptname.StartsWith("u:"))
-            scriptname = "user:" + scriptname.Substring(2);
         if (scriptname.StartsWith(g_lang + ":"))
             scriptname = scriptname.Substring(3);
+        if (scriptname.IndexOf(":") > -1)
+            scriptname = scriptname.Substring(0, scriptname.IndexOf(":")).ToLower() + scriptname.Substring(scriptname.IndexOf(":"));
         scriptname = Uri.UnescapeDataString(scriptname).Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
-            .Replace("википедия:", "project:").Replace("U:", "user:").Replace("У:", "user:").Replace("Участник:", "user:").Replace("Участница:", "user:").Replace("ВП:", "project:")
-            .Replace("Википедия:", "project:").Replace("User:", "user:").Replace("Project:", "project:");
-        if (g_invoking_page.EndsWith("/global.js") && scriptname.ToLower().StartsWith("mediawiki:"))
-            scriptname = "meta:" + scriptname;
-        debug_result += "\n|-\n|[[:" + g_invoking_page + "]]||[[:" + scriptname + "]]";
+            .Replace("википедия:", "project:").Replace("вікіпедія:", "project:").Replace("користувач:", "user:").Replace("користувачка:", "user:");
+        if (scriptname.StartsWith("u:"))
+            scriptname = "user:" + scriptname.Substring(2);
+        //if (g_invoking_page.EndsWith("/global.js") && scriptname.ToLower().StartsWith("mediawiki:"))
+        //    scriptname = "meta:" + scriptname;
+        if (g_lang == "ru")
+            debug_result += "\n|-\n|[[:" + g_invoking_page + "]]||[[:" + scriptname + "]]";
         if (user_is_active() && scripts[g_lang].ContainsKey(scriptname))
             scripts[g_lang][scriptname].active++;
         else if (user_is_active() && !scripts[g_lang].ContainsKey(scriptname))
@@ -133,8 +135,10 @@ class Program
                     foreach (Match m in is_ext_rgx.Matches(s))
                         if (m.Groups[3].Value.EndsWith("edia"))
                             add_script(m.Groups[2].Value + ":" + m.Groups[4].Value);
-                        else if (m.Groups[3].Value == "wikidata" || m.Groups[3].Value == "mediawiki")
+                        else if (m.Groups[3].Value == "wikidata")
                             add_script(m.Groups[3].Value + ":" + m.Groups[4].Value);
+                        else if (m.Groups[3].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[4].Value);
                         else
                             add_script(m.Groups[2].Value + ":" + m.Groups[3].Value + ":" + m.Groups[4].Value);
                     foreach (Match m in loader_rgx.Matches(s))
@@ -142,20 +146,25 @@ class Program
                     foreach (Match m in loader_foreign_rgx.Matches(s))
                         if (m.Groups[4].Value.EndsWith("edia"))
                             add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
-                        else if (m.Groups[4].Value == "wikidata" || m.Groups[4].Value == "mediawiki")
+                        else if (m.Groups[4].Value == "wikidata")
                             add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[5].Value);
                         else
                             add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
                     foreach (Match m in loader_foreign2_rgx.Matches(s))
                         if (m.Groups[4].Value.EndsWith("edia"))
                             add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
-                        else if (m.Groups[4].Value == "wikidata" || m.Groups[4].Value == "mediawiki")
+                        else if (m.Groups[4].Value == "wikidata")
                             add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[5].Value);
                         else
                             add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
                 }
             }
     }
+
     static StreamWriter e = new StreamWriter("errors.txt");
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static Dictionary<string, HashSet<string>> invoking_pages = new Dictionary<string, HashSet<string>>(), script_users = new Dictionary<string, HashSet<string>>();
@@ -173,13 +182,13 @@ class Program
     {
         var result = new Dictionary<string, string>() { { "ru", "[[К:Википедия:Статистика и прогнозы]]{{shortcut|ВП:СИС}}<center>Статистика собирается по незакомментированным включениям " +
                 "importScript/.load/.using/.getscript на скриптовых страницах участников рувики, а также их global.js-файлах на Мете. Отсортировано по числу активных участников - " +
-                "сделавших хоть одно действие за последний месяц. Показаны лишь скрипты, имеющие более одного включения. Подробная разбивка скриптов по страницам - [[/details|тут]].\n{|class=\"standard " +
-                "sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" }, { "en", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active!!Inactive!!Total"} };
-        var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Самые используемые скрипты" }, { "en", "User:MBH/sandbox" } };
+                "сделавших хоть одно действие за последний месяц. Показаны лишь скрипты, имеющие более одного включения. Подробная разбивка скриптов по страницам - [[/details|тут]]. Обновляется первого " +
+                "числа каждого месяца. \n{|class=\"standard sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" }, { "uk", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active!!Inactive!!Total"} };
+        var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Самые используемые скрипты" }, { "uk", "User:MBH/sandbox" } };
         var w = new StreamWriter("result.txt");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
 
-        foreach (string lang in new string[] { "en", "ru" })
+        foreach (string lang in new string[] { /*"uk",*/ "ru" })
         {
             invoking_pages.Add(lang, new HashSet<string>()); script_users.Add(lang, new HashSet<string>());
             users_activity.Add(lang, new Dictionary<string, bool>()); scripts.Add(lang, new Dictionary<string, data>());
