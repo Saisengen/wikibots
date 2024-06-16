@@ -6,7 +6,6 @@ using System.Net.Http;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Linq;
-using System.Threading;
 
 class data
 {
@@ -43,7 +42,7 @@ class Program
         request.Add(new StringContent("xml"), "format");
         result = site.PostAsync("https://" + g_lang + ".wikipedia.org/w/api.php", request).Result;
         if (result.ToString().Contains("uccess"))
-            Console.WriteLine(DateTime.Now.ToString() + " written " + title);
+            Console.WriteLine(DateTime.Now.ToString() + " written " + g_lang + ":" + title);
         else
             Console.WriteLine(result);
     }
@@ -176,14 +175,14 @@ class Program
     loader_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""]/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
     loader_foreign_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
         loader_foreign2_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/([^?]*)\?", RegexOptions.IgnoreCase),
-        r1 = new Regex("importscript", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline);
+        r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline);
     static string g_username, g_lang, g_invoking_page, debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт";
     static void Main()
     {
-        var result = new Dictionary<string, string>() { { "ru", "[[К:Википедия:Статистика и прогнозы]]{{shortcut|ВП:СИС}}<center>Статистика собирается по незакомментированным включениям " +
-                "importScript/.load/.using/.getscript на скриптовых страницах участников рувики, а также их global.js-файлах на Мете. Отсортировано по числу активных участников - " +
-                "сделавших хоть одно действие за последний месяц. Показаны лишь скрипты, имеющие более одного включения. Подробная разбивка скриптов по страницам - [[/details|тут]]. Обновляется первого " +
-                "числа каждого месяца. \n{|class=\"standard sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" }, { "uk", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active!!Inactive!!Total"} };
+        var result = new Dictionary<string, string>() { { "ru", "[[К:Википедия:Статистика и прогнозы]]{{shortcut|ВП:СИС}}<center>Статистика собирается по незакомментированным включениям importScript/" +
+                ".load/.using/.getscript на скриптовых страницах участников рувики, а также их global.js-файлах на Мете. Отсортировано по числу активных участников - сделавших хоть одно действие за " +
+                "последний месяц. Показаны лишь скрипты, имеющие более одного включения. Подробная разбивка скриптов по страницам - [[/details|тут]]. Обновлено " + DateTime.Now.ToString("dd.MM.yyyy")
+                + ". \n{|class=\"standard sortable\"\n!Скрипт!!Активных!!Неактивных!!Всего" }, { "uk", "<center>\n{|class=\"wikitable sortable\"\n!Script!!Active!!Inactive!!Total"} };
         var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Самые используемые скрипты" }, { "uk", "User:MBH/sandbox" } };
         var w = new StreamWriter("result.txt");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
