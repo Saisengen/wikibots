@@ -20,7 +20,7 @@ config_bot.read(config_path)
 
 TOKEN = config_bot["MAIN"]["bot_token"]
 BEARER_TOKEN = config_bot["MAIN"]["bearer_token"]
-DEBUG["pass"] = config_bot["MAIN"]["DB_pass"]
+DEBUG["SQL"]["pass"] = config_bot["MAIN"]["DB_pass"]
 
 
 # Целевой сервер, ID каналов с фидами, ID бота, ID ботов-источников, ID канала с командами,
@@ -529,10 +529,12 @@ def get_view(embed: discord.Embed, disable: bool = False) -> View:
     btn1 = Button(emoji="⏮️", label="", style=discord.ButtonStyle.danger, custom_id="btn1", disabled=disable)
     btn2 = Button(emoji="👍🏻", label="", style=discord.ButtonStyle.green, custom_id="btn2", disabled=disable)
     btn3 = Button(emoji="↪️", label="", style=discord.ButtonStyle.blurple, custom_id="btn3", disabled=disable)
+    btn4 = Button(emoji="💩", label="", style=discord.ButtonStyle.green, custom_id="btn4", disabled=disable)
     view = View()
     view.add_item(btn1)
     view.add_item(btn3)
     view.add_item(btn2)
+    view.add_item(btn4)
     return view
 
 
