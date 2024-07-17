@@ -546,25 +546,25 @@ async def on_interaction(inter):
         try:
             await inter.response.defer()
         except Exception as e:
-            print(f"On_Interraction error 0.1: {e}")
+            print(f"On_Interaction error 0.1: {e}")
     else:
         if inter.data["values"][0] != "14":
             try:
                 await inter.response.defer()
             except Exception as e:
-                print(f"On_Interraction error 0.2: {e}")
+                print(f"On_Interaction error 0.2: {e}")
     if inter.channel.id in CONFIG["IDS"]:
         try:
             msg_rights = await client.get_channel(CONFIG["BOTCOMMANDS"]).fetch_message(CONFIG["ROLLBACKERS"])
             msg_rights = json.loads(msg_rights.content.replace("`", ""))
         except Exception as e:
-            print(f"On_Interraction error 1: {e}")
+            print(f"On_Interaction error 1: {e}")
         else:
             if str(inter.user.id) not in msg_rights:
                 try:
                     await inter.followup.send(content=f"К сожалению, у вас нет разрешение на выполнение откатов и отмен через бот. Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
                 except Exception as e:
-                    print(f"On_Interraction error 2: {e}")
+                    print(f"On_Interaction error 2: {e}")
                 finally:
                     return
             actor = msg_rights[str(inter.user.id)]
@@ -588,31 +588,30 @@ async def on_interaction(inter):
                     try:
                         await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                     except Exception as e:
-                        print(f"On_Interraction TextEdit error 1: {e}")
+                        print(f"On_Interaction TextEdit error 1: {e}")
                     if selected == "14":
                         try:
                             await inter.response.send_modal(Reason())
                         except Exception as e:
-                            print(f"On_Interraction TextEdit error 2: {e}")
+                            print(f"On_Interaction TextEdit error 2: {e}")
                         return
                     if selected == "15":
                         try:
                             await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                         except Exception as e:
-                            print(f"On_Interraction TextEdit error 3: {e}")
+                            print(f"On_Interaction TextEdit error 3: {e}")
                         return
                 else:
                     reason = f"{undo_prefix[lang_selector-1].replace('$actor', actor)} {v}"
                 r = do_rollback(msg.embeds[0], actor, action_type="undo", reason=reason)
                 try:
                     if r[0] == "Success":
-                        await channel.send(content=f"{actor} выполнил отмену {r[1]}.")
+                        await channel.send(content=f"{actor} отменил правку {r[1]}.")
                         send_to_db(actor, "undos", get_trigger(msg.embeds[0]))
                         await msg.delete()
                     else:
                         if "уже не существует" in r[0]:
-                            new_embed = discord.Embed(color=msg.embeds[0].color,
-                                                      title="Страница была удалена.")
+                            new_embed = discord.Embed(color=msg.embeds[0].color, title="Страница была удалена.")
                             await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
                         elif "уже были откачены" in r[0]:
                             new_embed = discord.Embed(color=msg.embeds[0].color, title="Правки уже были откачены.")
@@ -628,38 +627,21 @@ async def on_interaction(inter):
                                 msg.embeds[0].set_footer(text=f"Действие не удалось: {r[0]}.")
                                 await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                 except Exception as e:
-                    print(f"On_Interraction error 3: {e}")
-            if inter.data["custom_id"] == "btn3":
-                view = View()
-                view.add_item(select_component)
-                try:
-                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=view)
-                except Exception as e:
-                    print(f"On_Interraction error 4: {e}")
-            if inter.data["custom_id"] == "btn2":
-                try:
-                    await inter.message.delete()
-                    await channel.send(
-                        content=f"{actor} отметил [правку](<{msg.embeds[0].url}>) как проверенную.")
-                    send_to_db(actor, "approves", get_trigger(msg.embeds[0]))
-                except Exception as e:
-                    print(f"On_Interraction error 5: {e}")
+                    print(f"On_Interaction error 3: {e}")
             if inter.data["custom_id"] == "btn1":
                 if len(msg.embeds) > 0:
                     r = do_rollback(msg.embeds[0], actor)
                     try:
                         if r[0] == "Success":
                             await inter.message.delete()
-                            await channel.send(content=f"{actor} выполнил откат {r[1]}.")
+                            await channel.send(content=f"{actor} откатил правку {r[1]}.")
                             send_to_db(actor, "rollbacks", get_trigger(msg.embeds[0]))
                         else:
                             if "уже не существует" in r[0]:
-                                new_embed = discord.Embed(color=msg.embeds[0].color,
-                                                          title="Страница была удалена.")
+                                new_embed = discord.Embed(color=msg.embeds[0].color, title="Страница была удалена.")
                                 await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
                             elif "уже были откачены" in r[0]:
-                                new_embed = discord.Embed(color=msg.embeds[0].color,
-                                                          title="Правки уже были откачены.")
+                                new_embed = discord.Embed(color=msg.embeds[0].color, title="Правки уже были откачены.")
                                 await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
                             else:
                                 if r[1] != "":
@@ -669,8 +651,30 @@ async def on_interaction(inter):
                                     msg.embeds[0].set_footer(text=f"Действие не удалось: {r[0]}.")
                                     await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                     except Exception as e:
-                        print(f"On_Interraction error 6: {e}")
-
+                        print(f"On_Interaction error 6: {e}")
+            if inter.data["custom_id"] == "btn2":
+                try:
+                    await inter.message.delete()
+                    await channel.send(
+                        content=f"{actor} одобрил [правку](<{msg.embeds[0].url}>).")
+                    send_to_db(actor, "approves", get_trigger(msg.embeds[0]))
+                except Exception as e:
+                    print(f"On_Interaction error 5: {e}")
+            if inter.data["custom_id"] == "btn3":
+                view = View()
+                view.add_item(select_component)
+                try:
+                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=view)
+                except Exception as e:
+                    print(f"On_Interaction error 4: {e}")
+            if inter.data["custom_id"] == "btn4":
+                try:
+                    await inter.message.delete()
+                    await channel.send(
+                        content=f"{actor} отметил [правку](<{msg.embeds[0].url}>) как плохую, но уже отменённую.")
+                    send_to_db(actor, "approves", get_trigger(msg.embeds[0]))
+                except Exception as e:
+                    print(f"On_Interaction error 6: {e}")
 
 @client.event
 async def on_message(msg):
