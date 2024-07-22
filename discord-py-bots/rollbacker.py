@@ -22,12 +22,11 @@ TOKEN = config_bot["MAIN"]["bot_token"]
 BEARER_TOKEN = config_bot["MAIN"]["bearer_token"]
 DEBUG["SQL"]["pass"] = config_bot["MAIN"]["DB_pass"]
 
-
 # Целевой сервер, ID каналов с фидами, ID бота, ID ботов-источников, ID канала с командами,
 # ID сообщения со списком откатывающих, ID канала с источником, список админов для команд.
-CONFIG = {"SERVER": [1044474820089368666], "IDS": [1219273496371396681, 1212498198200062014], "BOT": 1225008116048072754,
-          "SOURCE_BOTS": [1237362558046830662], "BOTCOMMANDS": 1212507148982947901,
-          "ROLLBACKERS": 1237790591044292680, "SOURCE": 1237345566950948867,
+CONFIG = {"SERVER": [1044474820089368666], "IDS": [1219273496371396681, 1212498198200062014], 
+          "BOT": 1225008116048072754, "SOURCE_BOTS": [1237362558046830662], "BOTCOMMANDS": 1212507148982947901,
+          "ROLLBACKERS": 1237790591044292680, "SOURCE": 1237345566950948867, 
           "ADMINS": [352826965494988822, 512545053223419924, 223219998745821194]}
 if DEBUG["enable"]:
     CONFIG["IDS"].append(DEBUG["ID"])
@@ -58,12 +57,15 @@ select_options = {
 options = []
 for option in select_options:
     options.append(discord.SelectOption(label=select_options[option][0], value=str(option)))
-select_component = discord.ui.Select(placeholder="Выбор причины отмены", min_values=1, max_values=1, options=options, custom_id="sel1")
-undo_prefix = ["отмена правки [[Special:Contribs/$author|$author]] по запросу [[u:$actor|$actor]]:", "скасовано останнє редагування [[Special:Contribs/$author|$author]] за запитом [[User:$actor|$actor]]:"]
+select_component = discord.ui.Select(placeholder="Выбор причины отмены", min_values=1, max_values=1, options=options, 
+                                     custom_id="sel1")
+undo_prefix = ["отмена правки [[Special:Contribs/$author|$author]] по запросу [[u:$actor|$actor]]:", 
+               "скасовано останнє редагування [[Special:Contribs/$author|$author]] за запитом [[User:$actor|$actor]]:"]
 
 
 class Reason(discord.ui.Modal, title='Причина'):
-    res = discord.ui.TextInput(custom_id="edt1", label="Причина отмены", min_length=2, max_length=255, placeholder="введите причину", required=True, style=discord.TextStyle.short)
+    res = discord.ui.TextInput(custom_id="edt1", label="Причина отмены", min_length=2, max_length=255, 
+                               placeholder="введите причину", required=True, style=discord.TextStyle.short)
 
     async def on_submit(self, interaction: discord.Interaction):
         pass
@@ -83,10 +85,12 @@ def get_trigger(embed: discord.Embed) -> str:
         return "unknown"
 
 
-def send_to_db(actor: str, action_type: str, trigger: str):
+def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False):
     try:
         if DEBUG["enable"]:
-            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"],port=DEBUG["SQL"]["port"],password=DEBUG["SQL"]["pass"],database="s55857__rv",host='127.0.0.1')
+            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"], port=DEBUG["SQL"]["port"], 
+                                                  password=DEBUG["SQL"]["pass"], database="s55857__rv", 
+                                                  host='127.0.0.1')
         else:
             conn = toolforge.toolsdb("s55857__rv")
         with conn.cursor() as cur:
@@ -96,9 +100,10 @@ def send_to_db(actor: str, action_type: str, trigger: str):
                 if len(res) == 0:
                     cur.execute(f"INSERT INTO ds_antivandal (name, {action_type}, {trigger}) VALUES (%s, 1, 1);", actor)
                 else:
-                    cur.execute(f"UPDATE ds_antivandal SET {action_type} = {action_type}+1, {trigger} = {trigger}+1 WHERE name = %s;", actor)
+                    cur.execute(f"UPDATE ds_antivandal SET {action_type} = {action_type}+1, {trigger} = "
+                                f"{trigger}+1 WHERE name = %s;", actor)
             conn.commit()
-            if action_type == "approves":
+            if bad:
                 cur.execute(f"UPDATE ds_antivandal_false SET {trigger} = {trigger}+1 WHERE result = 'stats';")
                 conn.commit()
         conn.close()
@@ -110,16 +115,20 @@ def send_to_db(actor: str, action_type: str, trigger: str):
 def get_from_db(is_all: bool = True, actor: str = None):
     try:
         if DEBUG["enable"]:
-            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"],port=DEBUG["SQL"]["port"],password=DEBUG["SQL"]["pass"],database="s55857__rv",host='127.0.0.1')
+            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"], port=DEBUG["SQL"]["port"], 
+                                                  password=DEBUG["SQL"]["pass"], database="s55857__rv", 
+                                                  host='127.0.0.1')
         else:
             conn = toolforge.toolsdb("s55857__rv")
         with conn.cursor() as cur:
             i_res = False
             triggers_false = False
             if is_all:
-                cur.execute(f"SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), SUM(tags) FROM ds_antivandal")
+                cur.execute(f"SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), "
+                            f"SUM(tags) FROM ds_antivandal")
                 r = cur.fetchall()
-                cur.execute("SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) AS am FROM ds_antivandal GROUP BY name ORDER BY am DESC LIMIT 5;")
+                cur.execute("SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) AS am FROM ds_antivandal "
+                            "GROUP BY name ORDER BY am DESC LIMIT 5;")
                 r2 = cur.fetchall()
                 i_res = []
                 for i in r2:
@@ -127,14 +136,26 @@ def get_from_db(is_all: bool = True, actor: str = None):
                 i_res = "\n".join(i_res)
                 cur.execute("SELECT patterns, LW, ORES, tags FROM ds_antivandal_false WHERE result = 'stats';")
                 r3 = cur.fetchall()
-                triggers_false = f"Ложные триггеры: паттерны — {r3[0][0]}, LW — {r3[0][1]}, ORES — {r3[0][2]}, теги — {r3[0][3]}."
+                patterns = r[0][3]-172
+                patterns = 0 if patterns == 0 else float(f'{(r3[0][0]) / patterns * 100:.3f}')
+                lw = r[0][4]-1061
+                lw = 0 if lw == 0 else float(f'{(r3[0][1]) / lw * 100:.3f}')
+                ores = r[0][5]-1431
+                ores = 0 if ores == 0 else float(f'{(r3[0][2]) / ores * 100:.3f}')
+                tags = r[0][6]-63
+                tags = 0 if tags == 0 else float(f'{(r3[0][3]) / tags * 100:.3f}')
+                triggers_false = (f"Ложные триггеры, c 21.07.2024: паттерны — {r3[0][0]} ({patterns} %), "
+                                  f"LW — {r3[0][1]} ({lw} %), ORES — {r3[0][2]} ({ores} %), теги — {r3[0][3]} "
+                                  f"({tags} %).")
             else:
-                cur.execute(f"SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), SUM(tags) FROM ds_antivandal WHERE name=%s;", actor)
+                cur.execute(f"SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES),"
+                            f" SUM(tags) FROM ds_antivandal WHERE name=%s;", actor)
                 r = cur.fetchall()
             conn.close()
             if len(r) > 0:
-                return {"rollbacks": r[0][0], "undos": r[0][1], "approves": r[0][2], "total": i_res, "patterns": r[0][3],
-                        "LW": r[0][4], "ORES": r[0][5], "tags": r[0][6], "triggers": triggers_false}
+                return {"rollbacks": r[0][0], "undos": r[0][1], "approves": r[0][2], "total": i_res, 
+                        "patterns": r[0][3], "LW": r[0][4], "ORES": r[0][5], "tags": r[0][6], 
+                        "triggers": triggers_false}
             else:
                 return {"rollbacks": 0, "undos": 0, "approves": 0, "patterns": 0, "LW": 0, "ORES": 0, "tags": 0}
     except Exception as e:
@@ -145,7 +166,9 @@ def get_from_db(is_all: bool = True, actor: str = None):
 def delete_from_db(actor: str):
     try:
         if DEBUG["enable"]:
-            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"], port=DEBUG["SQL"]["port"], password=DEBUG["SQL"]["pass"], database="s55857__rv", host='127.0.0.1')
+            conn = pymysql.connections.Connection(user=DEBUG["SQL"]["user"], port=DEBUG["SQL"]["port"], 
+                                                  password=DEBUG["SQL"]["pass"], database="s55857__rv", 
+                                                  host='127.0.0.1')
         else:
             conn = toolforge.toolsdb("s55857__rv")
         with conn.cursor() as cur:
@@ -162,8 +185,9 @@ async def welcome_user(inter: discord.Interaction, message: discord.Message):
     if inter.user.id in CONFIG["ADMINS"]:
         try:
             await inter.response.defer()
-            await inter.followup.send(content=f"Приветствуем, <@{message.author.id}>! Если вы желаете получить доступ к остальным каналам "
-                                              f"сервера, сообщите, пожалуйста, имя вашей учётной записи в проектах Викимедиа.")
+            await inter.followup.send(content=f"Приветствуем, <@{message.author.id}>! Если вы желаете получить доступ к"
+                                              f" остальным каналам сервера, сообщите, пожалуйста, имя вашей учётной "
+                                              f"записи в проектах Викимедиа.")
         except Exception as e:
             print(f"welcome_user error 1: {e}")
     else:
@@ -187,12 +211,16 @@ async def rollback_help(inter: discord.Interaction):
             await inter.followup.send(content=f"/rollback_help — список команд бота.\n"
                                               f"/rollback_clear — очистка фид-каналов от всех сообщений бота.\n"
                                               f"/rollbackers — список участников, кому разрешены действия через бот.\n"
-                                              f"/add_rollbacker — добавить участника в список тех, кому разрешены действия через бот.\n"
-                                              f"/remove_rollbacker — удалить участника из списка тех, кому разрешены действия через бот.\n"
+                                              f"/add_rollbacker — добавить участника в список тех, кому разрешены "
+                                              f"действия через бот.\n"
+                                              f"/remove_rollbacker — удалить участника из списка тех, кому разрешены "
+                                              f"действия через бот.\n"
                                               f"/rollback_stats_all — статистика откатов через бот.\n"
                                               f"/rollback_stats — статистика действий участника через бот.\n"
-                                              f"/rollback_stats_delete — удалить всю статистику действий участника через бот.\n"
-                                              f"По вопросам работы бота обращайтесь к <@352826965494988822>.", ephemeral=True)
+                                              f"/rollback_stats_delete — удалить всю статистику действий участника "
+                                              f"через бот.\n"
+                                              f"По вопросам работы бота обращайтесь к <@352826965494988822>.", 
+                                      ephemeral=True)
         except Exception as e:
             print(f"rollback_help 2: {e}")
 
@@ -209,11 +237,11 @@ async def rollback_stats_all(inter: discord.Interaction):
         r = get_from_db(is_all=True)
         if r and len(r):
             try:
-                await inter.followup.send(content=f"Через бот совершено: откатов — {r['rollbacks']}, отмен — {r['undos']}, "
-                                                  f"одобрений ревизий — {r['approves']}.\n"
+                await inter.followup.send(content=f"Через бот совершено: откатов — {r['rollbacks']}, "
+                                                  f"отмен — {r['undos']}, одобрений ревизий — {r['approves']}.\n"
                                                   f"Наибольшее количество действий совершили:\n{r['total']}\n"
-                                                  f"Действий по типам причин: паттерны — {r['patterns']}, ORES — {r['ORES']}, "
-                                                  f"LW — {r['LW']}, метки — {r['tags']}.\n"
+                                                  f"Действий по типам причин: паттерны — {r['patterns']}, "
+                                                  f"ORES — {r['ORES']}, LW — {r['LW']}, метки — {r['tags']}.\n"
                                                   f"{r['triggers']}", ephemeral=True)
             except Exception as e:
                 print(f"rollback_stats_all 2: {e}")
@@ -239,10 +267,12 @@ async def rollback_stats(inter: discord.Interaction, wiki_name: str):
                     await inter.followup.send(
                         content=f"Данный участник не совершал действий через бот.", ephemeral=True)
                 else:
-                    await inter.followup.send(content=f"Через бот участник {wiki_name} совершил действий: {r['rollbacks']+r['undos']+r['approves']},\n"
+                    await inter.followup.send(content=f"Через бот участник {wiki_name} совершил действий: "
+                                                      f"{r['rollbacks']+r['undos']+r['approves']},\n"
                                                       f"из них: откатов — {r['rollbacks']}, отмен — {r['undos']}, "
                                                       f"одобрений ревизий — {r['approves']}.\n"
-                                                      f"Действий по типам причин: паттерны — {r['patterns']}, ORES — {r['ORES']},"
+                                                      f"Действий по типам причин, за всё время: паттерны — "
+                                                      f"{r['patterns']}, ORES — {r['ORES']},"
                                                       f" LW — {r['LW']}, метки — {r['tags']}.", ephemeral=True)
             except Exception as e:
                 print(f"rollback_stats 2: {e}")
@@ -274,7 +304,8 @@ async def rollback_stats_delete(inter: discord.Interaction, wiki_name: str):
         else:
             try:
                 await inter.followup.send(content=f"К сожалению, у вас нет разрешения "
-                                                  f"на выполнение данной комманды. Обратитесь к участнику <@{223219998745821194}> или <@{352826965494988822}>.",
+                                                  f"на выполнение данной комманды. Обратитесь к участнику"
+                                                  f" <@{223219998745821194}> или <@{352826965494988822}>.",
                                           ephemeral=True)
             except Exception as e:
                 print(f"rollback_stats_delete 4: {e}")
@@ -342,7 +373,9 @@ async def rollbackers(inter: discord.Interaction):
         print(f"Rollbackers list error 1: {e}")
     else:
         try:
-            await inter.followup.send(content=f"Откаты и отмены через бота разрешены участникам `{', '.join(rights_content)}`.\nДля запроса права или отказа от него обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
+            await inter.followup.send(content=f"Откаты и отмены через бота разрешены участникам "
+                                              f"`{', '.join(rights_content)}`.\nДля запроса права или отказа от него "
+                                              f"обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
         except Exception as e:
             print(f"Rollbackers list error 2: {e}")
 
@@ -374,18 +407,21 @@ async def add_rollbacker(inter: discord.Interaction, discord_name: discord.User,
                     rights_content[str(discord_name.id)] = wiki_name
                     try:
                         await msg_rights.edit(content=json.dumps(rights_content))
-                        await inter.followup.send(content=f"Участник {wiki_name} добавлен в список откатывающих.", ephemeral=True)
+                        await inter.followup.send(content=f"Участник {wiki_name} добавлен в список откатывающих.", 
+                                                  ephemeral=True)
                     except Exception as e:
                         print(f"Add rollbacker error 3: {e}")
                 else:
                     try:
-                        await inter.followup.send(content=f"Участник {wiki_name} уже присутствует в списке откатывающих.", ephemeral=True)
+                        await inter.followup.send(content=f"Участник {wiki_name} уже присутствует в списке "
+                                                          f"откатывающих.", ephemeral=True)
                     except Exception as e:
                         print(f"Add rollbacker error 4: {e}")
 
     else:
         try:
-            await inter.followup.send(content=f"К сожалению, у вас нет разрешения на выполнение данной команды. Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
+            await inter.followup.send(content=f"К сожалению, у вас нет разрешения на выполнение данной команды. "
+                                              f"Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
         except Exception as e:
             print(f"Add rollbacker error 4: {e}")
 
@@ -420,16 +456,19 @@ async def remove_rollbacker(inter: discord.Interaction, wiki_name: str):
                 except Exception as e:
                     print(f"Remove rollbacker error 3: {e}")
                 else:
-                    await inter.followup.send(content=f"Участник {wiki_name} убран из списка откатывающих.", ephemeral=True)
+                    await inter.followup.send(content=f"Участник {wiki_name} убран из списка откатывающих.", 
+                                              ephemeral=True)
             else:
                 try:
-                    await inter.followup.send(content=f"Участника {wiki_name} не было в списке откатывающих.", ephemeral=True)
+                    await inter.followup.send(content=f"Участника {wiki_name} не было в списке откатывающих.", 
+                                              ephemeral=True)
                 except Exception as e:
                     print(f"Remove rollbacker error 4: {e}")
 
     else:
         try:
-            await inter.followup.send(content=f"К сожалению, у вас нет разрешения на выполнение данной команды. Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
+            await inter.followup.send(content=f"К сожалению, у вас нет разрешения на выполнение данной команды. "
+                                              f"Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
         except Exception as e:
             print(f"Remove rollbacker error 4: {e}")
 
@@ -438,24 +477,29 @@ def do_rollback(embed, actor, action_type="rollback", reason=""):
     diff_url = embed.url
     title = embed.title
     lang = "ru" if "ru.wikipedia.org" in diff_url else "uk"
-    rev_id = diff_url.replace(f"https://{lang}.wikipedia.org/w/index.php?diff=", "") if "diff" in diff_url else diff_url.replace(f"https://{lang}.wikipedia.org/w/index.php?oldid=", "")
+    rev_id = diff_url.replace(f"https://{lang}.wikipedia.org/w/index.php?diff=", "") if "diff" in diff_url else (
+        diff_url.replace(f"https://{lang}.wikipedia.org/w/index.php?oldid=", ""))
     data = {"action": "query", "prop": "revisions", "rvslots": "*", "rvprop": "ids|tags", "rvlimit": 500,
             "rvendid": rev_id, "rvexcludeuser": embed.author.name, "titles": title, "format": "json", "utf8": 1}
     try:
         r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data,
                           headers=USER_AGENT)
         if r.status_code == 404:
-            return ["Такой страницы уже не существует.", f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"]
+            return ["Такой страницы уже не существует.", f"[{title}](<https://"
+                                                         f"{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) "
+                                                         f"(ID: {rev_id})"]
         r = r.json()
         page_id = list(r["query"]["pages"].keys())[0]
     except Exception as e:
         print(f"rollback error 1: {e}")
     else:
         if "-1" in r["query"]["pages"]:
-            return ["Такой страницы уже не существует", f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"]
+            return ["Такой страницы уже не существует", f"[{title}](<https://{lang}.wikipedia.org/wiki/"
+                                                        f"{title.replace(' ', '_')}>) (ID: {rev_id})"]
         if "revisions" in r["query"]["pages"][page_id] and "mw-rollback" in \
                 r["query"]["pages"][page_id]["revisions"][-1]["tags"]:
-            return ["Правки уже были откачены.", f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"]
+            return ["Правки уже были откачены.", f"[{title}](<https://{lang}.wikipedia.org/wiki/"
+                                                 f"{title.replace(' ', '_')}>) (ID: {rev_id})"]
         if "revisions" in r["query"]["pages"][page_id] and len(r["query"]["pages"][page_id]["revisions"]) > 0:
             return ["Правки данного пользователя не являются последними, действие невозможно", ""]
         data = {"action": "query", "prop": "revisions", "rvslots": "*", "rvprop": "ids|timestamp", "rvlimit": 500,
@@ -467,38 +511,46 @@ def do_rollback(embed, actor, action_type="rollback", reason=""):
             print(f"rollback error 2: {e}")
         else:
             if "-1" in r["query"]["pages"]:
-                return ["Такой страницы уже не существует.", f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"]
+                return ["Такой страницы уже не существует.", f"[{title}](<https://{lang}.wikipedia.org/wiki/"
+                                                             f"{title.replace(' ', '_')}>) (ID: {rev_id})"]
             if "revisions" in r["query"]["pages"][page_id] and len(r["query"]["pages"][page_id]["revisions"]) > 0:
                 rev_id = r["query"]["pages"][page_id]["revisions"][0]["revid"]
             api_url = f"https://{lang}.wikipedia.org/w/api.php"
             headers = {"Authorization": f"Bearer {BEARER_TOKEN}", "User-Agent": "Reimu; iluvatar@tools.wmflabs.org"}
 
             if action_type == "rollback":
-                comment_body_uk = f"відкинуто редагування [[Special:Contribs/$2|$2]] за запитом [[User:{actor}|{actor}]]"
+                comment_body_uk = (f"відкинуто редагування [[Special:Contribs/$2|$2]] за запитом "
+                                   f"[[User:{actor}|{actor}]]")
                 comment_body_ru = f"откат правок [[Special:Contribs/$2|$2]] по запросу [[u:{actor}|{actor}]]"
                 comment = comment_body_ru if lang == "ru" else comment_body_uk
                 try:
                     rollback_token = \
-                        requests.get(f'{api_url}?format=json&action=query&meta=tokens&type=rollback', headers=headers).json()["query"]["tokens"]["rollbacktoken"]
+                        requests.get(f'{api_url}?format=json&action=query&meta=tokens&type=rollback',
+                                     headers=headers).json()["query"]["tokens"]["rollbacktoken"]
                 except Exception as e:
                     print(f"rollback error 3: {e}")
                 else:
-                    data = {"action": "rollback", "format": "json", "title": title, "user": embed.author.name, "utf8": 1, "watchlist": "nochange", "summary": comment, "token": rollback_token}
+                    data = {"action": "rollback", "format": "json", "title": title, "user": embed.author.name, 
+                            "utf8": 1, "watchlist": "nochange", "summary": comment, "token": rollback_token}
                     try:
-                        r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, headers=headers).json()
+                        r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data,
+                                          headers=headers).json()
                     except Exception as e:
                         print(f"rollback error 4: {e}")
                     else:
                         return [r["error"]["info"],
-                                f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"] if "error" in r else [
+                                f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) "
+                                f"(ID: {rev_id})"] if "error" in r else [
                             "Success",
                             f"[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r['rollback']['revid']}>)"]
 
             else:
                 data = {"action": "query", "prop": "revisions", "rvslots": "*", "rvprop": "ids|user", "rvlimit": 1,
-                        "rvstartid": rev_id, "rvexcludeuser": embed.author.name, "titles": title, "format": "json", "utf8": 1}
+                        "rvstartid": rev_id, "rvexcludeuser": embed.author.name, "titles": title, "format": "json", 
+                        "utf8": 1}
                 try:
-                    r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, headers=USER_AGENT).json()
+                    r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, 
+                                      headers=USER_AGENT).json()
                     check_revs = len(r["query"]["pages"][page_id]["revisions"])
                     if check_revs > 0:
                         parent_id = r["query"]["pages"][page_id]["revisions"][0]["revid"]
@@ -507,25 +559,34 @@ def do_rollback(embed, actor, action_type="rollback", reason=""):
                     print(f"rollback error 5: {e}")
                 else:
                     if check_revs == 0:
-                        return ["Все версии принадлежат одному участнику", f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"]
+                        return ["Все версии принадлежат одному участнику", f"[{title}]"
+                                                                           f"(<https://{lang}.wikipedia.org/wiki/"
+                                                                           f"{title.replace(' ', '_')}>) (ID: "
+                                                                           f"{rev_id})"]
                     try:
-                        edit_token = requests.get(f'{api_url}?format=json&action=query&meta=tokens&type=csrf', headers=headers).json()["query"]["tokens"]["csrftoken"]
+                        edit_token = requests.get(f'{api_url}?format=json&action=query&meta=tokens&type=csrf', 
+                                                  headers=headers).json()["query"]["tokens"]["csrftoken"]
                     except Exception as e:
                         print(f"rollback error 6: {e}")
                     else:
                         reason = reason.replace("$author", embed.author.name).replace("$lastauthor", last_author)
-                        data = {"action": "edit", "format": "json", "title": title, "undo": rev_id, "undoafter": parent_id,
-                                "watchlist": "nochange", "nocreate": 1, "summary": reason, "token": edit_token, "utf8": 1}
+                        data = {"action": "edit", "format": "json", "title": title, "undo": rev_id, 
+                                "undoafter": parent_id, "watchlist": "nochange", "nocreate": 1, "summary": reason, 
+                                "token": edit_token, "utf8": 1}
                         try:
-                            r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, headers=headers).json()
+                            r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, 
+                                              headers=headers).json()
                         except Exception as e:
                             print(f"rollback error 7: {e}")
                         else:
-                            return [r["error"]["info"], f"[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}>) (ID: {rev_id})"] if "error" in r else ["Success",
-                                f"[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r['edit']['newrevid']}>)"]
+                            return [r["error"]["info"], f"[{title}](<https://{lang}"
+                                                        f".wikipedia.org/wiki/{title.replace(' ', '_')}>) "
+                                                        f"(ID: {rev_id})"] if "error" in r else \
+                                ["Success", f"[{title}](<https://{lang}.wikipedia.org/w/index.php?diff="
+                                            f"{r['edit']['newrevid']}>)"]
 
 
-def get_view(embed: discord.Embed, disable: bool = False) -> View:
+def get_view(disable: bool = False) -> View:
     btn1 = Button(emoji="⏮️", label="", style=discord.ButtonStyle.danger, custom_id="btn1", disabled=disable)
     btn2 = Button(emoji="👍🏻", label="", style=discord.ButtonStyle.green, custom_id="btn2", disabled=disable)
     btn3 = Button(emoji="↪️", label="", style=discord.ButtonStyle.blurple, custom_id="btn3", disabled=disable)
@@ -562,7 +623,9 @@ async def on_interaction(inter):
         else:
             if str(inter.user.id) not in msg_rights:
                 try:
-                    await inter.followup.send(content=f"К сожалению, у вас нет разрешение на выполнение откатов и отмен через бот. Обратитесь к участнику <@{223219998745821194}>.", ephemeral=True)
+                    await inter.followup.send(content=f"К сожалению, у вас нет разрешение на выполнение откатов и отмен"
+                                                      f" через бот. Обратитесь к участнику <@{223219998745821194}>.", 
+                                              ephemeral=True)
                 except Exception as e:
                     print(f"On_Interaction error 2: {e}")
                 finally:
@@ -576,7 +639,7 @@ async def on_interaction(inter):
                     inter.data["components"][0] and len(inter.data["components"][0]["components"]) > 0 and \
                     inter.data["components"][0]["components"][0]["custom_id"] == "edt1":
                 v = inter.data["components"][0]["components"][0]["value"]
-            base_view = get_view(msg.embeds[0])
+            base_view = get_view()
             if inter.data["custom_id"] == "sel1" or v is not False:
                 lang_selector = 1
                 if "uk.wikipedia.org" in msg.embeds[0].url:
@@ -584,7 +647,8 @@ async def on_interaction(inter):
 
                 if inter.data["custom_id"] == "sel1":
                     selected = inter.data["values"][0]
-                    reason = f"{undo_prefix[lang_selector-1].replace('$actor', actor)} {select_options[selected][lang_selector].replace('$1', msg.embeds[0].title)}"
+                    reason = (f"{undo_prefix[lang_selector-1].replace('$actor', actor)} "
+                              f"{select_options[selected][lang_selector].replace('$1', msg.embeds[0].title)}")
                     try:
                         await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                     except Exception as e:
@@ -617,7 +681,8 @@ async def on_interaction(inter):
                             new_embed = discord.Embed(color=msg.embeds[0].color, title="Правки уже были откачены.")
                             await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
                         elif "версии принадлежат" in r[0]:
-                            msg.embeds[0].set_footer(text=f"Отмена не удалась: все версии страницы принадлежат одному участнику.")
+                            msg.embeds[0].set_footer(text=f"Отмена не удалась: все версии страницы принадлежат одному "
+                                                          f"участнику.")
                             await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
                         else:
                             if r[1] != "":
@@ -634,7 +699,7 @@ async def on_interaction(inter):
                     try:
                         if r[0] == "Success":
                             await inter.message.delete()
-                            await channel.send(content=f"{actor} откатил правку {r[1]}.")
+                            await channel.send(content=f"{actor} откатил {r[1]}.")
                             send_to_db(actor, "rollbacks", get_trigger(msg.embeds[0]))
                         else:
                             if "уже не существует" in r[0]:
@@ -657,7 +722,7 @@ async def on_interaction(inter):
                     await inter.message.delete()
                     await channel.send(
                         content=f"{actor} одобрил [правку](<{msg.embeds[0].url}>).")
-                    send_to_db(actor, "approves", get_trigger(msg.embeds[0]))
+                    send_to_db(actor, "approves", get_trigger(msg.embeds[0]), bad=True)
                 except Exception as e:
                     print(f"On_Interaction error 5: {e}")
             if inter.data["custom_id"] == "btn3":
@@ -675,7 +740,8 @@ async def on_interaction(inter):
                     send_to_db(actor, "approves", get_trigger(msg.embeds[0]))
                 except Exception as e:
                     print(f"On_Interaction error 6: {e}")
-
+                    
+                    
 @client.event
 async def on_message(msg):
     if msg.author.id not in CONFIG["SOURCE_BOTS"]:
@@ -693,10 +759,12 @@ async def on_message(msg):
     if len(msg.embeds) > 0:
         # не откачена ли
         lang = "ru" if "ru.wikipedia.org" in msg.embeds[0].url else "uk"
-        rev_id = msg.embeds[0].url.replace(f"https://{lang}.wikipedia.org/w/index.php?", "").replace("oldid=", "").replace("diff=", "")
+        rev_id = (msg.embeds[0].url.replace(f"https://{lang}.wikipedia.org/w/index.php?", "").replace("oldid=", "")
+                  .replace("diff=", ""))
         try:
             data = {"action": "query", "prop": "revisions", "rvslots": "*", "rvprop": "ids|tags", "rvlimit": 500,
-                    "rvendid": rev_id, "rvexcludeuser": msg.embeds[0].author.name, "titles": msg.embeds[0].title, "format": "json", "utf8": 1}
+                    "rvendid": rev_id, "rvexcludeuser": msg.embeds[0].author.name, "titles": msg.embeds[0].title, 
+                    "format": "json", "utf8": 1}
             r = requests.post(url=f"https://{lang}.wikipedia.org/w/api.php", data=data, headers=USER_AGENT)
             if r.status_code == 404:
                 try:
@@ -708,7 +776,7 @@ async def on_message(msg):
         except Exception as e:
             print(f"On_Message error 4: {e}")
         else:
-            if ("-1" in r["query"]["pages"]) or ("revisions" in r["query"]["pages"][page_id] and "mw-rollback" in
+            if ("-1" in r["query"]["pages"]) or ("revisions" in r["query"]["pages"][page_id] and "mw-rollback" in 
                                                  r["query"]["pages"][page_id]["revisions"][-1]["tags"]):
                 try:
                     await msg.delete()
@@ -721,7 +789,7 @@ async def on_message(msg):
             channel_new_id = DEBUG["ID"]
         channel_new = client.get_channel(channel_new_id)
         try:
-            new_message = await channel_new.send(embed=msg.embeds[0], view=get_view(msg.embeds[0], True))
+            new_message = await channel_new.send(embed=msg.embeds[0], view=get_view(True))
         except Exception as e:
             print(f"On_Message error 6: {e}")
         else:
@@ -732,7 +800,7 @@ async def on_message(msg):
             finally:
                 try:
                     await asyncio.sleep(3)
-                    await new_message.edit(embed=new_message.embeds[0], view=get_view(new_message.embeds[0]))
+                    await new_message.edit(embed=new_message.embeds[0], view=get_view())
                 except Exception as e:
                     print(f"On_Message error 8: {e}")
 
