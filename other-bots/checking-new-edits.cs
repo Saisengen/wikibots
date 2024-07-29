@@ -11,7 +11,8 @@ using System.Text;
 using Newtonsoft.Json;
 public class color
 {
-    public byte r, g, b; public color(byte r, byte g, byte b) { this.r = r; this.b = b; this.g = g; } public long convert() { return 256 * 256 * r + 256 * g + b; }
+    public byte r, g, b; public color(byte r, byte g, byte b) { this.r = r; this.b = b; this.g = g; }
+    public long convert() { return 256 * 256 * r + 256 * g + b; }
 }
 public class Author { public string name, url; }
 public class Embed { public Author author; public string title, description, url; public long color; public List<Field> fields; }
@@ -22,27 +23,28 @@ class Program
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
         "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
         "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or " +
-        "rc_namespace=100 or rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, 
+        "rc_namespace=100 or rc_namespace=104) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text,
         comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
     static double ores_risk, lw_risk, ores_limit = 1;
-    static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, {"multilang", 1 } };
+    static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, { "multilang", 1 } };
     static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), tag_rgx = new Regex
-        (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
+        (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>"),
+        editcount_rgx = new Regex(@"editcount=""(\d*)""");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
     static Dictionary<string, string> last_checked_id = new Dictionary<string, string>() { { "ru", "0" }, { "uk", "0" } };
-    static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, {"6", "file:" }, { "10", "template:"}, {"14", "category:" }, { "100", "portal:" }, { "104", "проект:" } };
+    static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, { "6", "file:" }, { "10", "template:" }, { "14", "category:" }, { "100", "portal:" }, { "104", "проект:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool user_is_anon, new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
-    static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) },{ "liftwing", new color(255, 255, 0) },{ "ores", new color(255, 0, 255) },{ "tag", new color(0, 255, 0) }};
+    static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) }, { "liftwing", new color(255, 255, 0) }, { "ores", new color(255, 0, 255) }, { "tag", new color(0, 255, 0) } };
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -99,17 +101,20 @@ class Program
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
         discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
 
-        if (discord_diff.Length > 1020)
-            discord_diff = discord_diff.Substring(0, 1020);
-        if (comment.Length > 250)
-            comment = comment.Substring(0, 250);
+        if (discord_diff.Length > 1022)
+            discord_diff = discord_diff.Substring(0, 1022);
+        if (comment.Length > 254)
+            comment = comment.Substring(0, 254);
 
         Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
-        var json = new Root() { embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid,
-            description = "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name =
-            comment, value = discord_diff }}, author = new Author(){ name = user, url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } } };
+        var json = new Root()
+        {
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description = 
+            "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, 
+                value = discord_diff }}, author = new Author(){ name = editcount == -1 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
+        };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
@@ -141,16 +146,21 @@ class Program
             {
                 last_checked_id[lang] = newid; new_id_saved = true;
             }
-
-            if (ores_risk > ores_limit)
-            {
-                post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, "ores");
-                continue;
-            }
-
             if (user_is_anon || !trusted_users.Contains(user))
             {
-                foreach (Match edit_tag in tag_rgx.Matches(site[lang].GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result))
+                if (user_is_anon)
+                    editcount = -1;
+                else
+                    editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
+                        Uri.EscapeDataString(user)).Result).Groups[1].Value);
+
+                if (ores_risk > ores_limit)
+                {
+                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, "ores");
+                    continue;
+                }
+
+                foreach (Match edit_tag in tag_rgx.Matches(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result))
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
@@ -246,7 +256,7 @@ class Program
                                 trusted_users.Add(r.GetAttribute("name"));
             }
         }
-        
+
         while (true)
         {
             update_settings();
