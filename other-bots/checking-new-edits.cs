@@ -23,7 +23,7 @@ class Program
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
         "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
         "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or " +
-        "rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text,
+        "rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, diff_text,
         comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
@@ -35,14 +35,14 @@ class Program
         editcount_rgx = new Regex(@"editcount=""(\d*)""");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
-    static Dictionary<string, string> last_checked_id = new Dictionary<string, string>() { { "ru", "0" }, { "uk", "0" } };
-    static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, { "6", "file:" }, { "10", "template:" }, { "14", "category:" }, { "100", "portal:" } };
+    static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
+    static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool user_is_anon, new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) }, { "liftwing", new color(255, 255, 0) }, { "ores", new color(255, 0, 255) }, { "tag", new color(0, 255, 0) } };
     static HttpClient Site(string lang, string login, string password)
@@ -98,8 +98,8 @@ class Program
                 if (endpos >= str.Length) endpos = str.Length - 1;
                 strings_with_changes += str.Substring(startpos, endpos - startpos + 1).Replace("&lt;", "<").Replace("&gt;", ">") + "<...>";
             }
-        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-1 "), "+1 ");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~1~~ "), "`1` ");
+        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
 
         if (discord_diff.Length > 1022)
             discord_diff = discord_diff.Substring(0, 1022);
@@ -124,7 +124,7 @@ class Program
         connection[lang] = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
         connection[lang].Open();
         new_timestamp_saved = false; new_id_saved = false;
-        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang]), connection[lang]).ExecuteReader();
+        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang].ToString()), connection[lang]).ExecuteReader();
         while (sqlreader.Read())
         {
             user = sqlreader.GetString("user") ?? "";
@@ -133,9 +133,9 @@ class Program
             user_is_anon = sqlreader.IsDBNull(0);
             ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
             title = sqlreader.GetString("title").Replace('_', ' ');
-            ns = sqlreader.GetString("rc_namespace");
-            newid = sqlreader.GetString("rc_this_oldid");
-            oldid = sqlreader.GetString("rc_last_oldid");
+            ns = sqlreader.GetInt16("rc_namespace");
+            newid = sqlreader.GetInt32("rc_this_oldid");
+            oldid = sqlreader.GetInt32("rc_last_oldid");
             comment = sqlreader.GetString("comment");
             diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
             if (!new_timestamp_saved)
@@ -152,7 +152,7 @@ class Program
                 {
                     editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
                         Uri.EscapeDataString(user)).Result).Groups[1].Value);
-                    Console.WriteLine("num of trusers = " + trusted_users.Count);
+                    //Console.WriteLine("num of trusers = " + trusted_users.Count);
                 }
 
                 if (ores_risk > ores_limit)
