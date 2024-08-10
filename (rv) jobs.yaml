@@ -1,0 +1,29 @@
+- name: antvand
+  command: pyvenv/bin/python ./py/antivand_bot.py
+  image: python3.11
+  continuous: true
+  emails: none
+
+- name: antclr
+  command: pyvenv/bin/python ./py/antivand_cleaner.py
+  image: python3.11
+  continuous: true
+  emails: none
+
+- name: tw
+  command: pyvenv/bin/python ./py/tw.py
+  image: python3.11
+  schedule: "45 * * * *"
+  emails: none
+
+- name: metro
+  command: pyvenv/bin/python ./py/other/metro.py
+  image: python3.11
+  schedule: "00 */6 * * *"
+  emails: none
+
+- name: rollbacker
+  command: mono /data/project/rv/rollbacker/vand_rollbacker.exe
+  image: tf-mono68
+  emails: none
+  continuous: true
