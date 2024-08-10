@@ -232,10 +232,8 @@ class Program
             }
         }
     }
-    static void Main()
+    static void gather_trusted_users()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
         client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
@@ -248,16 +246,29 @@ class Program
             connection.Add(lang, new MySqlConnection());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
-                string request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
-                string result = site[lang].GetStringAsync(request).Result;
-                using (var r = new XmlTextReader(new StringReader(result)))
-                    while (r.Read())
-                        if (r.Name == "u")
-                            if (!trusted_users.Contains(r.GetAttribute("name")))
-                                trusted_users.Add(r.GetAttribute("name"));
+                string apiout, cont = "", request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
+                while (cont != null)
+                {
+                    apiout = (cont == "" ? site[lang].GetStringAsync(request).Result : site[lang].GetStringAsync(request + "&aufrom=" + Uri.EscapeDataString(cont)).Result);
+                    using (var r = new XmlTextReader(new StringReader(apiout)))
+                    {
+                        r.WhitespaceHandling = WhitespaceHandling.None;
+                        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("aufrom");
+                        while (r.Read())
+                            if (r.Name == "u")
+                                if (!trusted_users.Contains(r.GetAttribute("name")))
+                                    trusted_users.Add(r.GetAttribute("name"));
+                    }
+                }
             }
         }
+    }
+    static void Main()
+    {
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
 
+        gather_trusted_users();
         while (true)
         {
             update_settings();
