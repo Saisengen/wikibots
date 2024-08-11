@@ -149,10 +149,12 @@ class Program
             if (user_is_anon || !trusted_users.Contains(user))
             {
                 if (!user_is_anon)
-                {
                     editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
                         Uri.EscapeDataString(user)).Result).Groups[1].Value);
-                    //Console.WriteLine("num of trusers = " + trusted_users.Count);
+                if (editcount > 1000)
+                {
+                    trusted_users.Add(user);
+                    continue;
                 }
 
                 if (ores_risk > ores_limit)
