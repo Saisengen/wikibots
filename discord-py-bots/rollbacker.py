@@ -5,7 +5,7 @@ import configparser
 import json
 import logging
 import time
-from urllib.parse import unquote
+from urllib.parse import unquote, quote
 import discord
 import pymysql
 import requests
@@ -370,7 +370,7 @@ async def last_metro(inter: discord.Interaction):
         print(f"Metro error 1: {e}")
     else:
         try:
-            metro = requests.get(url="https://iluvatarbot.toolforge.org/metro/", headers=USER_AGENT).text.split("<br>")[
+            metro = requests.get(url="https://rv.toolforge.org/metro/", headers=USER_AGENT).text.split("<br>")[
                 0].replace("Задание запущено", "Последний запуск задания:")
             await inter.followup.send(content=metro, ephemeral=True)
         except Exception as e:
@@ -640,18 +640,27 @@ def do_rollback(embed, actor, action_type="rollback", reason=""):
                                             f"{r['edit']['newrevid']}>)", title]
 
 
-def get_view(disable: bool = False) -> View:
+def get_view(actions: bool = True, page: str = '', user: str = '', disable: bool = False) -> View:
     btn1 = Button(emoji="⏮️", style=discord.ButtonStyle.danger, custom_id="btn1", disabled=disable)
     btn2 = Button(emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="btn5", disabled=disable)
-    btn3 = Button(emoji="↪️", style=discord.ButtonStyle.blurple, custom_id="btn3", disabled=disable)
-    btn4 = Button(emoji="👍🏻", style=discord.ButtonStyle.green, custom_id="btn2", disabled=disable)
-    btn5 = Button(emoji="💩", style=discord.ButtonStyle.green, custom_id="btn4", disabled=disable)
+    btn3 = Button(emoji="🔨", style=discord.ButtonStyle.danger, custom_id="btn6", disabled=disable)
+    btn4 = Button(emoji="🔒", style=discord.ButtonStyle.danger, custom_id="btn7", disabled=disable)
+    btn5 = Button(emoji="↪️", style=discord.ButtonStyle.blurple, custom_id="btn3", disabled=disable)
+    btn6 = Button(emoji="👍🏻", style=discord.ButtonStyle.green, custom_id="btn2", disabled=disable)
+    btn7 = Button(emoji="💩", style=discord.ButtonStyle.green, custom_id="btn4", disabled=disable)
     view = View()
     view.add_item(btn1)
     view.add_item(btn2)
     view.add_item(btn3)
     view.add_item(btn4)
     view.add_item(btn5)
+    view.add_item(btn6)
+    view.add_item(btn7)
+
+    if actions:
+        user, page = quote(user), quote(page)
+        # место для кнопок действий (discord.ButtonStyle.url)
+        pass
     return view
 
 
@@ -732,7 +741,10 @@ async def on_interaction(inter):
                         undo_options_check = inter.data["components"][0]["components"][0]["value"]
                     else:
                         rfd_options_check = inter.data["components"][0]["components"][0]["value"]
-            base_view = get_view()
+            actions = False if "uk.wikipedia.org" in msg.embeds[0].url else True
+            lang = 'uk' if "uk.wikipedia.org" in msg.embeds[0].url else 'ru'
+            base_view = get_view(actions=actions, user=get_name_from_embed(lang, msg.embeds[0].author.url), 
+                                 page=msg.embeds[0].title)
             if inter.data["custom_id"] == "sel2" or rfd_options_check is not False:
                 lang_selector = 1
                 if "uk.wikipedia.org" in msg.embeds[0].url:
@@ -934,7 +946,11 @@ async def on_message(msg):
             channel_new_id = DEBUG["ID"]
         channel_new = client.get_channel(channel_new_id)
         try:
-            new_message = await channel_new.send(embed=msg.embeds[0], view=get_view(True))
+            actions = False if "uk.wikipedia.org" in msg.embeds[0].url else True
+            new_message = await channel_new.send(embed=msg.embeds[0], 
+                                                 view=get_view(actions=actions, disable=True,
+                                                               user=get_name_from_embed(lang, msg.embeds[0].author.url),
+                                                               page=msg.embeds[0].title))
         except Exception as e:
             print(f"On_Message error 6: {e}")
         else:
@@ -945,7 +961,11 @@ async def on_message(msg):
             finally:
                 try:
                     await asyncio.sleep(3)
-                    await new_message.edit(embed=new_message.embeds[0], view=get_view())
+                    actions = False if "uk.wikipedia.org" in msg.embeds[0].url else True
+                    await new_message.edit(embed=new_message.embeds[0], 
+                                           view=get_view(actions=actions, 
+                                                         user=get_name_from_embed(lang, msg.embeds[0].author.url), 
+                                                         page=msg.embeds[0].title))
                 except Exception as e:
                     print(f"On_Message error 8: {e}")
 
