@@ -53,6 +53,7 @@ class Program
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
+        int c = 0;
         //----------------------------------------------------------------------------
         if (type == "category")
         {
@@ -63,20 +64,6 @@ class Program
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
                         pageids.Add(r.GetInt32(0));
-                r.Close();
-            }
-
-            foreach (var p in pageids)
-            {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
-                r = command.ExecuteReader();
-                while (r.Read())
-                {
-                    string user = r.GetString(0);
-                    if (stats.ContainsKey(user))
-                        stats[user]++;
-                    else stats.Add(user, 1);
-                }
                 r.Close();
             }
         }
@@ -90,20 +77,6 @@ class Program
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
                         pageids.Add(r.GetInt32(0));
-                r.Close();
-            }
-
-            foreach (var p in pageids)
-            {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
-                r = command.ExecuteReader();
-                while (r.Read())
-                {
-                    string user = r.GetString(0);
-                    if (stats.ContainsKey(user))
-                        stats[user]++;
-                    else stats.Add(user, 1);
-                }
                 r.Close();
             }
         }
@@ -152,7 +125,34 @@ class Program
         else
             Sendresponse("category", "", 2, "Incorrect list type");
 
-        int c = 0;
+        if (type == "category" || type == "template")
+        {
+            var inputstrings = new List<string>();
+            string collector = "";
+            foreach (var p in pageids)
+                if (++c % 100 == 0)
+                {
+                    inputstrings.Add(collector.Substring(1));
+                    collector = "";
+                }
+                else
+                    collector += "|" + p;
+
+            foreach (var i in inputstrings)
+            {
+                using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i)))))
+                    while (rr.Read())
+                        if (rr.Name == "rev")
+                        {
+                            string user = rr.GetAttribute("user");
+                            if (stats.ContainsKey(user))
+                                stats[user]++;
+                            else stats.Add(user, 1);
+                        }
+            }
+        }
+
+        c = 0;
         result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
