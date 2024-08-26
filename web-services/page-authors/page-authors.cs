@@ -27,7 +27,7 @@ class Program
     {
         var cl = new WebClient();
         var srcpages = new List<string>();
-        //Environment.SetEnvironmentVariable("QUERY_STRING", "type=links&source=Проект:Востоковедная неделя/Статьи&notless=1");
+        //Environment.SetEnvironmentVariable("QUERY_STRING", "type=category&source=Статьи+проекта+Вымысел+III+уровня+низкой+важности&notless=2");
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == "" || input == null)
         {
@@ -46,7 +46,7 @@ class Program
         }
         int notless = Convert.ToInt32(parameters[2]);
         string result = "";
-        var pageids = new HashSet<string>();
+        var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
         var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", "ruwiki"));
@@ -56,13 +56,13 @@ class Program
         //----------------------------------------------------------------------------
         if (type == "category")
         {
-            foreach(var s in srcpages)
+            foreach (var s in srcpages)
             {
                 command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
-                    if (!pageids.Contains(r.GetString(0)))
-                        pageids.Add(r.GetString(0));
+                    if (!pageids.Contains(r.GetInt32(0)))
+                        pageids.Add(r.GetInt32(0));
                 r.Close();
             }
 
@@ -88,11 +88,11 @@ class Program
                 command = new MySqlCommand("select tl_from from templatelinks where tl_title=\"" + s + "\" and tl_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
-                    if (!pageids.Contains(r.GetString(0)))
-                        pageids.Add(r.GetString(0));
+                    if (!pageids.Contains(r.GetInt32(0)))
+                        pageids.Add(r.GetInt32(0));
                 r.Close();
             }
-            
+
             foreach (var p in pageids)
             {
                 command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
@@ -146,7 +146,7 @@ class Program
                                 else stats.Add(user, 1);
                             }
                 }
-                catch(Exception e) { continue; }
+                catch (Exception e) { continue; }
             }
         }
         else
