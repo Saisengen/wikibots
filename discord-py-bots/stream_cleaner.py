@@ -102,28 +102,25 @@ if __name__ == '__main__':
                 channel = client.get_channel(channel_id)
             except Exception as e:
                 print(f'get_messages 1: {e}')
-            else:
-                try:
-                    messages = channel.history(limit=30, oldest_first=False)
-                    async for msg in messages:
-                        print(msg)
-                        if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
-                            lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
-                            rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '') \
-                                if 'diff' in msg.embeds[0].url \
-                                else msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?oldid=', '')
-                            api_url = f'https://{lang}.wikipedia.org/w/api.php'
-                            status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
-                            if status is None or status is False:
-                                status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
-                            if status:
-                                try:
-                                    await msg.delete()
-                                    await asyncio.sleep(3.0)
-                                except Exception as e:
-                                    print(f'get_messages 2: {e}')
-                except Exception as e:
-                    print(f'get_messages 3: {e}')
+                continue
+            try:
+                messages = channel.history(limit=30, oldest_first=False)
+                async for msg in messages:
+                    if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
+                        lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
+                        rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
+                        api_url = f'https://{lang}.wikipedia.org/w/api.php'
+                        status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
+                        if status is None or status is False:
+                            status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
+                        if status:
+                            try:
+                                await msg.delete()
+                                await asyncio.sleep(3.0)
+                            except Exception as e:
+                                print(f'get_messages 2: {e}')
+            except Exception as e:
+                print(f'get_messages 3: {e}')
         await session.close()
 
 
