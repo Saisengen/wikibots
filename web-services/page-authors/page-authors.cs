@@ -54,6 +54,7 @@ class Program
         MySqlCommand command;
         MySqlDataReader r;
         int c = 0;
+        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
         //----------------------------------------------------------------------------
         if (type == "category")
         {
@@ -125,12 +126,12 @@ class Program
         else
             Sendresponse("category", "", 2, "Incorrect list type");
 
+        var inputstrings = new List<string>();
         if (type == "category" || type == "template")
         {
-            var inputstrings = new List<string>();
             string collector = "";
             foreach (var p in pageids)
-                if (++c % 100 == 0)
+                if (++c % 50 == 0)
                 {
                     inputstrings.Add(collector.Substring(1));
                     collector = "";
@@ -139,7 +140,6 @@ class Program
                     collector += "|" + p;
 
             foreach (var i in inputstrings)
-            {
                 using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i)))))
                     while (rr.Read())
                         if (rr.Name == "rev")
@@ -149,17 +149,18 @@ class Program
                                 stats[user]++;
                             else stats.Add(user, 1);
                         }
-            }
         }
 
         c = 0;
-        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
             if (u.Value < notless)
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        Sendresponse(type, rawsource, notless, result + "</table><br>num of pages = " + pageids.Count);
+        string astr = "";
+        foreach (var i in inputstrings)
+            astr += i + "\n";
+        Sendresponse(type, rawsource, notless, result + "</table>" + astr);
     }
 }
