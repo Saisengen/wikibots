@@ -37,7 +37,7 @@ class Program
         var parameters = HttpUtility.ParseQueryString(input);
         string type = parameters[0];
         var rawsource = parameters[1];
-        var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Replace("\n", "\t").Split('\t');//удаляем пробел нулевой ширины
+        var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
         foreach (var s in source)
         {
             string upcased = char.ToUpper(s[0]) + s.Substring(1);
@@ -160,6 +160,6 @@ class Program
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        Sendresponse(type, rawsource, notless, result + "</table>");
+        Sendresponse(type, rawsource, notless, result + "</table><br>num of pages = " + pageids.Count);
     }
 }
