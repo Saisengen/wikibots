@@ -160,6 +160,9 @@ class Program
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        Sendresponse(type, rawsource, notless, result + "</table>");
+        string astr = "";
+        foreach (var i in inputstrings)
+            astr += i + "\n";
+        Sendresponse(type, rawsource, notless, result + "</table><br>numofistr = " + inputstrings.Count);
     }
 }
