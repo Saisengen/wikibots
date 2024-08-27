@@ -7,18 +7,6 @@ import discord
 import aiohttp
 from discord.ext import tasks
 
-config_bot = configparser.ConfigParser()
-config_bot.read('configs/config-py.ini')
-
-# ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
-CONFIG = {'IDS': [1212498198200062014, 1219273496371396681], 'BOTS': [1225008116048072754],
-          'TOKEN': config_bot['MAIN']['bot_token']}
-USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.12; requests'}
-Intents = discord.Intents.default()
-Intents.members, Intents.message_content = True, True
-discord.Intents.all()
-client = discord.Client(intents=Intents)
-
 
 async def flagged_check(url: str, title: str, rev_id: int, session: aiohttp.ClientSession) -> bool | None:
     """Проверка на наличие более новых проверенных ревизий."""
@@ -90,49 +78,64 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
             return True
 
 
-# Получение старых сообщений (задержка в минутах)
-@tasks.loop(seconds=120.0)
-async def get_messages() -> None:
-    """Функция запроса сообщений из лент."""
-    session = aiohttp.ClientSession(headers=USER_AGENT)
-    for channel_id in CONFIG['IDS']:
-        try:
-            channel = client.get_channel(channel_id)
-        except Exception as e:
-            print(f'get_messages 1: {e}')
-        else:
+if __name__ == '__main__':
+    config_bot = configparser.ConfigParser()
+    config_bot.read('configs/config-py.ini')
+
+    # ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
+    CONFIG = {'IDS': [1212498198200062014, 1219273496371396681], 'BOTS': [1225008116048072754],
+              'TOKEN': config_bot['MAIN']['bot_token']}
+    USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.12; requests'}
+    Intents = discord.Intents.default()
+    Intents.members, Intents.message_content = True, True
+    discord.Intents.all()
+    client = discord.Client(intents=Intents)
+
+
+    # Получение старых сообщений (задержка в минутах)
+    @tasks.loop(seconds=60.0)
+    async def get_messages() -> None:
+        """Функция запроса сообщений из лент."""
+        session = aiohttp.ClientSession(headers=USER_AGENT)
+        for channel_id in CONFIG['IDS']:
             try:
-                messages = channel.history(limit=30, oldest_first=False)
-                async for msg in messages:
-                    if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
-                        lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
-                        rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '') \
-                            if 'diff' in msg.embeds[0].url \
-                            else msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?oldid=', '')
-                        api_url = f'https://{lang}.wikipedia.org/w/api.php'
-                        status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
-                        if status is None or status is False:
-                            status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
-                        if status:
-                            try:
-                                await msg.delete()
-                                await asyncio.sleep(3.0)
-                            except Exception as e:
-                                print(f'get_messages 2: {e}')
+                channel = client.get_channel(channel_id)
             except Exception as e:
-                print(f'get_messages 3: {e}')
-    await session.close()
+                print(f'get_messages 1: {e}')
+            else:
+                try:
+                    messages = channel.history(limit=30, oldest_first=False)
+                    async for msg in messages:
+                        print(msg)
+                        if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
+                            lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
+                            rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '') \
+                                if 'diff' in msg.embeds[0].url \
+                                else msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?oldid=', '')
+                            api_url = f'https://{lang}.wikipedia.org/w/api.php'
+                            status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
+                            if status is None or status is False:
+                                status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
+                            if status:
+                                try:
+                                    await msg.delete()
+                                    await asyncio.sleep(3.0)
+                                except Exception as e:
+                                    print(f'get_messages 2: {e}')
+                except Exception as e:
+                    print(f'get_messages 3: {e}')
+        await session.close()
 
 
-@client.event
-async def on_ready():
-    """Событие после запуска бота."""
+    @client.event
+    async def on_ready():
+        """Событие после запуска бота."""
 
-    try:
-        if not get_messages.is_running():
-            await get_messages.start()
-    except Exception as e:
-        print(f'on_ready 1: {e}')
+        try:
+            if not get_messages.is_running():
+                await get_messages.start()
+        except Exception as e:
+            print(f'on_ready 1: {e}')
 
 
-client.run(token=CONFIG['TOKEN'], reconnect=True, log_level=logging.WARN)
+    client.run(token=CONFIG['TOKEN'], reconnect=True, log_level=logging.WARN)
