@@ -27,7 +27,6 @@ class Program
     {
         var cl = new WebClient();
         var srcpages = new List<string>();
-        //Environment.SetEnvironmentVariable("QUERY_STRING", "type=category&source=Статьи+проекта+Вымысел+III+уровня+низкой+важности&notless=2");
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == "" || input == null)
         {
@@ -126,47 +125,27 @@ class Program
         else
             Sendresponse("category", "", 2, "Incorrect list type");
 
-        var inputstrings = new List<string>();
-        string apiout = "";
         if (type == "category" || type == "template")
-        {
-            string collector = "";
             foreach (var p in pageids)
-                if (++c % 50 == 0)
-                {
-                    inputstrings.Add(collector.Substring(1));
-                    collector = "";
-                }
-                else
-                    collector += "|" + p;
-            if (collector != "")
-                inputstrings.Add(collector);
-
-            foreach (var i in inputstrings)
             {
-                apiout = Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i));
-                using (var rr = new XmlTextReader(new StringReader(apiout)))
-                    while (rr.Read())
-                        if (rr.Name == "rev")
-                        {
-                            string user = rr.GetAttribute("user");
-                            if (stats.ContainsKey(user))
-                                stats[user]++;
-                            else stats.Add(user, 1);
-                        }
+                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
+                r = command.ExecuteReader();
+                while (r.Read())
+                {
+                    string user = r.GetString(0);
+                    if (stats.ContainsKey(user))
+                        stats[user]++;
+                    else stats.Add(user, 1);
+                }
+                r.Close();
             }
-        }
 
-        c = 0;
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
             if (u.Value < notless)
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        string astr = "";
-        foreach (var i in inputstrings)
-            astr += i + "\n";
-        Sendresponse(type, rawsource, notless, result + "</table><br>" + inputstrings[0] + apiout);
+        Sendresponse(type, rawsource, notless, result + "</table>");
     }
 }
