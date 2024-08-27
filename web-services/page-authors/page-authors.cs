@@ -127,6 +127,7 @@ class Program
             Sendresponse("category", "", 2, "Incorrect list type");
 
         var inputstrings = new List<string>();
+        string apiout = "";
         if (type == "category" || type == "template")
         {
             string collector = "";
@@ -142,7 +143,9 @@ class Program
                 inputstrings.Add(collector);
 
             foreach (var i in inputstrings)
-                using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i)))))
+            {
+                apiout = Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i));
+                using (var rr = new XmlTextReader(new StringReader(apiout)))
                     while (rr.Read())
                         if (rr.Name == "rev")
                         {
@@ -151,6 +154,7 @@ class Program
                                 stats[user]++;
                             else stats.Add(user, 1);
                         }
+            }
         }
 
         c = 0;
@@ -163,6 +167,6 @@ class Program
         string astr = "";
         foreach (var i in inputstrings)
             astr += i + "\n";
-        Sendresponse(type, rawsource, notless, result + "</table><br>numofistr = " + inputstrings.Count);
+        Sendresponse(type, rawsource, notless, result + "</table><br>" + inputstrings[0] + apiout);
     }
 }
