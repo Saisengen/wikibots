@@ -138,6 +138,8 @@ class Program
                 }
                 else
                     collector += "|" + p;
+            if (collector != "")
+                inputstrings.Add(collector);
 
             foreach (var i in inputstrings)
                 using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + i)))))
@@ -158,9 +160,6 @@ class Program
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        string astr = "";
-        foreach (var i in inputstrings)
-            astr += i + "\n";
-        Sendresponse(type, rawsource, notless, result + "</table>" + astr);
+        Sendresponse(type, rawsource, notless, result + "</table>");
     }
 }
