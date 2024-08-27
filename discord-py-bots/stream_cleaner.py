@@ -24,7 +24,6 @@ async def flagged_check(url: str, title: str, rev_id: int, session: aiohttp.Clie
             return True
     except Exception as e:
         print(f'flagged_check 1: {e}')
-    return False
 
 
 async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.ClientSession) -> bool | None:
@@ -111,7 +110,7 @@ if __name__ == '__main__':
                         rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
                         api_url = f'https://{lang}.wikipedia.org/w/api.php'
                         status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
-                        if status is None or status is False:
+                        if not status:
                             status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
                         if status:
                             try:
@@ -121,11 +120,14 @@ if __name__ == '__main__':
                                 print(f'get_messages 2: {e}')
             except Exception as e:
                 print(f'get_messages 3: {e}')
-        await session.close()
+        try:
+            await session.close()
+        except Exception as e:
+            print(f'get_messages 4: {e}')
 
 
     @client.event
-    async def on_ready():
+    async def on_ready() -> None:
         """Событие после запуска бота."""
 
         try:
