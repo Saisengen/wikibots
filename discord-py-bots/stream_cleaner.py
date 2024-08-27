@@ -62,7 +62,7 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
         sha1 = page['revisions'][0]['sha1']
         # Запрашиваем хэши всех правок до целевой ревизии
         # здесь можно было бы уже во втором запросе запросить все ревизии и третий не слать. Не уверен, что
-        # предпочтительнее с т.з нагрузки на сервер: два запроса или од ин с неограниченным кол-вом ревизий
+        # предпочтительнее с т.з нагрузки на сервер: два запроса или один с неограниченным кол-вом ревизий
         data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'sha1', 'rvlimit': 50,
                 'rvendid': rev_id, 'format': 'json', 'utf8': 1, 'titles': title}
         try:
