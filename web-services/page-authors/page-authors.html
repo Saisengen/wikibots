@@ -9,18 +9,18 @@ Content-type: text/html
 </head><body>
 <center>
 <form action="page-authors">
-Источник: страницы
-<input type="radio" name="type" value="cat" required %checked_cat%>из категории
-<input type="radio" name="type" value="tmplt" required %checked_tmplt%>с шаблоном
-<input type="radio" name="type" value="links" required %checked_links%>перечисленные на странице
-<br>
-<input type="radio" name="type" value="talktmplt" required %checked_talktmplt%>с шаблоном на СО
-<input type="radio" name="type" value="talkcat" required %checked_talkcat%>с категорией на СО
 Проект: <input type="text" name="wiki" value="%wiki%" required>
+Источник: страницы
+<label><input type="radio" name="type" value="cat" required %checked_cat%>из категории</label>
+<label><input type="radio" name="type" value="tmplt" required %checked_tmplt%>с шаблоном</label>
+<label><input type="radio" name="type" value="links" required %checked_links%>перечисленные на странице</label>
+<br>
+<label><input type="radio" name="type" value="talktmplt" required %checked_talktmplt%>с шаблоном на СО</label>
+<label><input type="radio" name="type" value="talkcat" required %checked_talkcat%>с категорией на СО</label>
 <br><br>
 <label for="source">Список категорий/шаблонов/страниц: </label><textarea name="source" placeholder="Введите список категорий либо шаблонов, название каждого на новой строке, без префиксов `Шаблон`/`Категория`, либо название страницы, на которой даны ссылки на обсчитываемые страницы" wrap="soft" rows="5" cols="60" required>%source%</textarea>
 <br><br>
-<label for="notless">Выводить участников, создавших не менее </label><input type="number" name="notless" value="%notless%" required> статей
+<label for="notless">Выводить участников, создавших не менее </label><input type="number" name="notless" value="%notless%" style="width:3em" required> статей
 <button type="submit">Пуск</button>
 </form><br>
 %result%
