@@ -36,7 +36,7 @@ class Program
             return;
         }
         var parameters = HttpUtility.ParseQueryString(input);
-
+        int notless = -1;
         string type = parameters["type"];
         string project = parameters["wiki"];
         var rawsource = parameters["source"];
@@ -47,7 +47,11 @@ class Program
             if (!srcpages.Contains(upcased))
                 srcpages.Add(upcased);
         }
-        int notless = Convert.ToInt32(parameters["notless"]);
+        try
+        {
+            notless = Convert.ToInt32(parameters["notless"]);
+        }
+        catch { Sendresponse(type, project, rawsource, 2, "В последнее поле введено не число."); }
         string result = "";
         var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
