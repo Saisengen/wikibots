@@ -11,12 +11,12 @@ Content-type: text/html
 <form action="page-authors">
 Проект: <input type="text" name="wiki" value="%wiki%" required>
 Источник: страницы
-<label><input type="radio" name="type" value="cat" required %checked_cat%>из категории</label>
-<label><input type="radio" name="type" value="tmplt" required %checked_tmplt%>с шаблоном</label>
-<label><input type="radio" name="type" value="links" required %checked_links%>перечисленные на странице</label>
+<label><input type="radio" name="type" value="cat" required %checked_cat%>из категорий</label>
+<label><input type="radio" name="type" value="tmplt" required %checked_tmplt%>с шаблонами</label>
 <br>
-<label><input type="radio" name="type" value="talktmplt" required %checked_talktmplt%>с шаблоном на СО</label>
-<label><input type="radio" name="type" value="talkcat" required %checked_talkcat%>с категорией на СО</label>
+<label><input type="radio" name="type" value="links" required %checked_links%>перечисленные на страницах</label>
+<label><input type="radio" name="type" value="talktmplt" required %checked_talktmplt%>с шаблонами на СО</label>
+<label><input type="radio" name="type" value="talkcat" required %checked_talkcat%>с категориями на СО</label>
 <br><br>
 <label for="source">Список категорий/шаблонов/страниц: </label><textarea name="source" placeholder="Введите список категорий либо шаблонов, название каждого на новой строке, без префиксов `Шаблон`/`Категория`, либо название страницы, на которой даны ссылки на обсчитываемые страницы" wrap="soft" rows="5" cols="60" required>%source%</textarea>
 <br><br>
