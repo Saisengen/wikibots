@@ -65,7 +65,7 @@ class Program
         if (type == "cat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s.Replace(" ", "_") + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
@@ -75,7 +75,7 @@ class Program
         else if (type == "tmplt")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select tl_from from templatelinks where tl_title=\"" + s + "\" and tl_namespace=10;", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select tl_from from templatelinks join linktarget on lt_id=tl_target_id where lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
@@ -85,7 +85,7 @@ class Program
         else if (type == "talktmplt")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from where tl_title=\"" + s + "\" and tl_namespace=10;", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
@@ -95,7 +95,7 @@ class Program
         else if (type == "talkcat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_to=\"" + s.Replace(" ", "_") + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
@@ -153,7 +153,7 @@ class Program
                                 else stats.Add(user, 1);
                             }
                 }
-                catch (Exception e) { continue; }
+                catch { continue; }
             }
 
         foreach (var u in stats.OrderByDescending(u => u.Value))
