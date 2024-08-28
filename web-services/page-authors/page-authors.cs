@@ -10,10 +10,6 @@ using System.Text;
 
 class Program
 {
-    static string url2db(string url)
-    {
-        return url.Replace(".", "").Replace("wikipedia", "wiki");
-    }
     static void Sendresponse(string type, string project, string source, int notless, string result)
     {
         string template = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "page-authors.html")).ReadToEnd();
@@ -41,9 +37,9 @@ class Program
         }
         var parameters = HttpUtility.ParseQueryString(input);
 
-        string type = parameters[0];
-        string project = parameters[1];
-        var rawsource = parameters[2];
+        string type = parameters["type"];
+        string project = parameters["wiki"];
+        var rawsource = parameters["source"];
         var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
         foreach (var s in source)
         {
@@ -51,17 +47,17 @@ class Program
             if (!srcpages.Contains(upcased))
                 srcpages.Add(upcased);
         }
-        int notless = Convert.ToInt32(parameters[3]);
+        int notless = Convert.ToInt32(parameters["notless"]);
         string result = "";
         var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
-        var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", url2db(project)));
+        var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", project.Replace(".", "").Replace("wikipedia", "wiki")));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
         int c = 0;
-        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал страниц</th></tr>\n";
+        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
         if (type == "cat")
             foreach (var s in srcpages)
             {
