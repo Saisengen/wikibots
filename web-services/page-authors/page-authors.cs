@@ -10,7 +10,7 @@ using System.Text;
 
 class Program
 {
-    static void Sendresponse(string type, string project, string source, int notless, string result)
+    static void Sendresponse(string type, string project, string source, int notless, string result, string sizetype, int size)
     {
         string template = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "page-authors.html")).ReadToEnd();
         if (type == "cat")
@@ -23,7 +23,11 @@ class Program
             template = template.Replace("%checked_links%", "checked");
         else if (type == "talkcat")
             template = template.Replace("%checked_talkcat%", "checked");
-        Console.WriteLine(template.Replace("%result%", result).Replace("%source%", source).Replace("%wiki%", project).Replace("%notless%", notless.ToString()));
+        if (sizetype == "more")
+            template = template.Replace("%checked_more%", "checked");
+        else
+            template = template.Replace("%checked_less%", "checked");
+        Console.WriteLine(template.Replace("%result%", result).Replace("%source%", source).Replace("%wiki%", project).Replace("%size%", size.ToString()).Replace("%notless%", notless.ToString()));
     }
     static void Main()
     {
@@ -32,26 +36,28 @@ class Program
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == "" || input == null)
         {
-            Sendresponse("cat", "ru.wikipedia", "", 2, "");
+            Sendresponse("cat", "ru.wikipedia", "", 2, "", "more", 0);
             return;
         }
         var parameters = HttpUtility.ParseQueryString(input);
-        int notless = -1;
+        int notless = -1, size = 0;
         string type = parameters["type"];
         string project = parameters["wiki"];
+        string sign = parameters["sizetype"] == "more" ? ">" : "<";
         var rawsource = parameters["source"];
         var source = rawsource.Replace(" ", "_").Replace("\u200E", "").Replace("\r", "").Split('\n');//удаляем пробел нулевой ширины
         foreach (var s in source)
         {
-            string upcased = char.ToUpper(s[0]) + s.Substring(1);
+            string upcased = char.ToUpper(s[0]) + s.Substring(1).Replace(" ", "_");
             if (!srcpages.Contains(upcased))
                 srcpages.Add(upcased);
         }
         try
         {
             notless = Convert.ToInt32(parameters["notless"]);
+            size = Convert.ToInt32(parameters["size"]);
         }
-        catch { Sendresponse(type, project, rawsource, 2, "В последнее поле введено не число."); }
+        catch { Sendresponse(type, project, rawsource, 2, "Введено не целое число.", parameters["sizetype"], 0); }
         string result = "";
         var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
@@ -65,7 +71,7 @@ class Program
         if (type == "cat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s.Replace(" ", "_") + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
@@ -85,7 +91,7 @@ class Program
         else if (type == "talktmplt")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where page_len " + sign + size*1024 + " and lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
@@ -95,7 +101,7 @@ class Program
         else if (type == "talkcat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where cl_to=\"" + s.Replace(" ", "_") + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where page_len " + sign + size*1024 + " and cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
@@ -116,17 +122,15 @@ class Program
                         cont = xr.GetAttribute("plcontinue");
                         while (xr.Read())
                             if (xr.Name == "pl")
-                                pagenames.Add(xr.GetAttribute("title"));
+                                pagenames.Add(xr.GetAttribute("title").Replace(" ", "_"));
                     }
                 }
             }
-        else
-            Sendresponse("cat", "ru.wikipedia", "", 2, "Incorrect list type");
 
         if (type == "cat" || type == "tmplt")
-            foreach (var p in pageids)
+            foreach (var id in pageids)
             {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + p + "\" order by rev_timestamp limit 1);", connect);
+                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + id + "\" order by rev_timestamp limit 1);", connect);
                 r = command.ExecuteReader();
                 while (r.Read())
                 {
@@ -139,21 +143,31 @@ class Program
             }
 
         if (type == "talkcat" || type == "talktmplt" || type == "links")
-            foreach (var p in pagenames)
+            foreach (var name in pagenames)
             {
-                try
+                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision join page on rev_page=page_id where page_title=\"" + name + "\" order by rev_timestamp limit 1);", connect);
+                r = command.ExecuteReader();
+                while (r.Read())
                 {
-                    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(p))))))
-                        while (rr.Read())
-                            if (rr.Name == "rev")
-                            {
-                                string user = rr.GetAttribute("user");
-                                if (stats.ContainsKey(user))
-                                    stats[user]++;
-                                else stats.Add(user, 1);
-                            }
+                    string user = r.GetString(0);
+                    if (stats.ContainsKey(user))
+                        stats[user]++;
+                    else stats.Add(user, 1);
                 }
-                catch { continue; }
+                r.Close();
+                //try
+                //{
+                //    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(p))))))
+                //        while (rr.Read())
+                //            if (rr.Name == "rev")
+                //            {
+                //                string user = rr.GetAttribute("user");
+                //                if (stats.ContainsKey(user))
+                //                    stats[user]++;
+                //                else stats.Add(user, 1);
+                //            }
+                //}
+                //catch { continue; }
             }
 
         foreach (var u in stats.OrderByDescending(u => u.Value))
@@ -162,6 +176,6 @@ class Program
                 break;
             result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
-        Sendresponse(type, project, rawsource, notless, result + "</table>");
+        Sendresponse(type, project, rawsource, notless, result + "</table>", parameters["sizetype"], size);
     }
 }
