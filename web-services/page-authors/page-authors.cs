@@ -145,29 +145,29 @@ class Program
         if (type == "talkcat" || type == "talktmplt" || type == "links")
             foreach (var name in pagenames)
             {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision join page on rev_page=page_id where page_title=\"" + name + "\" order by rev_timestamp limit 1);", connect);
-                r = command.ExecuteReader();
-                while (r.Read())
-                {
-                    string user = r.GetString(0);
-                    if (stats.ContainsKey(user))
-                        stats[user]++;
-                    else stats.Add(user, 1);
-                }
-                r.Close();
-                //try
+                //command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision join page on rev_page=page_id where page_title=\"" + name + "\" order by rev_timestamp limit 1);", connect);
+                //r = command.ExecuteReader();
+                //while (r.Read())
                 //{
-                //    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(p))))))
-                //        while (rr.Read())
-                //            if (rr.Name == "rev")
-                //            {
-                //                string user = rr.GetAttribute("user");
-                //                if (stats.ContainsKey(user))
-                //                    stats[user]++;
-                //                else stats.Add(user, 1);
-                //            }
+                //    string user = r.GetString(0);
+                //    if (stats.ContainsKey(user))
+                //        stats[user]++;
+                //    else stats.Add(user, 1);
                 //}
-                //catch { continue; }
+                //r.Close();
+                try
+                {
+                    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name))))))
+                        while (rr.Read())
+                            if (rr.Name == "rev")
+                            {
+                                string user = rr.GetAttribute("user");
+                                if (stats.ContainsKey(user))
+                                    stats[user]++;
+                                else stats.Add(user, 1);
+                            }
+                }
+                catch { continue; }
             }
 
         foreach (var u in stats.OrderByDescending(u => u.Value))
