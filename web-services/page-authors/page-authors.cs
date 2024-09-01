@@ -58,7 +58,7 @@ class Program
             size = Convert.ToInt32(parameters["size"]);
         }
         catch { Sendresponse(type, project, rawsource, 2, "Введено не целое число.", parameters["sizetype"], 0); }
-        string result = "";
+        string result = "", size_condition = size == 0 ? "" : " page_len" + sign + size * 1024 + " and ";
         var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
         var stats = new Dictionary<string, int>();
@@ -67,11 +67,11 @@ class Program
         MySqlCommand command;
         MySqlDataReader r;
         int c = 0;
-        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал статей</th></tr>\n";
+        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал(а) статей</th></tr>\n";
         if (type == "cat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cl_from from categorylinks where cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cl_from from categorylinks " + (size == 0 ? "" : "join page on page_id=cl_from") + " where " + size_condition + " cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
@@ -81,27 +81,27 @@ class Program
         else if (type == "tmplt")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select tl_from from templatelinks join linktarget on lt_id=tl_target_id where lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select tl_from from templatelinks " + (size == 0 ? "" : "join page on page_id=tl_from") + " join linktarget on lt_id=tl_target_id where " + size_condition + " lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pageids.Contains(r.GetInt32(0)))
                         pageids.Add(r.GetInt32(0));
                 r.Close();
             }
-        else if (type == "talktmplt")
+        else if (type == "talkcat")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where page_len " + sign + size*1024 + " and lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where " + size_condition + " cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
                         pagenames.Add(r.GetString(0));
                 r.Close();
             }
-        else if (type == "talkcat")
+        else if (type == "talktmplt")
             foreach (var s in srcpages)
             {
-                command = new MySqlCommand("select cast(page_title as char) title from categorylinks join page on page_id=cl_from where page_len " + sign + size*1024 + " and cl_to=\"" + s + "\";", connect) { CommandTimeout = 99999 };
+                command = new MySqlCommand("select cast(page_title as char) title from templatelinks join page on page_id=tl_from join linktarget on lt_id=tl_target_id where " + size_condition + " lt_title=\"" + s + "\" and lt_namespace=10;", connect) { CommandTimeout = 99999 };
                 r = command.ExecuteReader();
                 while (r.Read())
                     if (!pagenames.Contains(r.GetString(0)))
@@ -144,18 +144,7 @@ class Program
 
         if (type == "talkcat" || type == "talktmplt" || type == "links")
             foreach (var name in pagenames)
-            {
-                //command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision join page on rev_page=page_id where page_title=\"" + name + "\" order by rev_timestamp limit 1);", connect);
-                //r = command.ExecuteReader();
-                //while (r.Read())
-                //{
-                //    string user = r.GetString(0);
-                //    if (stats.ContainsKey(user))
-                //        stats[user]++;
-                //    else stats.Add(user, 1);
-                //}
-                //r.Close();
-                try
+                try//обращение к БД гораздо медленнее
                 {
                     using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name))))))
                         while (rr.Read())
@@ -168,7 +157,6 @@ class Program
                             }
                 }
                 catch { continue; }
-            }
 
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
