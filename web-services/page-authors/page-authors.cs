@@ -132,7 +132,7 @@ class Program
             foreach (var id in pageids)
                 try//обращение к БД гораздо медленнее
                 {
-                    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageis=" + id)))))
+                    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id)))))
                         while (rr.Read())
                             if (rr.Name == "rev")
                             {
@@ -143,18 +143,6 @@ class Program
                             }
                 }
                 catch { continue; }
-        //{
-        //    command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + id + "\" order by rev_timestamp limit 1);", connect);
-        //    r = command.ExecuteReader();
-        //    while (r.Read())
-        //    {
-        //        string user = r.GetString(0);
-        //        if (stats.ContainsKey(user))
-        //            stats[user]++;
-        //        else stats.Add(user, 1);
-        //    }
-        //    r.Close();
-        //}
 
         if (type == "talkcat" || type == "talktmplt" || type == "links")
             foreach (var name in pagenames)
