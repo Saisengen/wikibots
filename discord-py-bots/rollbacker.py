@@ -558,15 +558,21 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
     lang = get_lang(diff_url)
     rev_id = diff_url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
     session = aiohttp.ClientSession(headers=USER_AGENT)
-    r = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, title, session)
-    if not r:
-        r = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', title, rev_id, session)
-    if r:
-        return ['Такой страницы уже не существует, правки были откачены или страница отпатрулирована.',
-                f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
-    data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'ids|timestamp', 'rvlimit': 500,
-            'rvendid': rev_id, 'rvuser': get_name_from_embed(lang, embed.author.url), 'titles': title,
-            'format': 'json', 'utf8': 1, 'uselang': 'ru'}
+    try:
+        r = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, title, session)
+    except Exception as e:
+        print(f'rollback error 1.1: {e}')
+        await session.close()
+    else:
+        if not r:
+            r = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', title, rev_id, session)
+        if r:
+            await session.close()
+            return ['Такой страницы уже не существует, правки были откачены или страница отпатрулирована.',
+                    f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
+        data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'ids|timestamp', 'rvlimit': 500,
+                'rvendid': rev_id, 'rvuser': get_name_from_embed(lang, embed.author.url), 'titles': title,
+                'format': 'json', 'utf8': 1, 'uselang': 'ru'}
     try:
         r = await session.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
         r = await r.json()
@@ -630,6 +636,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                 else:
                     if check_revs == 0:
                         await session_with_auth.close()
+                        await session.close()
                         return ['Все версии принадлежат одному участнику', f'[{title}]'
                                                                            f'(<https://{lang}.wikipedia.org/wiki/'
                                                                            f'{title.replace(" ", "_")}>) (ID: '
@@ -642,6 +649,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                         edit_token = await r_token.json()
                         edit_token = edit_token['query']['tokens']['csrftoken']
                     except Exception as e:
+                        await session.close()
                         await session_with_auth.close()
                         print(f'rollback error 6: {e}')
                     else:
@@ -662,6 +670,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                                 ['Success', f'[правку](<https://{lang}.wikipedia.org/w/index.php?diff='
                                             f'{r["edit"]["newrevid"]}>)', title]
                         finally:
+                            await session.close()
                             await session_with_auth.close()
                 finally:
                     await session.close()
@@ -859,7 +868,7 @@ async def on_interaction(inter):
                 r = await do_rollback(msg.embeds[0], actor, action_type='undo', reason=reason)
                 try:
                     if r[0] == 'Success':
-                        await channel.send(content=f'{actor} отменил {r[1]} на странице {r[2]}.')
+                        await channel.send(content=f'{actor} выполнил отмену на странице {r[1]}.')
                         send_to_db(actor, 'undos', get_trigger(msg.embeds[0]))
                         await msg.delete()
                     else:
@@ -887,7 +896,7 @@ async def on_interaction(inter):
                     try:
                         if r[0] == 'Success':
                             await inter.message.delete()
-                            await channel.send(content=f'{actor} откатил {r[1]} на странице {r[2]}.')
+                            await channel.send(content=f'{actor} выполнил откат на странице {r[1]}.')
                             send_to_db(actor, 'rollbacks', get_trigger(msg.embeds[0]))
                         else:
                             if 'были откачены' in r[0]:
@@ -933,7 +942,7 @@ async def on_interaction(inter):
                                 f'как неконструктивную, но уже отменённую.')
                     send_to_db(actor, 'approves', get_trigger(msg.embeds[0]))
                 except Exception as e:
-                    print(f'On_Interaction error 6: {e}')
+                    print(f'On_Interaction error 6.1: {e}')
 
 
 @client.event
