@@ -1,7 +1,7 @@
 """Анти-вандальный бот"""
 
 import asyncio
-import configparser
+import os
 import json
 import logging
 import time
@@ -14,15 +14,13 @@ from discord.ui import Button, View
 import aiohttp
 from antivand_cleaner import revision_check, flagged_check
 
-DEBUG = {'enable': False, 'ID': 1237345748778221649, 'SQL': {'user': 's55857', 'pass': '', 'port': 4711}}
 
-CONFIG_BOT = configparser.ConfigParser()
-CONFIG_PATH = 'config-py.ini' if DEBUG['enable'] is True else 'configs/config-py.ini'
-CONFIG_BOT.read(CONFIG_PATH)
+DEBUG = {'enable': False, 'ID': 1237345748778221649, 'port': 4711}
+DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': DEBUG['port'], 'host': '127.0.0.1',
+              'password': os.environ['TOOL_TOOLSDB_PASSWORD'], 'database': f'{os.environ["TOOL_TOOLSDB_USER"]}__rv'}
 
-TOKEN = CONFIG_BOT['MAIN']['bot_token']
-BEARER_TOKEN = CONFIG_BOT['MAIN']['bearer_token']
-DEBUG['SQL']['pass'] = CONFIG_BOT['MAIN']['DB_pass']
+TOKEN = os.environ['DISCORD_BOT_TOKEN']
+BEARER_TOKEN = os.environ['BEARER_TOKEN']
 
 # Целевой сервер, ID каналов с фидами, ID бота, ID ботов-источников, ID канала с командами,
 # ID сообщения со списком откатывающих, ID канала с источником, список админов для команд.
@@ -140,12 +138,8 @@ def get_trigger(embed: discord.Embed) -> str:
 def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) -> None:
     """Отправка в БД."""
     try:
-        if DEBUG['enable']:
-            conn = pymysql.connections.Connection(user=DEBUG['SQL']['user'], port=DEBUG['SQL']['port'],
-                                                  password=DEBUG['SQL']['pass'], database='s55857__rv',
-                                                  host='127.0.0.1')
-        else:
-            conn = toolforge.toolsdb('s55857__rv')
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
+            toolforge.toolsdb(DB_CREDITS['database']))
         with conn.cursor() as cur:
             if action_type in ['rollbacks', 'undos', 'approves', 'rfd']:
                 cur.execute('SELECT name FROM ds_antivandal WHERE name=%s;', actor)
@@ -167,12 +161,8 @@ def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) ->
 def get_from_db(is_all: bool = True, actor: str = None):
     """Получение из БД."""
     try:
-        if DEBUG['enable']:
-            conn = pymysql.connections.Connection(user=DEBUG['SQL']['user'], port=DEBUG['SQL']['port'],
-                                                  password=DEBUG['SQL']['pass'], database='s55857__rv',
-                                                  host='127.0.0.1')
-        else:
-            conn = toolforge.toolsdb('s55857__rv')
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
+            toolforge.toolsdb(DB_CREDITS['database']))
         with conn.cursor() as cur:
             i_res = False
             triggers_false = False
@@ -219,12 +209,8 @@ def get_from_db(is_all: bool = True, actor: str = None):
 def delete_from_db(actor: str) -> None:
     """Удаление из БД."""
     try:
-        if DEBUG['enable']:
-            conn = pymysql.connections.Connection(user=DEBUG['SQL']['user'], port=DEBUG['SQL']['port'],
-                                                  password=DEBUG['SQL']['pass'], database='s55857__rv',
-                                                  host='127.0.0.1')
-        else:
-            conn = toolforge.toolsdb('s55857__rv')
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
+            toolforge.toolsdb(DB_CREDITS['database']))
         with conn.cursor() as cur:
             cur.execute(f'DELETE FROM ds_antivandal WHERE name="{actor}";')
             conn.commit()
@@ -264,7 +250,7 @@ async def rollback_restart_cleaner(inter: discord.Interaction):
             session = aiohttp.ClientSession(headers=USER_AGENT)
             try:
                 await session.get(url='https://rv.toolforge.org/online.php?send=1&action=restart&name=antclr'
-                                      '&token=wb327whash2w7w6dwbbdhxylmkhauhbdj')
+                                      f'&token={os.environ["BOT_TOKEN"]}')
                 await inter.followup.send(content='Запрос отправлен.', ephemeral=True)
             except Exception as e:
                 print(f'restart_cleaner 2: {e}')
@@ -584,7 +570,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
             await session.close()
             return ['Такой страницы уже не существует.',
                     f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
-        page_id = str(list(r["query"]["pages"].keys())[0])
+        page_id = str(list(r['query']["pages"].keys())[0])
         if 'revisions' in r['query']['pages'][page_id] and len(r['query']['pages'][page_id]['revisions']) > 0:
             rev_id = r['query']['pages'][page_id]['revisions'][0]['revid']
             api_url = f'https://{lang}.wikipedia.org/w/api.php'
