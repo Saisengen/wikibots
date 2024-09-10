@@ -1,8 +1,8 @@
 """Очистка лент от уже отменённых правок и правок на удалённых страницах."""
 
+import os
 import asyncio
 import logging
-import configparser
 import discord
 import aiohttp
 from discord.ext import tasks
@@ -78,12 +78,9 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
 
 
 if __name__ == '__main__':
-    config_bot = configparser.ConfigParser()
-    config_bot.read('configs/config-py.ini')
-
     # ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
     CONFIG = {'IDS': [1212498198200062014, 1219273496371396681], 'BOTS': [1225008116048072754],
-              'TOKEN': config_bot['MAIN']['bot_token']}
+              'TOKEN': os.environ['DISCORD_BOT_TOKEN']}
     USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.12; requests'}
     Intents = discord.Intents.default()
     Intents.members, Intents.message_content = True, True
