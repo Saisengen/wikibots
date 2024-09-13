@@ -10,6 +10,9 @@ using System.Text;
 
 class Program
 {
+    static WebClient cl = new WebClient();
+    static int notless = -1, size = 0, c = 0, hidden = 0;
+    static Dictionary<string, int> stats = new Dictionary<string, int>();
     static void Sendresponse(string type, string project, string source, int notless, string result, string sizetype, int size)
     {
         string template = new StreamReader(Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), "page-authors.html")).ReadToEnd();
@@ -29,9 +32,29 @@ class Program
             template = template.Replace("%checked_less%", "checked");
         Console.WriteLine(template.Replace("%result%", result).Replace("%source%", source).Replace("%wiki%", project).Replace("%size%", size.ToString()).Replace("%notless%", notless.ToString()));
     }
+    static void count(string request)
+    {
+        try//обращение к БД гораздо медленнее
+        {
+            using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData(request)))))
+                while (rr.Read())
+                    if (rr.Name == "rev")
+                    {
+                        if (rr.GetAttribute("userhidden") == "")
+                            hidden++;
+                        else
+                        {
+                            string user = rr.GetAttribute("user");
+                            if (stats.ContainsKey(user))
+                                stats[user]++;
+                            else stats.Add(user, 1);
+                        }
+                    }
+        }
+        catch { }
+    }
     static void Main()
     {
-        var cl = new WebClient();
         var srcpages = new List<string>();
         string input = Environment.GetEnvironmentVariable("QUERY_STRING");
         if (input == "" || input == null)
@@ -40,7 +63,6 @@ class Program
             return;
         }
         var parameters = HttpUtility.ParseQueryString(input);
-        int notless = -1, size = 0;
         string type = parameters["type"];
         string project = parameters["wiki"];
         string sign = parameters["sizetype"] == "more" ? ">" : "<";
@@ -58,16 +80,13 @@ class Program
             size = Convert.ToInt32(parameters["size"]);
         }
         catch { Sendresponse(type, project, rawsource, 2, "Введено не целое число.", parameters["sizetype"], 0); }
-        string result = "", size_condition = size == 0 ? "" : " page_len" + sign + size * 1024 + " and ";
+        string size_condition = size == 0 ? "" : " page_len" + sign + size * 1024 + " and ";
         var pageids = new HashSet<int>();
         var pagenames = new HashSet<string>();
-        var stats = new Dictionary<string, int>();
         var connect = new MySqlConnection(Environment.GetEnvironmentVariable("CONN_STRING").Replace("%project%", project.Replace(".", "").Replace("wikipedia", "wiki")));
         connect.Open();
         MySqlCommand command;
         MySqlDataReader r;
-        int c = 0;
-        result = "<table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал(а) статей</th></tr>\n";
         if (type == "cat")
             foreach (var s in srcpages)
             {
@@ -129,35 +148,13 @@ class Program
 
         if (type == "cat" || type == "tmplt")
             foreach (var id in pageids)
-            {
-                command = new MySqlCommand("select cast(actor_name as char) user from actor where actor_id=(select rev_actor from revision where rev_page=\"" + id + "\" order by rev_timestamp limit 1);", connect);
-                r = command.ExecuteReader();
-                while (r.Read())
-                {
-                    string user = r.GetString(0);
-                    if (stats.ContainsKey(user))
-                        stats[user]++;
-                    else stats.Add(user, 1);
-                }
-                r.Close();
-            }
+                count("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + id);
 
-        if (type == "talkcat" || type == "talktmplt" || type == "links")
+        else if (type == "talkcat" || type == "talktmplt" || type == "links")
             foreach (var name in pagenames)
-                try//обращение к БД гораздо медленнее
-                {
-                    using (var rr = new XmlTextReader(new StringReader(Encoding.UTF8.GetString(cl.DownloadData("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name))))))
-                        while (rr.Read())
-                            if (rr.Name == "rev")
-                            {
-                                string user = rr.GetAttribute("user");
-                                if (stats.ContainsKey(user))
-                                    stats[user]++;
-                                else stats.Add(user, 1);
-                            }
-                }
-                catch { continue; }
+                count("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name));
 
+        string result = "Всего " + (type == "cat" || type == "tmplt" ? pageids.Count : pagenames.Count) + " страниц." + (hidden > 0 ? "Автор первой правки скрыт у " + hidden + " страниц." : "") + "<br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал(а) статей</th></tr>\n";
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
             if (u.Value < notless)
