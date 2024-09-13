@@ -154,7 +154,7 @@ class Program
             foreach (var name in pagenames)
                 count("https://" + project + ".org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&titles=" + Uri.EscapeDataString(name));
 
-        string result = "Всего " + (type == "cat" || type == "tmplt" ? pageids.Count : pagenames.Count) + " страниц." + (hidden > 0 ? "Автор первой правки скрыт у " + hidden + " страниц." : "") + "<br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал(а) статей</th></tr>\n";
+        string result = "Всего " + (type == "cat" || type == "tmplt" ? pageids.Count : pagenames.Count) + " страниц." + (hidden > 0 ? " Автор первой правки скрыт у " + hidden + " страниц." : "") + "<br><br><table border=\"1\" cellspacing=\"0\"><tr><th>№</th><th>Участник</th><th>Создал(а) статей</th></tr>\n";
         foreach (var u in stats.OrderByDescending(u => u.Value))
         {
             if (u.Value < notless)
