@@ -159,7 +159,7 @@ class Program
         {
             if (u.Value < notless)
                 break;
-            result += "<tr><td>" + ++c + "</td><td><a href=\"https://ru.wikipedia.org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
+            result += "<tr><td>" + ++c + "</td><td><a href=\"https://" + project + ".org/wiki/User:" + Uri.EscapeDataString(u.Key) + "\">" + u.Key + "</a></td><td>" + u.Value + "</td></tr>\n";
         }
         Sendresponse(type, project, rawsource, notless, result + "</table>", parameters["sizetype"], size);
     }
