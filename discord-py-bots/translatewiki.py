@@ -7,12 +7,13 @@ import pymysql
 import requests
 
 API = 'https://translatewiki.net/w/api.php'
+USER_AGENT = {'User-Agent': 'TW; iluvatar@tools.wmflabs.org; python3.11'}
 TOOLS = ['Swviewer', 'Convenient-discussions']
 LANGS = ['ru', 'uk', 'be', 'be-tarask', 'en', 'qqq']
 NAMESPACES = '1206|1207'  # wikimedia, wikimedia talk. Можно добавить выделенные пространства
 
 results, cont, timestamp_new = [], '', ''
-DEBUG = {'enable': False, 'port': 4711}
+DEBUG = {'ENABLE': False, 'port': 4711}
 DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': DEBUG['port'], 'host': '127.0.0.1',
               'password': os.environ['TOOL_TOOLSDB_PASSWORD'], 'database': f'{os.environ["TOOL_TOOLSDB_USER"]}__rv'}
 
@@ -29,7 +30,7 @@ def sender(edit) -> None:
         color = 0x7cfc00
     payload = {'content': '', 'tts': False, 'embeds': [
         {'type': 'rich', 'title': edit['title'], 'description': f'User:{edit["user"]}', 'color': color, 'url': url}]}
-    requests.post(url=f'{os.environ["DISCORD_URL_WEBHOOK"]}{os.environ["TW_WEBHOOK"]}', json=payload, timeout=30.0)
+    requests.post(url=f'{os.environ["DISCORD_URL_WEBHOOK"]}{os.environ["TW_WEBHOOK"]}', json=payload, headers=USER_AGENT, timeout=30.0)
 
 try:
     conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
@@ -47,7 +48,7 @@ else:
                 'rctype': 'edit|new'}
         if cont != '':
             data['rccontinue'] = cont
-        r = requests.post(url=API, data=data, timeout=30.0).json()
+        r = requests.post(url=API, data=data, headers=USER_AGENT, timeout=30.0).json()
         results += r['query']['recentchanges']
         if cont == '':
             timestamp_new = r['query']['recentchanges'][0]['timestamp']
