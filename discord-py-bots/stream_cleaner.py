@@ -81,7 +81,7 @@ if __name__ == '__main__':
     # ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
     CONFIG = {'IDS': [1212498198200062014, 1219273496371396681], 'BOTS': [1225008116048072754],
               'TOKEN': os.environ['DISCORD_BOT_TOKEN']}
-    USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.12; requests'}
+    USER_AGENT = {'User-Agent': 'D-V-C; iluvatar@tools.wmflabs.org; python3.11; requests'}
     Intents = discord.Intents.default()
     Intents.members, Intents.message_content = True, True
     discord.Intents.all()
