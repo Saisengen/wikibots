@@ -15,7 +15,7 @@ import aiohttp
 from antivand_cleaner import revision_check, flagged_check
 
 
-DEBUG = {'enable': False, 'ID': 1237345748778221649, 'port': 4711}
+DEBUG = {'ENABLE': False, 'ID': 1237345748778221649, 'port': 4711}
 DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': DEBUG['port'], 'host': '127.0.0.1',
               'password': os.environ['TOOL_TOOLSDB_PASSWORD'], 'database': f'{os.environ["TOOL_TOOLSDB_USER"]}__rv'}
 
@@ -25,10 +25,10 @@ BEARER_TOKEN = os.environ['BEARER_TOKEN']
 # Целевой сервер, ID каналов с фидами, ID бота, ID ботов-источников, ID канала с командами,
 # ID сообщения со списком откатывающих, ID канала с источником, список админов для команд.
 CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1219273496371396681, 1212498198200062014],
-          'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662], 'BOTCOMMANDS': 1212507148982947901,
+          'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662, 1299324425878900818], 'BOTCOMMANDS': 1212507148982947901,
           'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
           'ADMINS': [352826965494988822, 512545053223419924, 223219998745821194]}
-USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.12'}
+USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.11'}
 Intents = discord.Intents.default()
 Intents.members, Intents.message_content = True, True
 discord.Intents.all()
@@ -132,6 +132,8 @@ def get_trigger(embed: discord.Embed) -> str:
         return 'ORES'
     if color == '#00ff00':
         return 'tags'
+    if color == '#0000ff':
+        return 'replaces'
     return 'unknown'
 
 
@@ -168,9 +170,9 @@ def get_from_db(is_all: bool = True, actor: str = None):
             triggers_false = False
             if is_all:
                 cur.execute('SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), '
-                            'SUM(tags), SUM(rfd) FROM ds_antivandal')
+                            'SUM(tags), SUM(rfd), SUM(replaces) FROM ds_antivandal')
                 r = cur.fetchall()
-                cur.execute('SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) + SUM(rfd) AS am FROM '
+                cur.execute('SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) + SUM(rfd) + SUM(replaces) AS am FROM '
                             'ds_antivandal GROUP BY name ORDER BY am DESC LIMIT 5;')
                 r2 = cur.fetchall()
                 i_res = []
@@ -178,7 +180,7 @@ def get_from_db(is_all: bool = True, actor: str = None):
                     if i[0] != 'service_account':
                         i_res.append(f'{i[0]}: {i[1]}')
                 i_res = '\n'.join(i_res)
-                cur.execute('SELECT patterns, LW, ORES, tags FROM ds_antivandal_false WHERE result = "stats";')
+                cur.execute('SELECT patterns, LW, ORES, tags, replaces FROM ds_antivandal_false WHERE result = "stats";')
                 r3 = cur.fetchall()
                 patterns = r[0][3] - 172
                 patterns = 0 if patterns == 0 else float(f'{(r3[0][0]) / patterns * 100:.3f}')
@@ -188,19 +190,22 @@ def get_from_db(is_all: bool = True, actor: str = None):
                 ores = 0 if ores == 0 else float(f'{(r3[0][2]) / ores * 100:.3f}')
                 tags = r[0][6] - 63
                 tags = 0 if tags == 0 else float(f'{(r3[0][3]) / tags * 100:.3f}')
+                replaces = r[0][8] - 0
+                replaces = 0 if replaces == 0 else float(f'{(r3[0][4]) / replaces * 100:.3f}')
                 triggers_false = (f'Ложные триггеры, c 21.07.2024: паттерны — {r3[0][0]} ({patterns} %), '
-                                  f'LW — {r3[0][1]} ({lw} %), ORES — {r3[0][2]} ({ores} %), теги — {r3[0][3]} '
-                                  f'({tags} %).')
+                                  f'LW — {r3[0][1]} ({lw} %), ORES — {r3[0][2]} ({ores} %), теги — {r3[0][3]} ({tags} %), '
+                                  f'замены — {r3[0][4]} ({replaces} %).')
             else:
                 cur.execute('SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES),'
-                            ' SUM(tags), SUM(rfd) FROM ds_antivandal WHERE name=%s;', actor)
+                            ' SUM(tags), SUM(rfd), SUM(replaces) FROM ds_antivandal WHERE name=%s;', actor)
                 r = cur.fetchall()
             conn.close()
             if len(r) > 0:
                 return {'rollbacks': r[0][0], 'undos': r[0][1], 'approves': r[0][2], 'rfd': r[0][7], 'total': i_res,
-                        'patterns': r[0][3], 'LW': r[0][4], 'ORES': r[0][5], 'tags': r[0][6],
+                        'patterns': r[0][3], 'LW': r[0][4], 'ORES': r[0][5], 'tags': r[0][6], 'replaces': r[0][8],
                         'triggers': triggers_false}
-            return {'rollbacks': 0, 'undos': 0, 'approves': 0, 'rfd': 0, 'patterns': 0, 'LW': 0, 'ORES': 0, 'tags': 0}
+            return {'rollbacks': 0, 'undos': 0, 'approves': 0, 'rfd': 0, 'patterns': 0, 'LW': 0, 'ORES': 0, 'tags': 0,
+                    'replaces': 0}
     except Exception as e:
         print(f'get_from_db error 1: {e}')
         return False
@@ -305,7 +310,8 @@ async def rollback_stats_all(inter: discord.Interaction):
                                                   f'номинаций на КБУ — {r["rfd"]}.\n'
                                                   f'Наибольшее количество действий совершили:\n{r["total"]}\n'
                                                   f'Действий по типам причин: паттерны — {r["patterns"]}, '
-                                                  f'ORES — {r["ORES"]}, LW — {r["LW"]}, метки — {r["tags"]}.\n'
+                                                  f'ORES — {r["ORES"]}, LW — {r["LW"]}, метки — {r["tags"]}, '
+                                                  f'замены — {r["replaces"]}.\n'
                                                   f'{r["triggers"]}', ephemeral=True)
             except Exception as e:
                 print(f'rollback_stats_all 2: {e}')
@@ -338,7 +344,7 @@ async def rollback_stats(inter: discord.Interaction, wiki_name: str):
                                                       f'одобрений ревизий — {r["approves"]}, '
                                                       f'номинаций на КБУ — {r["rfd"]}.\n'
                                                       'Действий по типам причин, за всё время: паттерны — '
-                                                      f'{r["patterns"]}, ORES — {r["ORES"]}, '
+                                                      f'{r["patterns"]}, замены — {r["replaces"]}, ORES — {r["ORES"]}, '
                                                       f'LW — {r["LW"]}, метки — {r["tags"]}.', ephemeral=True)
             except Exception as e:
                 print(f'rollback_stats 2: {e}')
@@ -653,7 +659,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                             return [r['error']['info'], f'[{title}](<https://{lang}'
                                                         f'.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                                         f'(ID: {rev_id})'] if 'error' in r else \
-                                ['Success', f'[правку](<https://{lang}.wikipedia.org/w/index.php?diff='
+                                ['Success', f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff='
                                             f'{r["edit"]["newrevid"]}>)', title]
                         finally:
                             await session.close()
