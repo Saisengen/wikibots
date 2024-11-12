@@ -117,6 +117,8 @@ class Program
                                 request.Add(new StringContent("delete"), "action");
                                 request.Add(new StringContent(title), "title");
                                 request.Add(new StringContent(token), "token");
+                                if (ns == "0")
+                                    request.Add(new StringContent("[[ВП:КБУ#П1|редирект на красную страницу]] - [[" + title + "]]"), "reason");
                                 result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
                                 if (!result.ToString().Contains("uccess"))
                                     Console.WriteLine(result);
