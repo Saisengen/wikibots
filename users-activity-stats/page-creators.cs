@@ -53,7 +53,9 @@ class Program
         var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "kk", new string[] { "Arystanbek", "Нұрлан_Рахымжанов" } } };
         var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Участники по числу созданных страниц" }, { "kk", "Уикипедия:Бет бастауы бойынша қатысушылар" } };
         var disambigcategory = new Dictionary<string, string>() { { "ru", "Категория:Страницы значений по алфавиту" }, { "kk", "Санат:Алфавит бойынша айрық беттер" } };
-        var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{shortcut|ВП:УПЧС}}{{clear}}{{Самые активные участники}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Статьи!!Редиректы!!Дизамбиги!!Шаблоны!!Категории!!Файлы" },
+        var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{Самые активные участники}}{{shortcut|ВП:УПЧС}}<center>Бот, генерирующий таблицу, работает так: берёт " +
+                "все страницы основного пространства, включая редиректы, и для каждой смотрит имя первого правщика. Таким образом бот не засчитывает создание удалённых статей и статей, авторство в " +
+                "которых скрыто. Обновлено " + DateTime.Now.ToString("d.M.yyyy") + ".\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Статьи!!Редиректы!!Дизамбиги!!Шаблоны!!Категории!!Файлы" },
             { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
         var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
