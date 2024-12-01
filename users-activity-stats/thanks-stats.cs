@@ -3,7 +3,6 @@ using System.Linq;
 using System.Xml;
 using System.IO;
 using System;
-using System.Security.Policy;
 using System.Net.Http;
 using System.Net;
 
@@ -67,8 +66,6 @@ class Program
                     if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "item")
                     {
                         string source = rdr.GetAttribute("user");
-                        if (source == "Erokhin")
-                            continue;
                         string target = rdr.GetAttribute("title");
                         if (target != null && source != null)
                         {
@@ -91,7 +88,8 @@ class Program
             }
         }
         int c1 = 0, c2 = 0, c3 = 0;
-        string result = "{{Плавающая шапка таблицы}}<center>См. также https://mbh.toolforge.org/likes.cgi\n{|style=\"word-break: break-all\"\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👤⇨👍|место}}";
+        string result = "{{Плавающая шапка таблицы}}<center>См. также [https://mbh.toolforge.org/cgi-bin/likes интерактивную статистику].\n{|style=\"word-break: break-all\"\n|valign=top|\n{|class=" +
+            "\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👤⇨👍🏻|место}}";
         foreach (var p in thankingusers.OrderByDescending(p => p.Value))
             if (++c1 <= limit)
                 result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c1 + "}}";
@@ -103,7 +101,7 @@ class Program
                 result += "\n|-\n|" + p.Key + "||{{comment|" + p.Value + "|" + c2 + "}}";
             else
                 break;
-        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👍⇨👤|место}}";
+        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👍🏻⇨👤|место}}";
         foreach (var p in thankedusers.OrderByDescending(p => p.Value))
             if (++c3 <= limit)
                 result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c3 + "}}";
