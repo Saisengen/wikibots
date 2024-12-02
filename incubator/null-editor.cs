@@ -90,7 +90,7 @@ class MyBot : Bot
     }
     public static void Main()
     {
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         // счетчик запросов
         MyBot bot = new MyBot();
         string[] set = bot.Settings(6, site);
