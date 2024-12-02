@@ -76,7 +76,7 @@ class MyBot : Bot
     }
     public static void Main()
     {
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         Page p = new Page(site, "Википедия:Проект:Инкубатор/Статьи");
         PageList pl = new PageList(site);
         MyBot bot = new MyBot();
@@ -114,7 +114,6 @@ class MyBot : Bot
             }
             if (set[2] == "1")
             {
-                //pl.FillFromAllPages("", p2.GetNamespace(), true, 500);
                 string pURL = site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=" + set[5] + "&format=xml";
                 string h = site.GetWebPage(pURL);
                 XmlTextReader rdr = new XmlTextReader(new StringReader(h));
@@ -239,7 +238,7 @@ class MyBot : Bot
                             {
                                 if (e_cat == true)
                                 {
-                                    com = "добавлен {{В инкубаторе}}, [[User:Dibot/Скрытие категорий и интервик|скрытие категорий и/или интервик]]";
+                                    com = "добавлен {{В инкубаторе}}, [[User:IncubatorBot/Скрытие категорий и интервик|скрытие категорий и/или интервик]]";
                                 }
                                 else
                                 {
@@ -253,7 +252,7 @@ class MyBot : Bot
                             }
                             else if (e_cat == true)
                             {
-                                com = "[[User:Dibot/Скрытие категорий и интервик|скрытие категорий и/или интервик]]";
+                                com = "[[User:IncubatorBot/Скрытие категорий и интервик|скрытие категорий и/или интервик]]";
                                 try
                                 {
                                     n.Save(com, true);
