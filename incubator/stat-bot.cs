@@ -10,9 +10,9 @@ class MyBot : Bot
     {
         DateTime utcNow = DateTime.UtcNow;
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        Page pn = new Page(site, "Участник:" + creds[8] + "/TalkStat/" + utcNow.ToString("yyyyMM"));
-        Page inc = new Page(site, "Участник:" + creds[8] + "/IncubatorStat/" + utcNow.ToString("yyyyMM"));
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+        Page pn = new Page(site, "Участник:IncubatorBot/TalkStat/" + utcNow.ToString("yyyyMM"));
+        Page inc = new Page(site, "Участник:IncubatorBot/IncubatorStat/" + utcNow.ToString("yyyyMM"));
         Page incmem = new Page(site, "Проект:Инкубатор/Участники");
         Page vos = new Page(site, "Википедия:К восстановлению");
         vos.Load();
@@ -20,9 +20,9 @@ class MyBot : Bot
         inc.Load();
         incmem.Load();
         if (!pn.Exists())
-            pn.text = "{{subst:User:" + creds[8] + "/TalkStat/cap}}\n<noinclude>|}</noinclude>";
+            pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n<noinclude>|}</noinclude>";
         if (!inc.Exists())
-            inc.text = "{{subst:User:" + creds[8] + "/IncubatorStat/cap}}\n<noinclude>|}</noinclude>";
+            inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n<noinclude>|}</noinclude>";
 
         string[] cats = {"Википедия:Статьи для срочного улучшения","Статьи на улучшении более года","Статьи на улучшении более полугода","Статьи на улучшении более 90 дней","Статьи на улучшении более 30 дней",
         "Статьи на улучшении менее 30 дней","Википедия:Незакрытые обсуждения статей для улучшения","Википедия:Кандидаты на удаление","Википедия:Незакрытые обсуждения удаления страниц",
