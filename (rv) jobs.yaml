@@ -3,27 +3,45 @@
   image: python3.11
   continuous: true
   emails: none
+  filelog-stdout: logs/antvand.out
+  filelog-stderr: logs/antvand.err
 
 - name: antclr
   command: pyvenv/bin/python ./py/antivand_cleaner.py
   image: python3.11
   continuous: true
   emails: none
+  filelog-stdout: logs/antclr.out
+  filelog-stderr: logs/antclr.err
 
 - name: tw
   command: pyvenv/bin/python ./py/tw.py
   image: python3.11
   schedule: "45 * * * *"
   emails: none
+  filelog-stdout: logs/tw.out
+  filelog-stderr: logs/tw.err
 
 - name: metro
   command: pyvenv/bin/python ./py/other/metro.py
   image: python3.11
   schedule: "00 */6 * * *"
   emails: none
+  filelog-stdout: logs/metro.out
+  filelog-stderr: logs/metro.err
 
-- name: rollbacker
-  command: mono /data/project/rv/rollbacker/vand_rollbacker.exe
+- name: new-edits-check
+  command: mono ./new-edits-check/new-edits-check.exe
   image: tf-mono68
   emails: none
   continuous: true
+  filelog-stdout: new-edits-check.out
+  filelog-stderr: new-edits-check.err
+
+- name: ruukr
+  command: pyvenv/bin/python ./py/rukr.py
+  image: python3.11
+  emails: none
+  continuous: true
+  filelog-stdout: logs/rukr.out
+  filelog-stderr: logs/rukr.err
