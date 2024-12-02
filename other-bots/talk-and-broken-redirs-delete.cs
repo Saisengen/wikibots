@@ -26,7 +26,7 @@ class Program
     static void Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var site = Site(creds[8], creds[9]);
+        var site = Site(creds[0], creds[1]);
         var doc = new XmlDocument();
         var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
@@ -117,8 +117,6 @@ class Program
                                 request.Add(new StringContent("delete"), "action");
                                 request.Add(new StringContent(title), "title");
                                 request.Add(new StringContent(token), "token");
-                                if (ns == "0")
-                                    request.Add(new StringContent("[[ВП:КБУ#П1|редирект на красную страницу]] - [[" + title + "]]"), "reason");
                                 result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
                                 if (!result.ToString().Contains("uccess"))
                                     Console.WriteLine(result);
