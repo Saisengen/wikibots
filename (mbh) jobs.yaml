@@ -151,7 +151,7 @@
 - name: page-creators
   command: mono /data/project/mbh/bots/page_creators.exe
   image: tf-mono68
-  schedule: "2 17 27 * *"
+  schedule: "0 2 10 * *"
   emails: onfailure
 
 - name: summary-stats
