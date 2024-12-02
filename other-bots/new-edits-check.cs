@@ -20,29 +20,25 @@ public class Field { public string name, value; }
 public class Root { public List<Embed> embeds; }
 class Program
 {
-    static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
-        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
-        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or " +
-        "rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, diff_text,
-        comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+    static string user, ns, title, comment, newid, oldid, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes,
+        start_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
     static double ores_risk, lw_risk, ores_limit = 1;
     static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, { "multilang", 1 } };
     static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), tag_rgx = new Regex
-        (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>"),
-        editcount_rgx = new Regex(@"editcount=""(\d*)""");
+        (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
-    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
-    static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
-    static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
+    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", start_time }, { "uk", start_time } };
+    static Dictionary<string, string> last_checked_id = new Dictionary<string, string>() { { "ru", "0" }, { "uk", "0" } };
+    static Dictionary<string, string> ns_name = new Dictionary<string, string>() { { "0", "" }, { "6", "file:" }, { "10", "template:" }, { "14", "category:" }, { "100", "portal:" }, { "104", "проект:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool user_is_anon, new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) }, { "liftwing", new color(255, 255, 0) }, { "ores", new color(255, 0, 255) }, { "tag", new color(0, 255, 0) } };
     static HttpClient Site(string lang, string login, string password)
@@ -101,19 +97,19 @@ class Program
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
         discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
 
-        if (discord_diff.Length > 1022)
-            discord_diff = discord_diff.Substring(0, 1022);
-        if (comment.Length > 254)
-            comment = comment.Substring(0, 254);
+        if (discord_diff.Length > 1020)
+            discord_diff = discord_diff.Substring(0, 1020);
+        if (comment.Length > 250)
+            comment = comment.Substring(0, 250);
 
         Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
         var json = new Root()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment,
-                value = discord_diff }}, author = new Author(){ name = user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid,
+            description = "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name =
+            comment, value = discord_diff }}, author = new Author(){ name = user, url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
@@ -121,10 +117,13 @@ class Program
     }
     static void check(string lang)
     {
-        connection[lang] = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
+        connection[lang] = new MySqlConnection(creds[1].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
         connection[lang].Open();
         new_timestamp_saved = false; new_id_saved = false;
-        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang].ToString()), connection[lang]).ExecuteReader();
+        sqlreader = new MySqlCommand("select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
+        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
+        "join ores_model on oresc_model=oresm_id where rc_timestamp>" + last_checked_edit_time[lang] + " and rc_this_oldid>" + last_checked_id[lang] + " and (rc_type=0 or rc_type=1) and (rc_namespace=0 or " +
+        "rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", connection[lang]).ExecuteReader();
         while (sqlreader.Read())
         {
             user = sqlreader.GetString("user") ?? "";
@@ -133,9 +132,9 @@ class Program
             user_is_anon = sqlreader.IsDBNull(0);
             ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
             title = sqlreader.GetString("title").Replace('_', ' ');
-            ns = sqlreader.GetInt16("rc_namespace");
-            newid = sqlreader.GetInt32("rc_this_oldid");
-            oldid = sqlreader.GetInt32("rc_last_oldid");
+            ns = sqlreader.GetString("rc_namespace");
+            newid = sqlreader.GetString("rc_this_oldid");
+            oldid = sqlreader.GetString("rc_last_oldid");
             comment = sqlreader.GetString("comment");
             diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
             if (!new_timestamp_saved)
@@ -146,24 +145,15 @@ class Program
             {
                 last_checked_id[lang] = newid; new_id_saved = true;
             }
+
             if (user_is_anon || !trusted_users.Contains(user))
             {
-                if (!user_is_anon)
-                    editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
-                        Uri.EscapeDataString(user)).Result).Groups[1].Value);
-                if (editcount > 1000)
-                {
-                    trusted_users.Add(user);
-                    continue;
-                }
-
                 if (ores_risk > ores_limit)
                 {
                     post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, "ores");
                     continue;
                 }
-
-                foreach (Match edit_tag in tag_rgx.Matches(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result))
+                foreach (Match edit_tag in tag_rgx.Matches(site[lang].GetStringAsync("https://uk.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result))
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
@@ -234,8 +224,11 @@ class Program
             }
         }
     }
-    static void gather_trusted_users()
+    static void Main()
     {
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1];
+        Console.WriteLine("1st success.");
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
         client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
@@ -243,34 +236,21 @@ class Program
             trusted_users.Add(g);
         foreach (string lang in new string[] { "ru", "uk" })
         {
-            site.Add(lang, Site(lang, creds[4], creds[5]));
+            site.Add(lang, Site(lang, creds[0].Split(':')[0], creds[0].Split(':')[1]));
             patterns.Add(lang, new List<Regex>());
             connection.Add(lang, new MySqlConnection());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
-                string apiout, cont = "", request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
-                while (cont != null)
-                {
-                    apiout = (cont == "" ? site[lang].GetStringAsync(request).Result : site[lang].GetStringAsync(request + "&aufrom=" + Uri.EscapeDataString(cont)).Result);
-                    using (var r = new XmlTextReader(new StringReader(apiout)))
-                    {
-                        r.WhitespaceHandling = WhitespaceHandling.None;
-                        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("aufrom");
-                        while (r.Read())
-                            if (r.Name == "u")
-                                if (!trusted_users.Contains(r.GetAttribute("name")))
-                                    trusted_users.Add(r.GetAttribute("name"));
-                    }
-                }
+                string request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
+                string result = site[lang].GetStringAsync(request).Result;
+                using (var r = new XmlTextReader(new StringReader(result)))
+                    while (r.Read())
+                        if (r.Name == "u")
+                            if (!trusted_users.Contains(r.GetAttribute("name")))
+                                trusted_users.Add(r.GetAttribute("name"));
             }
         }
-    }
-    static void Main()
-    {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        liftwing_token = creds[3]; swviewer_token = creds[10]; discord_token = creds[11];
 
-        gather_trusted_users();
         while (true)
         {
             update_settings();
