@@ -12,7 +12,7 @@ class MyBot : Bot
     public string[] Settings(byte num, Site site)
     {
         string[] ar = new string[num];
-        Page setting = new Page(site, "user:MBH/incubator.js");
+        Page setting = new Page(site, "u:MBH/incubator.js");
         setting.Load();
         Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);
         Regex imbot = new Regex(@"imagebot.?=.?true", RegexOptions.Singleline);
@@ -78,8 +78,8 @@ class MyBot : Bot
     }
     public static void Main()
     {
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        Site commons = new Site("https://commons.wikimedia.org", creds[8], creds[9]);
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+        Site commons = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
         MyBot bot = new MyBot();
         string[] set = bot.Settings(6, site);
         if (set[0] == "1")
