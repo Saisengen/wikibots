@@ -91,15 +91,12 @@ class MyBot : Bot
         else
         { ar[0] = "0"; return ar; }
     }
-    /// <summary>
-    /// Альтернативный способ получения содержимого категорий
-    /// </summary>
     public PageList GetCategoryMembers(Site site, string cat, int limit)
     {
         PageList allpages = new PageList(site);
         string[] all = new string[limit];
         int page_num = 0;
-        string URL = site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=5000&cmtitle=" + HttpUtility.UrlEncode("Категория:" + cat) + "&format=xml";
+        string URL = site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=max&cmtitle=" + HttpUtility.UrlEncode("К:" + cat) + "&format=xml";
         string h = site.GetWebPage(URL);
         XmlTextReader rdr = new XmlTextReader(new StringReader(h));
         while (rdr.Read())
@@ -129,8 +126,7 @@ class MyBot : Bot
 
     public static void Main()
     {
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
-        // счетчик запросов
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         MyBot bot = new MyBot();
         string[] set = bot.Settings(8, site);
         if (set[0] == "1")
@@ -394,7 +390,6 @@ class MyBot : Bot
                     com = com + num[j, 0] + ":" + num[j, 1] + " / ";
                 }
                 com = com.Remove(com.Length - 3);
-                // save wikipage
                 p.Save(com, true);
             }
         }
