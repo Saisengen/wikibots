@@ -53,7 +53,7 @@ internal class MyBot : Bot
     public static void Main()
     {
         string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        Site site = new Site("https://ru.wikipedia.org", creds[8], creds[9]);
+        Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         MyBot bot = new MyBot();
         Page mrpage = new Page(site, "Проект:Инкубатор/Мини-рецензирование");
         mrpage.Load();
