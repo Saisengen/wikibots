@@ -1,0 +1,5 @@
+Рейму Хакурей@bot:<password>
+Server=%project%.analytics.db.svc.wikimedia.cloud;Database=%project%_p;Uid=<login>;Pwd=<password>;CharacterSet=utf8mb4;SslMode=none;
+liftwing:<token>
+swviewer:<token>
+discord:<token>
