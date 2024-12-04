@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using PCRE;
 using System.Net.Http;
+using System.Linq;
 
 class Program
 {
@@ -55,7 +56,7 @@ class Program
         var whitergx = new HashSet<PcreRegex>();
         var spam_template_rgx = new PcreRegex(@"\n*\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}");
         var too_many_stars_rgx = new PcreRegex(@"^\*{2,}");
-        foreach (string b in blacklist)
+        foreach (string b in blacklist.OrderBy(b => b))
         {
             string current = b;
             if (current.Contains("#"))
@@ -72,15 +73,14 @@ class Program
                 whitergx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
         var new_spamlinks_on_page = new HashSet<string>();
-        var pageids = new HashSet<string>();
         var pagenames = new Dictionary<string, string>();
         var requeststrings = new HashSet<string>();
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var bot = Site(creds[0], creds[1]);
-        var nonbot = Site(creds[6], creds[7]);
+        var nonbot = Site(creds[3].Split(':')[0], creds[3].Split(':')[1]);
 
         string dir = DateTime.Now.Month % 2 == 0 ? "ascending" : "descending";
-        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Гладков, Фёдор Васильевич
+        string apiout, cont = "", id="", idset="", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apdir=" + dir;//&apfrom=Merry Christmas II You
         while (cont != null)
         {
             apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
@@ -92,7 +92,6 @@ class Program
                     if (r.Name == "p")
                     {
                         string pid = r.GetAttribute("pageid");
-                        pageids.Add(pid);
                         try
                         {
                             pagenames.Add(pid, r.GetAttribute("title"));
@@ -106,10 +105,8 @@ class Program
             }
         }
 
-        string idset = "", id = "";
         int c = 0;
-        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
-        foreach (var p in pageids)
+        foreach (var p in pagenames.Keys)
         {
             idset += "|" + p;
             if (++c % 500 == 0)
@@ -121,6 +118,7 @@ class Program
         if (idset.Length > 0)
             requeststrings.Add(idset.Substring(1));
 
+        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
         foreach (var q in requeststrings)
         {
             string title = "";
@@ -141,15 +139,14 @@ class Program
                             if (r.NodeType == XmlNodeType.EndElement && new_spamlinks_on_page.Count != 0)
                             {
                                 string summary = "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|спам-ссылки]]: ";
-                                string starttext = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
-                                string text = starttext;
+                                string page_text = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagenames[id]) + "?action=raw").Result;
                                 string newtemplate = "{{спам-ссылки|1=";
-                                if (spam_template_rgx.IsMatch(starttext))
+                                var newstrings = new HashSet<string>();
+                                if (spam_template_rgx.IsMatch(page_text))
                                 {
-                                    string oldtemplate = spam_template_rgx.Match(starttext).Groups[0].ToString();
-                                    text = text.Replace(oldtemplate, "");
-                                    var old_link_strings_raw = spam_template_rgx.Match(starttext).Groups[1].ToString().Split('\n');
-                                    var newstrings = new HashSet<string>();
+                                    string oldtemplate = spam_template_rgx.Match(page_text).Groups[0].ToString();
+                                    var old_link_strings_raw = spam_template_rgx.Match(page_text).Groups[1].ToString().Split('\n');
+                                    page_text = page_text.Replace(oldtemplate, "");
                                     foreach (var oldstring in old_link_strings_raw)
                                         if (oldstring != "")
                                         {
@@ -169,21 +166,30 @@ class Program
                                         newtemplate += "\n" + newstring;
                                 }
                                 foreach (var link in new_spamlinks_on_page)
-                                    if (text.Contains(link))//there are links from WD in infoboxes
+                                    if (page_text.Contains(link))//there are links from WD in infoboxes
                                     {
                                         string brokenlink = link.Replace("http://", "").Replace("https://", "");
-                                        text = text.Replace(link, brokenlink);
-                                        newtemplate += "\n* " + link;
-                                        string domain = brokenlink.Contains("/") ? brokenlink.Substring(0, brokenlink.IndexOf('/')) : brokenlink;
-                                        if (!domains.Contains(domain))
-                                            domains.Add(domain);
+                                        if (brokenlink.EndsWith("/"))
+                                            brokenlink = brokenlink.Substring(0, brokenlink.Length - 1);
+                                        page_text = page_text.Replace(link, brokenlink);
+                                        bool same = false;
+                                        foreach (var newstring in newstrings)
+                                            if (newstring == brokenlink)
+                                                same = true;
+                                        if (!same)
+                                        {
+                                            newtemplate += "\n* " + brokenlink;
+                                            string domain = brokenlink.Contains("/") ? brokenlink.Substring(0, brokenlink.IndexOf('/')) : brokenlink;
+                                            if (!domains.Contains(domain))
+                                                domains.Add(domain);
+                                        }
                                     }
                                 foreach (var domain in domains)
                                     summary += domain + ", ";
                                 if (new_spamlinks_on_page.Count > 0 && domains.Count > 0)
                                     try
                                     {
-                                        Save(bot, pagenames[id], text + "\n" + newtemplate + "}}", summary.Substring(0, summary.Length - 2));
+                                        Save(bot, pagenames[id], page_text + "\n" + newtemplate + "}}", summary.Substring(0, summary.Length - 2));
                                     }
                                     catch (Exception e)
                                     {
