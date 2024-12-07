@@ -10,6 +10,11 @@ using System.Net;
 
 class Program
 {
+    static string cell(int number)
+    {
+        if (number == 0) return "";
+        else return number.ToString();
+    }
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -90,18 +95,18 @@ class Program
         r = command.ExecuteReader();
         while (r.Read())
         {
-            statstable[r.GetString("user")]["totalactions"] += Convert.ToInt32(r.GetString("count"));
+            statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
             switch (r.GetString("log_action"))
             {
                 case "delete":
-                    statstable[r.GetString("user")]["delete"] += Convert.ToInt32(r.GetString("count"));
+                    statstable[r.GetString("user")]["delete"] += r.GetInt32("count");
                     break;
                 case "restore":
-                    statstable[r.GetString("user")]["restore"] += Convert.ToInt32(r.GetString("count"));
+                    statstable[r.GetString("user")]["restore"] += r.GetInt32("count");
                     break;
                 case "revision":
                 case "event":
-                    statstable[r.GetString("user")]["del_rev_log"] += Convert.ToInt32(r.GetString("count"));
+                    statstable[r.GetString("user")]["del_rev_log"] += r.GetInt32("count");
                     break;
             }
         }
@@ -113,11 +118,11 @@ class Program
         r = command.ExecuteReader();
         while (r.Read())
             if (r.GetString("log_type") == "review")
-                statstable[r.GetString("user")]["review"] += Convert.ToInt32(r.GetString("count"));
+                statstable[r.GetString("user")]["review"] += r.GetInt32("count");
             else
             {
-                statstable[r.GetString("user")]["totalactions"] += Convert.ToInt32(r.GetString("count"));
-                statstable[r.GetString("user")][r.GetString("log_type")] += Convert.ToInt32(r.GetString("count"));
+                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+                statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
             }
         r.Close();
 
@@ -126,7 +131,7 @@ class Program
         r = command.ExecuteReader();
         while (r.Read())
         {
-            statstable[r.GetString("user")]["totaledits"] += Convert.ToInt32(r.GetString("count"));
+            statstable[r.GetString("user")]["totaledits"] += r.GetInt32("count");
             switch (r.GetString("page_namespace"))
             {
                 case "0":
@@ -135,11 +140,11 @@ class Program
                 case "14":
                 case "100":
                 case "102":
-                    statstable[r.GetString("user")]["contentedits"] += Convert.ToInt32(r.GetString("count"));
+                    statstable[r.GetString("user")]["contentedits"] += r.GetInt32("count");
                     break;
                 case "8":
-                    statstable[r.GetString("user")]["totalactions"] += Convert.ToInt32(r.GetString("count"));
-                    statstable[r.GetString("user")]["mediawiki"] += Convert.ToInt32(r.GetString("count"));
+                    statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+                    statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count");
                     break;
             }
         }
@@ -148,7 +153,7 @@ class Program
         var site = Site(creds[0], creds[1]);
         var lm = DateTime.Now.AddMonths(-1);
         var summaryrgx = new Regex(@"={1,}\s*Итог\s*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(" + monthnames[lm.Month] + "|" +
-            monthnames[lm.AddMonths(-1).Month] + "|" + monthnames[lm.AddMonths(-2).Month] + "|" + monthnames[lm.AddMonths(-3).Month] + "|" + monthnames[lm.AddMonths(-4).Month] + "|" + monthnames[lm.AddMonths(-5).Month] + ") (" + lm.Year + "|" + 
+            monthnames[lm.AddMonths(-1).Month] + "|" + monthnames[lm.AddMonths(-2).Month] + "|" + monthnames[lm.AddMonths(-3).Month] + "|" + monthnames[lm.AddMonths(-4).Month] + "|" + monthnames[lm.AddMonths(-5).Month] + ") (" + lm.Year + "|" +
             lm.AddMonths(-5).Year + @") \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         foreach (var t in discussiontypes)
             using (var xr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "/&apnamespace=4&aplimit=max").Result)))
@@ -158,9 +163,9 @@ class Program
                         string page = xr.GetAttribute("title");
                         int year;
                         try
-                        {year = Convert.ToInt16(page.Substring(page.Length - 4));}
+                        { year = Convert.ToInt16(page.Substring(page.Length - 4)); }
                         catch
-                        {continue;}
+                        { continue; }
                         if (year >= 2018)
                         {
                             string pagetext;
@@ -193,8 +198,8 @@ class Program
                 statstable[data[0]]["totalactions"] += Convert.ToInt32(data[1]);
             }
 
-        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{shortcut|ВП:АДА}}<center>{{списки администраторов}}{{Самые активные участники}}\nСтатистика активности " +
-            "администраторов и подводящих итоги Русской Википедии за период с 1 " + monthnames[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + monthnames[now.Month] + " " + now.Year + 
+        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика активности " +
+            "администраторов и подводящих итоги Русской Википедии за период с 1 " + monthnames[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + monthnames[now.Month] + " " + now.Year +
             " года. Первично отсортирована по сумме числа правок и админдействий. Включает только участников, сейчас имеющих флаг - после снятия флага строка участника пропадёт из таблицы при следующем " +
             "обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в содержательных пространствах имён, " +
             "а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий (итоги плюс удаления), из которых " +
@@ -216,11 +221,13 @@ class Program
                     color = "style=\"background-color:#fcc\"";
             }
             else
-                color = "style=\"background-color:#ccf\"";
-            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "'''" + u.Value["totaledits"] + "'''" : u.Value["totaledits"].ToString()) + "||" + (lesscontent ? "'''" + u.Value["contentedits"] + "'''" :
-                u.Value["contentedits"].ToString()) + "||" + u.Value["review"] + "||" + (lessactions ? "'''" + u.Value["totalactions"] + "'''" : u.Value["totalactions"].ToString()) + "||" + (inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + 
-                u.Value["delsum"] + ")") + "||" + u.Value["restore"] + " (" + u.Value["restoresum"] + ")||" + u.Value["del_rev_log"] + "||" + (u.Value["block"] + u.Value["gblblock"]) + "||" + u.Value["protect"] + "||" + u.Value["stable"] + "||" + u.Value["rights"] + "||" + (u.Value["managetags"] + 
-                u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + u.Value["abusefilter"] + "||" + u.Value["checkuser"] + "||" + u.Value["renameuser"];
+                color = "style=\"background-color:#ccf\"";//пробелы после ''' нужны чтоб не было висящих '
+            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "''' " + cell(u.Value["totaledits"]) +
+                "'''" : cell(u.Value["totaledits"])) + "||" + (lesscontent ? "''' " + cell(u.Value["contentedits"]) + "'''" : cell(u.Value["contentedits"])) + "||" + cell(u.Value["review"]) + "||" +
+                (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + (inactivecloser ? "''' " + u.Value["delete"] + " (" + u.Value["delsum"] +
+                ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")") + "||" + u.Value["restore"] + " (" + u.Value["restoresum"] + ")||" + cell(u.Value["del_rev_log"]) + "||" +
+                cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] +
+                u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["checkuser"]) + "||" + cell(u.Value["renameuser"]);
         }
         Save(site, "ВП:Администраторы/Активность", result + "\n|}", "");
     }
