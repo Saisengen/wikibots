@@ -5,6 +5,7 @@ import os
 import json
 import logging
 import time
+import datetime
 from urllib.parse import unquote, quote
 import discord
 import pymysql
@@ -13,7 +14,6 @@ from discord.ext import commands
 from discord.ui import Button, View
 import aiohttp
 from antivand_cleaner import revision_check, flagged_check
-
 
 DEBUG = {'ENABLE': False, 'ID': 1237345748778221649, 'port': 4711}
 DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': DEBUG['port'], 'host': '127.0.0.1',
@@ -29,6 +29,7 @@ CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1219273496371396681, 12124981
           'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
           'ADMINS': [352826965494988822, 512545053223419924, 223219998745821194]}
 USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.11'}
+STORAGE = []
 Intents = discord.Intents.default()
 Intents.members, Intents.message_content = True, True
 discord.Intents.all()
@@ -422,6 +423,7 @@ async def rollback_clear(inter: discord.Interaction):
                     if msg.author.id == CONFIG['BOT']:
                         try:
                             await msg.delete()
+                            await asyncio.sleep(1.5)
                         except Exception as e:
                             print(f'Clear feed error 3: {e}')
                         time.sleep(1.0)
@@ -584,9 +586,9 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
             session_with_auth = aiohttp.ClientSession(headers=headers)
 
             if action_type == 'rollback':
-                comment_body_uk = ('відкинуто редагування [[Special:Contribs/$2|$2]] за запитом '
+                comment_body_uk = ('Бот: відкинуто редагування [[Special:Contribs/$2|$2]] за запитом '
                                    f'[[User:{actor}|{actor}]]')
-                comment_body_ru = f'откат правок [[Special:Contribs/$2|$2]] по запросу [[u:{actor}|{actor}]]'
+                comment_body_ru = f'Бот: откат правок [[Special:Contribs/$2|$2]] по запросу [[u:{actor}|{actor}]]'
                 comment = comment_body_ru if lang == 'ru' else comment_body_uk
                 try:
                     r_token = await session_with_auth.get(f'{api_url}?format=json&action=query&meta=tokens'
@@ -656,6 +658,8 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                         except Exception as e:
                             print(f'rollback error 7: {e}')
                         else:
+                            if 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
+                                return print(r)  # debug
                             return [r['error']['info'], f'[{title}](<https://{lang}'
                                                         f'.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                                         f'(ID: {rev_id})'] if 'error' in r else \
@@ -730,6 +734,8 @@ async def do_rfd(embed: discord.Embed, rfd: str, summary: str):
         except Exception as e:
             print(f'rfd error 2: {e}')
         else:
+            if 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
+                return print(r)  # debug
             return [r['error']['info'], f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                         f'(ID: {title})'] if 'error' in r \
                 else ['Success', f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r["edit"]["newrevid"]}>)',
@@ -952,10 +958,27 @@ async def on_message(msg):
         except Exception as e:
             print(f'On_Message error 2: {e}')
         return
+
+    global STORAGE
+    STORAGE = [el for el in STORAGE if el['timestamp'] < datetime.datetime.now(datetime.UTC).timestamp() + 30]
+
+    lang = get_lang(msg.embeds[0].url)
+    rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
+
     if len(msg.embeds) > 0:
+        trigger = get_trigger(msg.embeds[0])
+        for el in STORAGE:
+            if (el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el['trigger'] == 'replaces' 
+                    and trigger != 'replaces'):
+                await asyncio.sleep(1.5)
+                await el['msg'].delete()
+            if el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el[
+                'trigger'] != 'replaces' and trigger == 'replaces':
+                await asyncio.sleep(1.5)
+                await msg.delete()
+                return
+
         # не откачена ли
-        lang = get_lang(msg.embeds[0].url)
-        rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
         session = aiohttp.ClientSession(headers=USER_AGENT)
         is_reverted = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, msg.embeds[0].title,
                                            session)
@@ -976,6 +999,9 @@ async def on_message(msg):
                                                  view=get_view(lang=lang, disable=True,
                                                                user=get_name_from_embed(lang, msg.embeds[0].author.url),
                                                                page=msg.embeds[0].title))
+            STORAGE.append({'wiki': f'{lang}wiki', 'rev_id': rev_id, 'trigger': trigger, 'msg': new_message, 'timestamp':
+                datetime.datetime.now(datetime.UTC).timestamp()})
+
         except Exception as e:
             print(f'On_Message error 4: {e}')
         else:
