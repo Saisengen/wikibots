@@ -22,18 +22,28 @@ public class Root { public List<Embed> embeds; }
 class Program
 {
     static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
-        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
-        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or " +
-        "rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, diff_text,
-        comment_diff, discord_diff, lw_raw, strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace, rc_cur_id from recentchanges " +
+        "join comment on rc_comment_id=comment_id " +
+        "join ores_classification on oresc_rev=rc_this_oldid " +
+        "join actor on actor_id=rc_actor " +
+        "join ores_model on oresc_model=oresm_id " +
+        "where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100) " +
+        "and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, discord_diff, lw_raw, 
+        strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
     static double ores_risk, lw_risk, ores_limit = 1;
     static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, { "multilang", 1 } };
-    static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"), tag_rgx = new Regex
-        (@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"), div_rgx = new Regex(@"</?div[^>]*>"), del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>"),
-        editcount_rgx = new Regex(@"editcount=""(\d*)""");
+    static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"),
+        reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
+        ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"),
+        tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline),
+        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"),
+        div_rgx = new Regex(@"</?div[^>]*>"),
+        del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>"),
+        editcount_rgx = new Regex(@"editcount=""(\d*)"""),
+        rev_rgx = new Regex(@"<rev ");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
     static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
@@ -43,7 +53,7 @@ class Program
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool user_is_anon, new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) }, { "liftwing", new color(255, 255, 0) }, { "ores", new color(255, 0, 255) }, { "tag", new color(0, 255, 0) } };
     static HttpClient Site(string lang, string login, string password)
@@ -107,14 +117,19 @@ class Program
         if (comment.Length > 254)
             comment = comment.Substring(0, 254);
 
+        string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=10").Result;
+        int num_of_revs = rev_rgx.Matches(revs).Count;
+        string num_of_revs_str = num_of_revs > 9 ? ">9" : num_of_revs.ToString();
+
         Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
         var json = new Root()
         {
             embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment,
-                value = discord_diff }}, author = new Author(){ name = user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
+            "[" + reason + ", " + num_of_revs_str + " revisions](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = 
+            new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + 
+                ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
@@ -137,6 +152,7 @@ class Program
             ns = sqlreader.GetInt16("rc_namespace");
             newid = sqlreader.GetInt32("rc_this_oldid");
             oldid = sqlreader.GetInt32("rc_last_oldid");
+            pageid = sqlreader.GetInt32("rc_cur_id");
             comment = sqlreader.GetString("comment");
             diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
             if (!new_timestamp_saved)
