@@ -6,30 +6,31 @@ import json
 import logging
 import time
 import datetime
-from urllib.parse import unquote, quote
+from urllib.parse import unquote
 import discord
+from discord import SelectOption, Embed
+from discord.ext import commands
+from discord.ui import Button, View, Select, TextInput, Modal
 import pymysql
 import toolforge
-from discord.ext import commands
-from discord.ui import Button, View
 import aiohttp
 from antivand_cleaner import revision_check, flagged_check
 
-DEBUG = {'ENABLE': False, 'ID': 1237345748778221649, 'port': 4711}
-DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': DEBUG['port'], 'host': '127.0.0.1',
-              'password': os.environ['TOOL_TOOLSDB_PASSWORD'], 'database': f'{os.environ["TOOL_TOOLSDB_USER"]}__rv'}
 
+DEBUG = False
+DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': 4711, 'host': '127.0.0.1',
+              'password': os.environ['TOOL_TOOLSDB_PASSWORD'], 'database': f'{os.environ["TOOL_TOOLSDB_USER"]}__rv'}
 TOKEN = os.environ['DISCORD_BOT_TOKEN']
 BEARER_TOKEN = os.environ['BEARER_TOKEN']
 
-# Целевой сервер, ID каналов с фидами, ID бота, ID ботов-источников, ID канала с командами,
-# ID сообщения со списком откатывающих, ID канала с источником, список админов для команд.
+# Целевой сервер, ID каналов с потоками, ID бота, ID ботов-источников, ID канала с командами,
+# ID сообщения со списком откатывающих, ID канала с источником, список администраторов бота.
 CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1219273496371396681, 1212498198200062014],
-          'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662, 1299324425878900818], 'BOTCOMMANDS': 1212507148982947901,
-          'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
+          'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662, 1299324425878900818],
+          'BOTCOMMANDS': 1212507148982947901, 'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
           'ADMINS': [352826965494988822, 512545053223419924, 223219998745821194]}
 USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.11'}
-STORAGE = []
+STORAGE, ALLOWED_USERS = [], {}
 Intents = discord.Intents.default()
 Intents.members, Intents.message_content = True, True
 discord.Intents.all()
@@ -68,12 +69,12 @@ select_options_undo = {
            'добавление комментариев в статью. Комментарии и пометки оставляйте на [[Talk:$7|странице обсуждения]] '
            'статьи', 'додавання коментарів до статті. Коментарі та позначки залишайте на '
                      '[[Сторінка обговорення:$1|сторінці обговорення]] статті'],
-    '14': ['своя причина', '', ''],
-    '15': ['Закрыть', '', '']
+    '14': ['своя причина', '', ''],  # не менять название пункта без изменения в callback
+    '15': ['Закрыть', '', '']  # не менять название пункта без изменения в callback
 }
 options_undo, options_rfd = [], []
 for option, index in select_options_undo.items():
-    options_undo.append(discord.SelectOption(label=index[0], value=str(option)))
+    options_undo.append(SelectOption(label=index[0], value=str(option)))
 
 select_options_rfd = {
     '1': ['Бессвязное содержимое', '{{уд-бессвязно}}', '{{Db-nonsense}}'],
@@ -83,38 +84,180 @@ select_options_rfd = {
     '5': ['Пустая статья', '{{{уд-пусто}}', '{{Db-nocontext}}'],
     '6': ['На иностранном языке', '{{уд-иностр}}', '{{Db-lang}}'],
     '7': ['Нет значимости', '{{уд-нз}}', '{{Db-nn}}'],
-    '8': ['своя причина', '', ''],
-    '9': ['Закрыть', '', '']
+    '8': ['своя причина', '', ''],  # не менять название пункта без изменения в callback
+    '9': ['Закрыть', '', '']  # не менять название пункта без изменения в callback
 }
 for option, index in select_options_rfd.items():
-    options_rfd.append(discord.SelectOption(label=index[0], value=str(option)))
+    options_rfd.append(SelectOption(label=index[0], value=str(option)))
 
-select_component_undo = discord.ui.Select(placeholder='Выбор причины отмены', min_values=1, max_values=1,
-                                          options=options_undo, custom_id='sel1')
-select_component_rfd = discord.ui.Select(placeholder='Выбор причины КБУ', min_values=1, max_values=1,
-                                         options=options_rfd, custom_id='sel2')
-undo_prefix = ['отмена правки [[Special:Contribs/$author|$author]] по запросу [[User:$actor|$actor]]:',
+
+select_component_undo = Select(placeholder='Выбор причины отмены', min_values=1, max_values=1, options=options_undo,
+                               custom_id='select_component_undo')
+select_component_undo.callback = select_component_undo
+select_component_rfd = Select(placeholder='Выбор причины КБУ', min_values=1, max_values=1, options=options_rfd,
+                              custom_id='select_component_rfd')
+
+undo_prefix = ['Бот: отмена правки [[Special:Contribs/$author|$author]] по запросу [[User:$actor|$actor]]:',
                'скасовано останнє редагування [[Special:Contribs/$author|$author]] за запитом [[User:$actor|$actor]]:']
-rfd_summary = ['Номинация на КБУ по запросу [[User:$actor|$actor]]',
+rfd_summary = ['Бот: Номинация на КБУ по запросу [[User:$actor|$actor]]',
                'Номінація на швидке вилучення за запитом [[User:$actor|$actor]]']
 
 
-class ReasonUndo(discord.ui.Modal, title='Причина'):
+class ReasonUndo(Modal, title='Причина'):
     """Строка ввода причины отмены."""
-    res = discord.ui.TextInput(custom_id='edt1', label='Причина отмены', min_length=2, max_length=255,
-                               placeholder='введите причину', required=True, style=discord.TextStyle.short)
+    res = TextInput(custom_id='menu_undo', label='Причина отмены', min_length=2, max_length=255,
+                         placeholder='введите причину', required=True, style=discord.TextStyle.short)
+
 
     async def on_submit(self, interaction: discord.Interaction):
-        pass
+        await interaction_defer(interaction, '0.1')
+        if not await check_rights(interaction):
+            return
+        actor, msg, channel = get_data(interaction)
+        lang_selector = 0 if get_lang(msg.embeds[0].url) != 'uk' else 1
+
+        reason = f'{undo_prefix[lang_selector].replace("$actor", actor)} {self.children[0].value}'
+
+        r = await do_rollback(msg.embeds[0], actor, action_type='undo', reason=reason)
+        await result_undo_handler(r, interaction)
 
 
-class ReasonRFD(discord.ui.Modal, title='Причина'):
+class ReasonRFD(Modal, title='Причина'):
     """Строка ввода номинации на удаления."""
-    res = discord.ui.TextInput(custom_id='edt2', label='Причина КБУ', min_length=2, max_length=255,
-                               placeholder='введите причину', required=True, style=discord.TextStyle.short)
+    res = TextInput(custom_id='menu_rfd', label='Причина КБУ', min_length=2, max_length=255,
+                    placeholder='введите причину', required=True, style=discord.TextStyle.short)
+
 
     async def on_submit(self, interaction: discord.Interaction):
-        pass
+        await interaction_defer(interaction, '0.2')
+        if not await check_rights(interaction):
+            return
+        actor, msg, channel = get_data(interaction)
+        lang_selector = 0 if get_lang(msg.embeds[0].url) != 'uk' else 1
+        summary = rfd_summary[lang_selector].replace('$actor', actor)
+        r = await do_rfd(msg.embeds[0], rfd=self.children[0].value, summary=summary)
+        await result_rfd_handler(r, interaction)
+
+
+async def result_rfd_handler(r, interaction: discord.Interaction) -> None:
+    actor, msg, channel = get_data(interaction)
+    try:
+        if r[0] == 'Success':
+            await channel.send(content=f'{actor} номинировал {r[1]} на КБУ.')
+            await send_to_db(actor, 'rfd', get_trigger(msg.embeds[0]))
+            await msg.delete()
+            return
+        if 'не существует' in r[0]:
+            new_embed = Embed(color=msg.embeds[0].color, title='Страница была удалена.')
+            await interaction.message.edit(embed=new_embed, view=None, delete_after=12.0)
+        else:
+            if r[1] != '':
+                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
+            else:
+                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+    except Exception as e:
+        print(f'Error 1.0: {e}')
+
+
+async def result_undo_handler(r, interaction: discord.Interaction) -> None:
+    actor, msg, channel = get_data(interaction)
+    try:
+        if r[0] == 'Success':
+            await channel.send(content=f'{actor} выполнил отмену на странице {r[1]}.')
+            await send_to_db(actor, 'undos', get_trigger(msg.embeds[0]))
+            await msg.delete()
+            return
+        if 'были откачены' in r[0]:
+            await send_to_db('service_account', 'undos', get_trigger(msg.embeds[0]))
+            new_embed = Embed(color=msg.embeds[0].color, title='Страница была удалена, отпатрулирована или правки уже '
+                                                               'были откачены.')
+            await interaction.message.edit(embed=new_embed, view=None, delete_after=12.0)
+        elif 'версии принадлежат' in r[0]:
+            msg.embeds[0].set_footer(text='Отмена не удалась: все версии страницы принадлежат одному участнику.')
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+        else:
+            if r[1] != '':
+                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
+            else:
+                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+    except Exception as e:
+        print(f'Error 2.0: {e}')
+
+
+def get_view_undo() -> View:
+    res = Select(placeholder="Причина?", max_values=1, min_values=1, options=options_undo, custom_id='undo_select')
+
+    async def callback(interaction: discord.Interaction):
+        if not await check_rights(interaction):
+            return
+        selected = select_options_undo[list(interaction.data.values())[0][0]]
+        actor, msg, channel = get_data(interaction)
+        lang = get_lang(msg.embeds[0].url)
+        try:
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+        except Exception as e:
+            print(f'Error 3.0: {e}')
+
+        if selected[0] == 'своя причина':
+            try:
+                await interaction.response.send_modal(ReasonUndo())
+            except Exception as e:
+                print(f'Error 4.0: {e}')
+            return
+
+        await interaction_defer(interaction, '0.3')
+        if selected[0] == 'Закрыть':
+            return
+
+        lang_selector = 0 if lang != 'uk' else 1
+        reason = (f'{undo_prefix[lang_selector].replace("$actor", actor)} '
+                  f'{selected[lang_selector + 1].replace("$1", msg.embeds[0].title)}')
+        r = await do_rollback(msg.embeds[0], actor, action_type='undo', reason=reason)
+        await result_undo_handler(r, interaction)
+
+
+    res.callback = callback
+    view = View(timeout=None)
+    return view.add_item(res)
+
+
+def get_view_rfd() -> View:
+    res = Select(placeholder="Причина?", max_values=1, min_values=1, options=options_rfd, custom_id='rfd_select')
+
+    async def callback(interaction: discord.Interaction):
+        if not await check_rights(interaction):
+            return
+        selected = select_options_rfd[list(interaction.data.values())[0][0]]
+        actor, msg, channel = get_data(interaction)
+        lang = get_lang(msg.embeds[0].url)
+        try:
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+        except Exception as e:
+            print(f'Error 5.0: {e}')
+
+        if selected[0] == 'своя причина':
+            try:
+                await interaction.response.send_modal(ReasonRFD())
+            except Exception as e:
+                print(f'Error 6.0: {e}')
+            return
+
+        await interaction_defer(interaction, '0.4')
+        if selected[0] == 'Закрыть':
+            return
+
+        lang_selector = 0 if lang != 'uk' else 1
+        summary = rfd_summary[lang_selector].replace('$actor', actor)
+        rfd_reason = selected[lang_selector + 1]
+        r = await do_rfd(msg.embeds[0], rfd=rfd_reason, summary=summary)
+        await result_rfd_handler(r, interaction)
+
+
+    res.callback = callback
+    view = View(timeout=None)
+    return view.add_item(res)
 
 
 def get_lang(url: str) -> str:
@@ -122,33 +265,149 @@ def get_lang(url: str) -> str:
     return 'ru' if 'ru.wikipedia.org' in url else 'uk'
 
 
-def get_trigger(embed: discord.Embed) -> str:
+def get_trigger(embed: Embed) -> str:
     """Получение причины реакции по цвету."""
-    color = str(embed.color)
-    if color == '#ff0000':
-        return 'patterns'
-    if color == '#ffff00':
-        return 'LW'
-    if color == '#ff00ff':
-        return 'ORES'
-    if color == '#00ff00':
-        return 'tags'
-    if color == '#0000ff':
-        return 'replaces'
-    return 'unknown'
+    triggers_dict = {'#ff0000': 'patterns', '#ffff00': 'LW', '#ff00ff': 'ORES', '#00ff00': 'tags',
+                     '#0000ff': 'replaces'}
+    return 'unknown' if (color:=str(embed.color)) not in triggers_dict else triggers_dict[color]
 
 
-def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) -> None:
+async def check_rights(interaction: discord.Interaction) -> bool:
+    if str(interaction.user.id) not in ALLOWED_USERS:
+        try:
+            await interaction.followup.send(
+                content='К сожалению, у вас нет разрешение на выполнение откатов и отмен через бот. Обратитесь к '
+                        f'участнику <@{223219998745821194}>.', ephemeral=True)
+        except Exception as e:
+            print(f'Error 7.0: {e}')
+            return False
+        else:
+            return False
+    return True
+
+
+def get_data(interaction: discord.Interaction):
+    actor = ALLOWED_USERS[str(interaction.user.id)]
+    msg = interaction.message
+    channel = client.get_channel(CONFIG['SOURCE'])
+    return actor, msg, channel
+
+
+def get_view_buttons(disable: bool = False) -> View:
+    """Формирование набора компонентов."""
+    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback", disabled=disable)
+    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=disable)
+    btn_rfd = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id="btn_rfd", disabled=disable)
+    btn_good = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id="btn_good", disabled=disable)
+    btn_bad = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id="btn_bad", disabled=disable)
+
+
+    async def rollback_handler(interaction: discord.Interaction):
+        await interaction_defer(interaction, '0.5')
+        if not await check_rights(interaction):
+            return
+        actor, msg, channel = get_data(interaction)
+        if len(msg.embeds) == 0:
+            return
+        r = await do_rollback(msg.embeds[0], actor)
+        try:
+            if r[0] == 'Success':
+                await interaction.message.delete()
+                await channel.send(content=f'{actor} выполнил откат на странице {r[1]}.')
+                await send_to_db(actor, 'rollbacks', get_trigger(msg.embeds[0]))
+            else:
+                if 'были откачены' in r[0]:
+                    await send_to_db('service_account', 'rollbacks', get_trigger(msg.embeds[0]))
+                    new_embed = Embed(color=msg.embeds[0].color, title='Страница была удалена, отпатрулирована или '
+                                                                       'правки уже были откачены.')
+                    await interaction.message.edit(embed=new_embed, view=None, delete_after=12.0)
+                else:
+                    footer_info = f'{r[0]}, {r[1]}' if r[1] != '' else f'{r[0]}'
+                    if r[1] != '':
+                        msg.embeds[0].set_footer(text=f'Действие не удалось: {footer_info}.')
+                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+        except Exception as e:
+            print(f'Error 8.0: {e}')
+
+    async def rfd_handler(interaction: discord.Interaction):
+        await interaction_defer(interaction, '0.6')
+        if not await check_rights(interaction):
+            return
+        msg = interaction.message
+        try:
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_rfd())
+        except Exception as e:
+            print(f'Error 9.0: {e}')
+
+    async def undo_handler(interaction: discord.Interaction):
+        await interaction_defer(interaction, '0.7')
+        if not await check_rights(interaction):
+            return
+        view = View()
+        view.add_item(select_component_undo)
+        msg = interaction.message
+        try:
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_undo())
+        except Exception as e:
+            print(f'Error 10.0: {e}')
+
+    async def good_handler(interaction: discord.Interaction):
+        await interaction_defer(interaction, '0.8')
+        if not await check_rights(interaction):
+            return
+        try:
+            actor, msg, channel = get_data(interaction)
+            await interaction.message.delete()
+            await channel.send(content=f'{actor} одобрил правку на странице '
+                                       f'[{msg.embeds[0].title}](<{msg.embeds[0].url}>).')
+            await send_to_db(actor, 'approves', get_trigger(msg.embeds[0]), bad=True)
+        except Exception as e:
+            print(f'Error 11.0: {e}')
+
+    async def bad_handler(interaction: discord.Interaction):
+        await interaction_defer(interaction, '0.9')
+        if not await check_rights(interaction):
+            return
+        try:
+            actor, msg, channel = get_data(interaction)
+            await interaction.message.delete()
+            await channel.send(
+                content=f'{actor} отметил правку на странице [{msg.embeds[0].title}](<{msg.embeds[0].url}>) '
+                        f'как неконструктивную, но уже отменённую.')
+            await send_to_db(actor, 'approves', get_trigger(msg.embeds[0]))
+        except Exception as e:
+            print(f'Error 12.0: {e}')
+
+
+    btn_rollback.callback = rollback_handler
+    btn_rfd.callback = rfd_handler
+    btn_undo.callback = undo_handler
+    btn_good.callback = good_handler
+    btn_bad.callback = bad_handler
+
+    view_buttons = View(timeout=None)
+    [view_buttons.add_item(i) for i in [btn_rollback, btn_undo, btn_rfd, btn_good, btn_bad]]
+    return view_buttons
+
+
+async def interaction_defer(interaction: discord.Interaction, error_description: str) -> None:
+    try:
+        await interaction.response.defer(ephemeral=True)
+    except Exception as e:
+        print(f'Error {error_description}: {e}')
+
+
+async def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) -> None:
     """Отправка в БД."""
     try:
-        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
-            toolforge.toolsdb(DB_CREDITS['database']))
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG else toolforge.toolsdb(DB_CREDITS['database'])
         with conn.cursor() as cur:
             if action_type in ['rollbacks', 'undos', 'approves', 'rfd']:
                 cur.execute('SELECT name FROM ds_antivandal WHERE name=%s;', actor)
                 res = cur.fetchall()
                 if len(res) == 0:
-                    cur.execute(f'INSERT INTO ds_antivandal (name, {action_type}, {trigger}) VALUES (%s, 1, 1);', actor)
+                    cur.execute(f'INSERT INTO ds_antivandal (name, {action_type}, {trigger}) VALUES (%s, 1, 1);',
+                                actor)
                 else:
                     cur.execute(f'UPDATE ds_antivandal SET {action_type} = {action_type}+1, {trigger} = '
                                 f'{trigger}+1 WHERE name = %s;', actor)
@@ -158,14 +417,13 @@ def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) ->
                 conn.commit()
         conn.close()
     except Exception as e:
-        print(f'send_to_db error 1: {e}')
+        print(f'Error 13.0: {e}')
 
 
-def get_from_db(is_all: bool = True, actor: str = None):
+async def get_from_db(is_all: bool = True, actor: str = None):
     """Получение из БД."""
     try:
-        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
-            toolforge.toolsdb(DB_CREDITS['database']))
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG else toolforge.toolsdb(DB_CREDITS['database'])
         with conn.cursor() as cur:
             i_res = False
             triggers_false = False
@@ -173,15 +431,16 @@ def get_from_db(is_all: bool = True, actor: str = None):
                 cur.execute('SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), '
                             'SUM(tags), SUM(rfd), SUM(replaces) FROM ds_antivandal')
                 r = cur.fetchall()
-                cur.execute('SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) + SUM(rfd) + SUM(replaces) AS am FROM '
-                            'ds_antivandal GROUP BY name ORDER BY am DESC LIMIT 5;')
+                cur.execute('SELECT name, SUM(rollbacks) + SUM(undos) + SUM(approves) + SUM(rfd) + SUM(replaces) AS am '
+                            'FROM ds_antivandal GROUP BY name ORDER BY am DESC LIMIT 5;')
                 r2 = cur.fetchall()
                 i_res = []
                 for i in r2:
                     if i[0] != 'service_account':
                         i_res.append(f'{i[0]}: {i[1]}')
                 i_res = '\n'.join(i_res)
-                cur.execute('SELECT patterns, LW, ORES, tags, replaces FROM ds_antivandal_false WHERE result = "stats";')
+                cur.execute('SELECT patterns, LW, ORES, tags, replaces FROM ds_antivandal_false '
+                            'WHERE result = "stats";')
                 r3 = cur.fetchall()
                 patterns = r[0][3] - 172
                 patterns = 0 if patterns == 0 else float(f'{(r3[0][0]) / patterns * 100:.3f}')
@@ -194,8 +453,8 @@ def get_from_db(is_all: bool = True, actor: str = None):
                 replaces = r[0][8] - 0
                 replaces = 0 if replaces == 0 else float(f'{(r3[0][4]) / replaces * 100:.3f}')
                 triggers_false = (f'Ложные триггеры, c 21.07.2024: паттерны — {r3[0][0]} ({patterns} %), '
-                                  f'LW — {r3[0][1]} ({lw} %), ORES — {r3[0][2]} ({ores} %), теги — {r3[0][3]} ({tags} %), '
-                                  f'замены — {r3[0][4]} ({replaces} %).')
+                                  f'LW — {r3[0][1]} ({lw} %), ORES — {r3[0][2]} ({ores} %), теги — {r3[0][3]} '
+                                  f'({tags} %), замены — {r3[0][4]} ({replaces} %).')
             else:
                 cur.execute('SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES),'
                             ' SUM(tags), SUM(rfd), SUM(replaces) FROM ds_antivandal WHERE name=%s;', actor)
@@ -208,118 +467,104 @@ def get_from_db(is_all: bool = True, actor: str = None):
             return {'rollbacks': 0, 'undos': 0, 'approves': 0, 'rfd': 0, 'patterns': 0, 'LW': 0, 'ORES': 0, 'tags': 0,
                     'replaces': 0}
     except Exception as e:
-        print(f'get_from_db error 1: {e}')
+        print(f'Error 14.0: {e}')
         return False
 
 
-def delete_from_db(actor: str) -> None:
+async def delete_from_db(actor: str) -> None:
     """Удаление из БД."""
     try:
-        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG['ENABLE'] else (
-            toolforge.toolsdb(DB_CREDITS['database']))
+        conn = pymysql.connections.Connection(**DB_CREDITS) if DEBUG else toolforge.toolsdb(DB_CREDITS['database'])
         with conn.cursor() as cur:
             cur.execute(f'DELETE FROM ds_antivandal WHERE name="{actor}";')
             conn.commit()
         conn.close()
     except Exception as e:
-        print(f'delete_from_db error 1: {e}')
+        print(f'Error 15.0: {e}')
 
 
 @client.tree.context_menu(name='Поприветствовать')
-async def welcome_user(inter: discord.Interaction, message: discord.Message):
+async def welcome_user(interaction: discord.Interaction, message: discord.Message):
     """Шаблонное приветствие пользователя."""
-    if inter.user.id in CONFIG['ADMINS']:
+    await interaction_defer(interaction, '0.10')
+    if interaction.user.id not in CONFIG['ADMINS']:
         try:
-            await inter.response.defer()
-            await inter.followup.send(content=f'Приветствуем, <@{message.author.id}>! Если вы желаете получить доступ '
-                                              'к остальным каналам сервера, сообщите, пожалуйста, имя вашей учётной '
-                                              f'записи в проектах Викимедиа.')
+            await interaction.followup.send(content='К сожалению, у вас нет разрешения на выполнение данной команды.')
         except Exception as e:
-            print(f'welcome_user error 1: {e}')
-    else:
-        try:
-            await inter.response.defer(ephemeral=True)
-            await inter.followup.send(content='К сожалению, у вас нет разрешения на выполнение данной команды.')
-        except Exception as e:
-            print(f'welcome_user error 2: {e}')
+            print(f'Error 16.0: {e}')
+        return
+    try:
+        await interaction.followup.send(content=f'Приветствуем, <@{message.author.id}>! Если вы желаете получить '
+                                                'доступ к остальным каналам сервера, сообщите, пожалуйста, имя вашей '
+                                                'учётной записи в проектах Викимедиа.')
+    except Exception as e:
+        print(f'Error 17.0: {e}')
 
 
 @client.tree.command(name='rollback_restart_cleaner')
-async def rollback_restart_cleaner(inter: discord.Interaction):
-    """Перезаапуск бота, очищающего ленты."""
+async def rollback_restart_cleaner(interaction: discord.Interaction):
+    """Перезапуск бота, очищающего ленты."""
+    await interaction_defer(interaction, '0.11')
+    if interaction.user.id not in CONFIG['ADMINS']:
+        try:
+            await interaction.followup.send(content='К сожалению, у вас нет разрешения на выполнение данной команды. '
+                                                    f'Обратитесь к участнику <@{223219998745821194}> или '
+                                                    f'<@{352826965494988822}>.', ephemeral=True)
+        except Exception as e:
+            print(f'Error 18.0: {e}')
+        return
+    session = aiohttp.ClientSession(headers=USER_AGENT)
     try:
-        await inter.response.defer(ephemeral=True)
+        await session.get(url='https://rv.toolforge.org/online.php?send=1&action=restart&name=antclr'
+                              f'&token={os.environ["BOT_TOKEN"]}')
+        await interaction.followup.send(content='Запрос отправлен.', ephemeral=True)
     except Exception as e:
-        print(f'restart_cleaner 1: {e}')
-    else:
-        if inter.user.id in CONFIG['ADMINS']:
-            session = aiohttp.ClientSession(headers=USER_AGENT)
-            try:
-                await session.get(url='https://rv.toolforge.org/online.php?send=1&action=restart&name=antclr'
-                                      f'&token={os.environ["BOT_TOKEN"]}')
-                await inter.followup.send(content='Запрос отправлен.', ephemeral=True)
-            except Exception as e:
-                print(f'restart_cleaner 2: {e}')
-            finally:
-                await session.close()
-        else:
-            try:
-                await inter.followup.send(content='К сожалению, у вас нет разрешения на выполнение данной команды. '
-                                                  f'Обратитесь к участнику <@{223219998745821194}> или '
-                                                  f'<@{352826965494988822}>.',
-                                          ephemeral=True)
-            except Exception as e:
-                print(f'restart_cleaner 3: {e}')
+        print(f'error 19.0: {e}')
+    finally:
+        await session.close()
 
 
 @client.tree.command(name='rollback_help')
-async def rollback_help(inter: discord.Interaction):
+async def rollback_help(interaction: discord.Interaction):
     """Список команд бота."""
+    await interaction_defer(interaction, '0.12')
     try:
-        await inter.response.defer(ephemeral=True)
+        await interaction.followup.send(content="""/rollback_help — список команд бота.\n
+                                                /rollback_clear — очистка фид-каналов от всех сообщений бота.\n
+                                                /rollbackers — список участников, кому разрешены действия через бот.\n
+                                                /add_rollbacker — разрешить участнику действия через бот.\n"
+                                                /remove_rollbacker — запретить участника действия через бот.\n
+                                                /rollback_stats_all — статистика откатов через бот.\n
+                                                /rollback_stats — статистика действий участника через бот.\n
+                                                /rollback_stats_delete — удалить всю статистику действий участника.\n
+                                                По вопросам работы бота обращайтесь к <@352826965494988822>.""",
+                                        ephemeral=True)
     except Exception as e:
-        print(f'rollback_help 1: {e}')
-    else:
-        try:
-            await inter.followup.send(content="""/rollback_help — список команд бота.\n
-                                              /rollback_clear — очистка фид-каналов от всех сообщений бота.\n
-                                              /rollbackers — список участников, кому разрешены действия через бот.\n
-                                              /add_rollbacker — разрешить участнику действия через бот.\n"
-                                              /remove_rollbacker — запретить участника действия через бот.\n
-                                              /rollback_stats_all — статистика откатов через бот.\n
-                                              /rollback_stats — статистика действий участника через бот.\n
-                                              /rollback_stats_delete — удалить всю статистику действий участника.\n
-                                              По вопросам работы бота обращайтесь к <@352826965494988822>.""",
-                                      ephemeral=True)
-        except Exception as e:
-            print(f'rollback_help 2: {e}')
+        print(f'Error 20.0: {e}')
 
 
 @client.tree.command(name='rollback_stats_all')
-async def rollback_stats_all(inter: discord.Interaction):
+async def rollback_stats_all(interaction: discord.Interaction):
     """Просмотреть статистику откатов и отмен через бот."""
+    await interaction_defer(interaction, '0.13')
+    r = await get_from_db(is_all=True)
+    if not r or not len(r):
+        return
     try:
-        await inter.response.defer(ephemeral=True)
+        await interaction.followup.send(content=f'Через бот совершено: откатов — {r["rollbacks"]}, '
+                                          f'отмен — {r["undos"]}, одобрений ревизий — {r["approves"]}, '
+                                          f'номинаций на КБУ — {r["rfd"]}.\n'
+                                          f'Наибольшее количество действий совершили:\n{r["total"]}\n'
+                                          f'Действий по типам причин: паттерны — {r["patterns"]}, '
+                                          f'ORES — {r["ORES"]}, LW — {r["LW"]}, метки — {r["tags"]}, '
+                                          f'замены — {r["replaces"]}.\n'
+                                          f'{r["triggers"]}', ephemeral=True)
     except Exception as e:
-        print(f'rollback_stats_all 1: {e}')
-    else:
-        r = get_from_db(is_all=True)
-        if r and len(r):
-            try:
-                await inter.followup.send(content=f'Через бот совершено: откатов — {r["rollbacks"]}, '
-                                                  f'отмен — {r["undos"]}, одобрений ревизий — {r["approves"]}, '
-                                                  f'номинаций на КБУ — {r["rfd"]}.\n'
-                                                  f'Наибольшее количество действий совершили:\n{r["total"]}\n'
-                                                  f'Действий по типам причин: паттерны — {r["patterns"]}, '
-                                                  f'ORES — {r["ORES"]}, LW — {r["LW"]}, метки — {r["tags"]}, '
-                                                  f'замены — {r["replaces"]}.\n'
-                                                  f'{r["triggers"]}', ephemeral=True)
-            except Exception as e:
-                print(f'rollback_stats_all 2: {e}')
+        print(f'Error 21.0: {e}')
 
 
 @client.tree.command(name='rollback_stats')
-async def rollback_stats(inter: discord.Interaction, wiki_name: str):
+async def rollback_stats(interaction: discord.Interaction, wiki_name: str):
     """Просмотреть статистику откатов и отмен через бот.
 
     Parameters
@@ -327,33 +572,29 @@ async def rollback_stats(inter: discord.Interaction, wiki_name: str):
     wiki_name: str
         Имя участника в вики
      """
+    await interaction_defer(interaction, '0.14')
+    r = await get_from_db(is_all=False, actor=wiki_name)
+    if not r or not len(r):
+        return
+
     try:
-        await inter.response.defer(ephemeral=True)
+        if r['rollbacks'] is None:
+            await interaction.followup.send(content='Данный участник не совершал действий через бот.', ephemeral=True)
+        else:
+            await interaction.followup.send(content=f'Через бот участник {wiki_name} совершил действий: '
+                                                    f'{r["rollbacks"] + r["undos"] + r["approves"]},\n'
+                                                    f'из них: откатов — {r["rollbacks"]}, отмен — {r["undos"]}, '
+                                                    f'одобрений ревизий — {r["approves"]}, '
+                                                    f'номинаций на КБУ — {r["rfd"]}.\n'
+                                                    'Действий по типам причин, за всё время: паттерны — '
+                                                    f'{r["patterns"]}, замены — {r["replaces"]}, ORES — {r["ORES"]}, '
+                                                    f'LW — {r["LW"]}, метки — {r["tags"]}.', ephemeral=True)
     except Exception as e:
-        print(f'rollback_stats 1: {e}')
-    else:
-        r = get_from_db(is_all=False, actor=wiki_name)
-        if r and len(r):
-            try:
-                if r['rollbacks'] is None:
-                    await inter.followup.send(
-                        content='Данный участник не совершал действий через бот.', ephemeral=True)
-                else:
-                    await inter.followup.send(content=f'Через бот участник {wiki_name} совершил действий: '
-                                                      f'{r["rollbacks"] + r["undos"] + r["approves"]},\n'
-                                                      f'из них: откатов — {r["rollbacks"]}, отмен — {r["undos"]}, '
-                                                      f'одобрений ревизий — {r["approves"]}, '
-                                                      f'номинаций на КБУ — {r["rfd"]}.\n'
-                                                      'Действий по типам причин, за всё время: паттерны — '
-                                                      f'{r["patterns"]}, замены — {r["replaces"]}, ORES — {r["ORES"]}, '
-                                                      f'LW — {r["LW"]}, метки — {r["tags"]}.', ephemeral=True)
-            except Exception as e:
-                print(f'rollback_stats 2: {e}')
+        print(f'Error 22.0: {e}')
 
 
-# noinspection PyUnresolvedReferences
 @client.tree.command(name='rollback_stats_delete')
-async def rollback_stats_delete(inter: discord.Interaction, wiki_name: str):
+async def rollback_stats_delete(interaction: discord.Interaction, wiki_name: str):
     """Удалить статистку откатов и отмен конкретного участника через бот.
 
     Parameters
@@ -361,101 +602,87 @@ async def rollback_stats_delete(inter: discord.Interaction, wiki_name: str):
     wiki_name: str
         Имя участника в вики
      """
+    await interaction_defer(interaction, '0.15')
+    if interaction.user.id not in CONFIG['ADMINS']:
+        try:
+            await interaction.followup.send(content='К сожалению, у вас нет разрешения '
+                                                    'на выполнение данной команды. Обратитесь к участнику '
+                                                    f'<@{223219998745821194}> или <@{352826965494988822}>.',
+                                            ephemeral=True)
+        except Exception as e:
+            print(f'Error 23.0: {e}')
+        return
+
+    await delete_from_db(wiki_name)
     try:
-        await inter.response.defer(ephemeral=True)
+        await interaction.followup.send(content='Статистика участника удалена, убедитесь в этом через соответствующую '
+                                                'команду.', ephemeral=True)
     except Exception as e:
-        print(f'rollback_stats_delete 1: {e}')
-    else:
-        if inter.user.id in CONFIG['ADMINS']:
-            delete_from_db(wiki_name)
-            try:
-                await inter.followup.send(content='Статистика участника удалена, убедитесь в этом через соответствующую '
-                                                  'команду.', ephemeral=True)
-            except Exception as e:
-                print(f'rollback_stats_delete 3: {e}')
-        else:
-            try:
-                await inter.followup.send(content='К сожалению, у вас нет разрешения '
-                                                  'на выполнение данной команды. Обратитесь к участнику '
-                                                  f'<@{223219998745821194}> или <@{352826965494988822}>.',
-                                          ephemeral=True)
-            except Exception as e:
-                print(f'rollback_stats_delete 4: {e}')
+        print(f'Error 24.0: {e}')
 
 
 @client.tree.command(name='last_metro')
-async def last_metro(inter: discord.Interaction):
+async def last_metro(interaction: discord.Interaction):
     """Узнать время последнего запуска бота #metro."""
+    await interaction_defer(interaction, '0.16')
+    session = aiohttp.ClientSession(headers=USER_AGENT)
     try:
-        await inter.response.defer(ephemeral=True)
+        r = await session.get(url='https://rv.toolforge.org/metro/')
+        r = await r.text()
+        metro = r.split('<br>')[0].replace('Задание запущено', 'Последний запуск задания:')
+        await interaction.followup.send(content=metro, ephemeral=True)
     except Exception as e:
-        print(f'Metro error 1: {e}')
-    else:
-        session = aiohttp.ClientSession(headers=USER_AGENT)
-        try:
-            r = await session.get(url='https://rv.toolforge.org/metro/')
-            r = await r.text()
-            metro = r.split('<br>')[0].replace('Задание запущено', 'Последний запуск задания:')
-            await inter.followup.send(content=metro, ephemeral=True)
-        except Exception as e:
-            print(f'Metro error 2: {e}')
-        finally:
-            await session.close()
+        print(f'Error 25.0: {e}')
+    finally:
+        await session.close()
 
 
 @client.tree.command(name='rollback_clear')
-async def rollback_clear(inter: discord.Interaction):
+async def rollback_clear(interaction: discord.Interaction):
     """Очистка каналов с выдачей от сообщений бота."""
+    await interaction_defer(interaction, '0.17')
+
+    if interaction.user.id not in CONFIG['ADMINS']:
+        try:
+            await interaction.followup.send(content='К сожалению, у вас нет разрешения '
+                                              'на выполнение данной команды. '
+                                              f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
+        except Exception as e:
+            print(f'Error 26.0: {e}')
+        return
+
     try:
-        await inter.response.defer(ephemeral=True)
+        await interaction.followup.send(content='Очистка каналов начата.', ephemeral=True)
     except Exception as e:
-        print(f'Clear feed error 1: {e}')
-    else:
-        if inter.user.id in CONFIG['ADMINS']:
-            try:
-                await inter.followup.send(content='Очистка каналов начата.', ephemeral=True)
-            except Exception as e:
-                print(f'Clear feed error 2: {e}')
-            for channel_id in CONFIG['IDS']:
-                channel = client.get_channel(channel_id)
-                messages = channel.history(limit=100000)
-                async for msg in messages:
-                    if msg.author.id == CONFIG['BOT']:
-                        try:
-                            await msg.delete()
-                            await asyncio.sleep(1.5)
-                        except Exception as e:
-                            print(f'Clear feed error 3: {e}')
-                        time.sleep(1.0)
-        else:
-            try:
-                await inter.followup.send(content='К сожалению, у вас нет разрешения '
-                                                  'на выполнение данной команды. '
-                                                  f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
-            except Exception as e:
-                print(f'Clear feed error 4: {e}')
+        print(f'Error 27.0: {e}')
+    for channel_id in CONFIG['IDS']:
+        channel = client.get_channel(channel_id)
+        messages = channel.history(limit=100000)
+        async for msg in messages:
+            if msg.author.id == CONFIG['BOT']:
+                try:
+                    await msg.delete()
+                    await asyncio.sleep(1.5)
+                except Exception as e:
+                    print(f'Error 28.0: {e}')
+                time.sleep(1.0)
 
 
 @client.tree.command(name='rollbackers')
-async def rollbackers(inter: discord.Interaction):
+async def rollbackers(interaction: discord.Interaction):
     """Просмотра списка участников, кому разрешён откат и отмена через бот."""
+    await interaction_defer(interaction, '0.18')
+    rights_content = ALLOWED_USERS.values()
     try:
-        await inter.response.defer(ephemeral=True)
-        msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
-        rights_content = json.loads(msg_rights.content.replace('`', '')).values()
+        await interaction.followup.send(content=f'Откаты и отмены через бота разрешены участникам '
+                                        f'`{", ".join(rights_content)}`.\nДля запроса права или отказа от него '
+                                        f'обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
     except Exception as e:
-        print(f'Rollbackers list error 1: {e}')
-    else:
-        try:
-            await inter.followup.send(content=f'Откаты и отмены через бота разрешены участникам '
-                                              f'`{", ".join(rights_content)}`.\nДля запроса права или отказа от него '
-                                              f'обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
-        except Exception as e:
-            print(f'Rollbackers list error 2: {e}')
+        print(f'Error 29.0: {e}')
 
 
 @client.tree.command(name='add_rollbacker')
-async def add_rollbacker(inter: discord.Interaction, discord_name: discord.User, wiki_name: str):
+async def add_rollbacker(interaction: discord.Interaction, discord_name: discord.User, wiki_name: str):
     """Добавление участника в список тех, кому разрешён откат и отмена ботом.
 
     Parameters
@@ -465,42 +692,35 @@ async def add_rollbacker(inter: discord.Interaction, discord_name: discord.User,
     wiki_name: str
         Имя участника в вики
     """
-    try:
-        await inter.response.defer(ephemeral=True)
-    except Exception as e:
-        print(f'Add rollbacker error 1: {e}')
-    if inter.user.id in CONFIG['ADMINS']:
-        if '@' not in wiki_name:
-            try:
-                msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
-                rights_content = json.loads(msg_rights.content.replace('`', ''))
-            except Exception as e:
-                print(f'Add rollbacker error 2: {e}')
-            else:
-                if str(discord_name.id) not in rights_content:
-                    rights_content[str(discord_name.id)] = wiki_name
-                    try:
-                        await msg_rights.edit(content=json.dumps(rights_content))
-                        await inter.followup.send(content=f'Участник {wiki_name} добавлен в список откатывающих.',
-                                                  ephemeral=True)
-                    except Exception as e:
-                        print(f'Add rollbacker error 3: {e}')
-                else:
-                    try:
-                        await inter.followup.send(content=f'Участник {wiki_name} уже присутствует в списке '
-                                                          f'откатывающих.', ephemeral=True)
-                    except Exception as e:
-                        print(f'Add rollbacker error 4: {e}')
-    else:
+    await interaction_defer(interaction, '0.19')
+    if interaction.user.id not in CONFIG['ADMINS']:
         try:
-            await inter.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
+            await interaction.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
                                               f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Add rollbacker error 4: {e}')
+            print(f'Error 30.0: {e}')
+        return
+
+    global ALLOWED_USERS
+    add_rollbacker_result = f'Участник {wiki_name} уже присутствует в списке откатывающих.'
+    if str(discord_name.id) not in ALLOWED_USERS:
+        add_rollbacker_result = f'Участник {wiki_name} добавлен в список откатывающих.'
+        ALLOWED_USERS[str(discord_name.id)] = wiki_name
+
+        try:
+            msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
+            await msg_rights.edit(content=json.dumps(ALLOWED_USERS))
+        except Exception as e:
+            print(f'Error 31.0: {e}')
+            return
+    try:
+        await interaction.followup.send(content=add_rollbacker_result, ephemeral=True)
+    except Exception as e:
+        print(f'Error 32.0: {e}')
 
 
 @client.tree.command(name='remove_rollbacker')
-async def remove_rollbacker(inter: discord.Interaction, wiki_name: str):
+async def remove_rollbacker(interaction: discord.Interaction, wiki_name: str):
     """Удаление участника из списка тех, кому разрешён откат и отмена ботом.
 
     Parameters
@@ -508,41 +728,33 @@ async def remove_rollbacker(inter: discord.Interaction, wiki_name: str):
     wiki_name: str
         Имя участника в вики
     """
-    try:
-        await inter.response.defer(ephemeral=True)
-    except Exception as e:
-        print(f'Remove rollbacker error 1: {e}')
-    if inter.user.id in CONFIG['ADMINS']:
+    await interaction_defer(interaction, '0.20')
+    if interaction.user.id not in CONFIG['ADMINS']:
         try:
-            msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
-            rights_content = json.loads(msg_rights.content.replace('`', ''))
-        except Exception as e:
-            print(f'Remove rollbacker error 2: {e}')
-        else:
-            right_copy = rights_content.copy()
-            for k in right_copy:
-                if rights_content[k] == wiki_name:
-                    del rights_content[k]
-            if right_copy != rights_content:
-                try:
-                    await msg_rights.edit(content=json.dumps(rights_content))
-                except Exception as e:
-                    print(f'Remove rollbacker error 3: {e}')
-                else:
-                    await inter.followup.send(content=f'Участник {wiki_name} убран из списка откатывающих.',
-                                              ephemeral=True)
-            else:
-                try:
-                    await inter.followup.send(content=f'Участника {wiki_name} не было в списке откатывающих.',
-                                              ephemeral=True)
-                except Exception as e:
-                    print(f'Remove rollbacker error 4: {e}')
-    else:
-        try:
-            await inter.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
+            await interaction.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
                                               f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Remove rollbacker error 4: {e}')
+            print(f'Error 33.0: {e}')
+        return
+
+    global ALLOWED_USERS
+    right_copy = ALLOWED_USERS.copy()
+    for k in right_copy:
+        if ALLOWED_USERS[k] == wiki_name:
+            del ALLOWED_USERS[k]
+    remove_rollbacker_result = f'Участника {wiki_name} не было в списке откатывающих.'
+    if right_copy != ALLOWED_USERS:
+        remove_rollbacker_result = f'Участник {wiki_name} убран из списка откатывающих.'
+        try:
+            msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
+            await msg_rights.edit(content=json.dumps(ALLOWED_USERS))
+        except Exception as e:
+            print(f'Error 34.0: {e}')
+            return
+    try:
+        await interaction.followup.send(content=remove_rollbacker_result, ephemeral=True)
+    except Exception as e:
+        print(f'Error 35.0: {e}')
 
 
 async def do_rollback(embed, actor, action_type='rollback', reason=''):
@@ -555,7 +767,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
     try:
         r = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, title, session)
     except Exception as e:
-        print(f'rollback error 1.1: {e}')
+        print(f'Error 36.0: {e}')
         await session.close()
     else:
         if not r:
@@ -564,14 +776,14 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
             await session.close()
             return ['Такой страницы уже не существует, правки были откачены или страница отпатрулирована.',
                     f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
-        data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'ids|timestamp', 'rvlimit': 500,
-                'rvendid': rev_id, 'rvuser': get_name_from_embed(lang, embed.author.url), 'titles': title,
-                'format': 'json', 'utf8': 1, 'uselang': 'ru'}
+    data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'ids|timestamp', 'rvlimit': 500,
+            'rvendid': rev_id, 'rvuser': get_name_from_embed(lang, embed.author.url), 'titles': title,
+            'format': 'json', 'utf8': 1, 'uselang': 'ru'}
     try:
         r = await session.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
         r = await r.json()
     except Exception as e:
-        print(f'rollback error 2: {e}')
+        print(f'Error 37.0: {e}')
         await session.close()
     else:
         if '-1' in r['query']['pages']:
@@ -598,7 +810,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                 except Exception as e:
                     await session_with_auth.close()
                     await session.close()
-                    print(f'rollback error 3: {e}')
+                    print(f'Error 38.0: {e}')
                 else:
                     data = {'action': 'rollback', 'format': 'json', 'title': title,
                             'user': get_name_from_embed(lang, embed.author.url), 'utf8': 1, 'watchlist': 'nochange',
@@ -607,7 +819,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                         r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
                         r = await r.json()
                     except Exception as e:
-                        print(f'rollback error 4: {e}')
+                        print(f'Error 39.0: {e}')
                     else:
                         return [r['error']['info'],
                                 f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
@@ -626,7 +838,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                     r = await r.json()
                     check_revs = len(r['query']['pages'][page_id]['revisions'])
                 except Exception as e:
-                    print(f'rollback error 5: {e}')
+                    print(f'Error 40.0: {e}')
                 else:
                     if check_revs == 0:
                         await session_with_auth.close()
@@ -645,7 +857,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                     except Exception as e:
                         await session.close()
                         await session_with_auth.close()
-                        print(f'rollback error 6: {e}')
+                        print(f'Error 41.0: {e}')
                     else:
                         reason = reason.replace('$author', get_name_from_embed(lang, embed.author.url)).replace(
                             '$lastauthor', last_author)
@@ -656,9 +868,10 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                             r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
                             r = await r.json()
                         except Exception as e:
-                            print(f'rollback error 7: {e}')
+                            print(f'Error 42.0: {e}')
                         else:
-                            if 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
+                            if ('error' not in r and 'edit' in r and 'newrevid' not in r['edit'] and
+                                    'revid' not in r['edit']):
                                 return print(r)  # debug
                             return [r['error']['info'], f'[{title}](<https://{lang}'
                                                         f'.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
@@ -674,44 +887,14 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
             await session.close()
 
 
-def get_view(lang: str = 'ru', page: str = '', user: str = '', disable: bool = False) -> View:
-    """Формирование набора компонентов."""
-    btn1 = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id='btn1', disabled=disable, row=1)
-    btn2 = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id='btn5', disabled=disable, row=1)
-    btn5 = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id='btn3', disabled=disable, row=1)
-    view = View()
-    [view.add_item(i) for i in [btn1, btn2, btn5]]
-
-    # if lang == 'ru':
-    #     user, page = quote(user), quote(page)
-    #     btn3 = Button(emoji='🔨', style=discord.ButtonStyle.url,
-    #                   url=f'https://ru.wikipedia.org/w/index.php?action=edit&preload=User:Iluvatar/Preload&'
-    #                       f'section=new&title=User:QBA-bot/Запросы_на_блокировку&preloadtitle=1%23%23%23%23{user}',
-    #                   disabled=disable, row=2)
-    #     btn4 = Button(emoji='🔒', style=discord.ButtonStyle.url, url=f'https://ru.wikipedia.org/w/index.php?'
-    #                                                                 f'action=edit&preload=User:Iluvatar/Preload&'
-    #                                                                 f'section=new&title=User:Iluvatar/Запросы_на_'
-    #                                                                 f'полузащиту&preloadtitle=1%23%23%23%23{page}',
-    #                   disabled=disable, row=2)
-    #     [view.add_item(i) for i in [btn3, btn4]]
-
-    btn6 = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id='btn2', disabled=disable,
-                  row=1) #2 if lang == 'ru' else 1)
-    btn7 = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id='btn4', disabled=disable,
-                  row=1) #2 if lang == 'ru' else 1)
-    [view.add_item(i) for i in [btn6, btn7]]
-    return view
-
-
 def get_name_from_embed(lang: str, link: str) -> str:
     """Получение имени пользователя из ссылки на вклад."""
     return unquote(link.replace(f'https://{lang}.wikipedia.org/wiki/special:contribs/', ''))
 
 
-async def do_rfd(embed: discord.Embed, rfd: str, summary: str):
+async def do_rfd(embed: Embed, rfd: str, summary: str):
     """Номинация на быстрое удаление."""
-    diff_url = embed.url
-    title = embed.title
+    diff_url, title = embed.url, embed.title
     lang = get_lang(diff_url)
     api_url = f'https://{lang}.wikipedia.org/w/api.php'
     headers = {'Authorization': f'Bearer {BEARER_TOKEN}', 'User-Agent': 'Reimu; iluvatar@tools.wmflabs.org'}
@@ -724,7 +907,7 @@ async def do_rfd(embed: discord.Embed, rfd: str, summary: str):
         edit_token = edit_token['query']['tokens']['csrftoken']
     except Exception as e:
         await session.close()
-        print(f'rfd error 1: {e}')
+        print(f'Error 43.0: {e}')
     else:
         payload = {'action': 'edit', 'format': 'json', 'title': title, 'prependtext': f'{rfd}\n\n', 'token': edit_token,
                    'utf8': 1, 'nocreate': 1, 'summary': summary, 'uselang': 'ru'}
@@ -732,9 +915,9 @@ async def do_rfd(embed: discord.Embed, rfd: str, summary: str):
             r = await session.post(url=api_url, data=payload)
             r = await r.json()
         except Exception as e:
-            print(f'rfd error 2: {e}')
+            print(f'Error 44.0: {e}')
         else:
-            if 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
+            if 'error' not in r and 'edit' in r and 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
                 return print(r)  # debug
             return [r['error']['info'], f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                         f'(ID: {title})'] if 'error' in r \
@@ -745,279 +928,76 @@ async def do_rfd(embed: discord.Embed, rfd: str, summary: str):
 
 
 @client.event
-async def on_interaction(inter):
-    """Событие получение отклика пользователя."""
-    if 'custom_id' not in inter.data:
-        return
-    if inter.data['custom_id'] != 'sel1' and inter.data['custom_id'] != 'sel2':
-        try:
-            await inter.response.defer()
-        except Exception as e:
-            print(f'On_Interaction error 0.1: {e}')
-    else:
-        if (inter.data['custom_id'] == 'sel1' and inter.data['values'][0] != '14') or (inter.data['custom_id'] == 'sel2'
-                                                                                       and inter.data['values'][0]
-                                                                                       != '8'):
-            try:
-                await inter.response.defer()
-            except Exception as e:
-                print(f'On_Interaction error 0.2: {e}')
-    if inter.channel.id in CONFIG['IDS']:
-        try:
-            msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
-            msg_rights = json.loads(msg_rights.content.replace('`', ''))
-        except Exception as e:
-            print(f'On_Interaction error 1: {e}')
-        else:
-            if str(inter.user.id) not in msg_rights:
-                try:
-                    await inter.followup.send(content='К сожалению, у вас нет разрешение на выполнение откатов и отмен '
-                                                      f'через бот. Обратитесь к участнику <@{223219998745821194}>.',
-                                              ephemeral=True)
-                except Exception as e:
-                    print(f'On_Interaction error 2: {e}')
-                return
-            actor = msg_rights[str(inter.user.id)]
-            msg = inter.message
-            channel = client.get_channel(CONFIG['SOURCE'])
-
-            undo_options_check, rfd_options_check = False, False
-            if 'components' in inter.data and len(inter.data['components']) > 0 and 'components' in \
-                    inter.data['components'][0] and len(inter.data['components'][0]['components']) > 0:
-                if inter.data['components'][0]['components'][0]['custom_id'] in ['edt1', 'edt2']:
-                    if inter.data['components'][0]['components'][0]['custom_id'] == 'edt1':
-                        undo_options_check = inter.data['components'][0]['components'][0]['value']
-                    else:
-                        rfd_options_check = inter.data['components'][0]['components'][0]['value']
-            lang = get_lang(msg.embeds[0].url)
-            base_view = get_view(lang=lang, user=get_name_from_embed(lang, msg.embeds[0].author.url),
-                                 page=msg.embeds[0].title)
-            if inter.data['custom_id'] == 'sel2' or rfd_options_check is not False:
-                lang_selector = 1
-                if lang == 'uk':
-                    lang_selector = 2
-                summary = rfd_summary[lang_selector - 1].replace('$actor', actor)
-                if inter.data['custom_id'] == 'sel2':
-                    selected = inter.data['values'][0]
-                    rfd_reason = select_options_rfd[selected][lang_selector]
-                    try:
-                        await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                    except Exception as e:
-                        print(f'On_Interaction TextEdit error 1.1: {e}')
-                    if selected == '8':
-                        try:
-                            await inter.response.send_modal(ReasonRFD())
-                        except Exception as e:
-                            print(f'On_Interaction TextEdit error 2.1: {e}')
-                        return
-                    if selected == '9':
-                        try:
-                            await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                        except Exception as e:
-                            print(f'On_Interaction TextEdit error 3.1: {e}')
-                        return
-                else:
-                    rfd_reason = rfd_options_check
-                r = await do_rfd(msg.embeds[0], rfd=rfd_reason, summary=summary)
-                try:
-                    if r[0] == 'Success':
-                        await channel.send(content=f'{actor} номинировал {r[1]} на КБУ.')
-                        send_to_db(actor, 'rfd', get_trigger(msg.embeds[0]))
-                        await msg.delete()
-                    else:
-                        if 'уже не существует' in r[0]:
-                            new_embed = discord.Embed(color=msg.embeds[0].color, title='Страница была удалена.')
-                            await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
-                        else:
-                            if r[1] != '':
-                                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
-                            else:
-                                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
-                            await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                except Exception as e:
-                    print(f'On_Interaction error 3.2: {e}')
-            if inter.data['custom_id'] == 'sel1' or undo_options_check is not False:
-                lang_selector = 1
-                if lang == 'uk':
-                    lang_selector = 2
-
-                if inter.data['custom_id'] == 'sel1':
-                    selected = inter.data['values'][0]
-                    reason = (f'{undo_prefix[lang_selector - 1].replace("$actor", actor)} '
-                              f'{select_options_undo[selected][lang_selector].replace("$1", msg.embeds[0].title)}')
-                    try:
-                        await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                    except Exception as e:
-                        print(f'On_Interaction TextEdit error 1: {e}')
-                    if selected == '14':
-                        try:
-                            await inter.response.send_modal(ReasonUndo())
-                        except Exception as e:
-                            print(f'On_Interaction TextEdit error 2: {e}')
-                        return
-                    if selected == '15':
-                        try:
-                            await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                        except Exception as e:
-                            print(f'On_Interaction TextEdit error 3: {e}')
-                        return
-                else:
-                    reason = f'{undo_prefix[lang_selector - 1].replace("$actor", actor)} {undo_options_check}'
-                r = await do_rollback(msg.embeds[0], actor, action_type='undo', reason=reason)
-                try:
-                    if r[0] == 'Success':
-                        await channel.send(content=f'{actor} выполнил отмену на странице {r[1]}.')
-                        send_to_db(actor, 'undos', get_trigger(msg.embeds[0]))
-                        await msg.delete()
-                    else:
-                        if 'были откачены' in r[0]:
-                            send_to_db('service_account', 'undos', get_trigger(msg.embeds[0]))
-                            new_embed = discord.Embed(color=msg.embeds[0].color, title='Страница была удалена, '
-                                                                                       'отпатрулирована или правки уже '
-                                                                                       'были откачены.')
-                            await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
-                        elif 'версии принадлежат' in r[0]:
-                            msg.embeds[0].set_footer(text='Отмена не удалась: все версии страницы принадлежат одному '
-                                                          'участнику.')
-                            await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                        else:
-                            if r[1] != '':
-                                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
-                            else:
-                                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
-                            await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                except Exception as e:
-                    print(f'On_Interaction error 3: {e}')
-            if inter.data['custom_id'] == 'btn1':
-                if len(msg.embeds) > 0:
-                    r = await do_rollback(msg.embeds[0], actor)
-                    try:
-                        if r[0] == 'Success':
-                            await inter.message.delete()
-                            await channel.send(content=f'{actor} выполнил откат на странице {r[1]}.')
-                            send_to_db(actor, 'rollbacks', get_trigger(msg.embeds[0]))
-                        else:
-                            if 'были откачены' in r[0]:
-                                send_to_db('service_account', 'rollbacks', get_trigger(msg.embeds[0]))
-                                new_embed = discord.Embed(color=msg.embeds[0].color, title='Страница была удалена, '
-                                                                                       'отпатрулирована или правки уже '
-                                                                                       'были откачены.')
-                                await inter.message.edit(embed=new_embed, view=None, delete_after=12.0)
-                            else:
-                                footer_info = f'{r[0]}, {r[1]}' if r[1] != '' else f'{r[0]}'
-                                if r[1] != '':
-                                    msg.embeds[0].set_footer(text=f'Действие не удалось: {footer_info}.')
-                                await msg.edit(content=msg.content, embed=msg.embeds[0], view=base_view)
-                    except Exception as e:
-                        print(f'On_Interaction error 6: {e}')
-            if inter.data['custom_id'] == 'btn2':
-                try:
-                    await inter.message.delete()
-                    await channel.send(content=f'{actor} одобрил [правку](<{msg.embeds[0].url}>) на странице '
-                                               f'{msg.embeds[0].title}.')
-                    send_to_db(actor, 'approves', get_trigger(msg.embeds[0]), bad=True)
-                except Exception as e:
-                    print(f'On_Interaction error 5: {e}')
-            if inter.data['custom_id'] == 'btn3':
-                view = View()
-                view.add_item(select_component_undo)
-                try:
-                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=view)
-                except Exception as e:
-                    print(f'On_Interaction error 4: {e}')
-            if inter.data['custom_id'] == 'btn5':
-                view = View()
-                view.add_item(select_component_rfd)
-                try:
-                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=view)
-                except Exception as e:
-                    print(f'On_Interaction error 4.1: {e}')
-            if inter.data['custom_id'] == 'btn4':
-                try:
-                    await inter.message.delete()
-                    await channel.send(
-                        content=f'{actor} отметил [правку](<{msg.embeds[0].url}>) на странице {msg.embeds[0].title} '
-                                f'как неконструктивную, но уже отменённую.')
-                    send_to_db(actor, 'approves', get_trigger(msg.embeds[0]))
-                except Exception as e:
-                    print(f'On_Interaction error 6.1: {e}')
-
-
-@client.event
 async def on_message(msg):
     """Получение нового сообщения."""
+    if len(msg.embeds) == 0:
+        return
     if msg.author.id not in CONFIG['SOURCE_BOTS']:
         try:
             await client.process_commands(msg)
         except Exception as e:
-            print(f'On_Message error 1: {e}')
+            print(f'Error 45.0: {e}')
         return
     if msg.channel.id != CONFIG['SOURCE']:
         try:
             await client.process_commands(msg)
         except Exception as e:
-            print(f'On_Message error 2: {e}')
+            print(f'Error 46.0: {e}')
         return
 
+    # предотвращение массовых уведомлений от территориальных замен
     global STORAGE
-    STORAGE = [el for el in STORAGE if el['timestamp'] < datetime.datetime.now(datetime.UTC).timestamp() + 30]
-
+    STORAGE = [el for el in STORAGE if el['timestamp'] + 1800 >= datetime.datetime.now(datetime.UTC).timestamp()]
     lang = get_lang(msg.embeds[0].url)
     rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
+    trigger = get_trigger(msg.embeds[0])
+    for el in STORAGE:
+        if (el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el['trigger'] == 'replaces'
+                and trigger != 'replaces'):
+            await asyncio.sleep(1.5)
+            await el['msg'].delete()
+        if el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el[
+            'trigger'] != 'replaces' and trigger == 'replaces':
+            await asyncio.sleep(1.5)
+            await msg.delete()
+            return
 
-    if len(msg.embeds) > 0:
-        trigger = get_trigger(msg.embeds[0])
-        for el in STORAGE:
-            if (el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el['trigger'] == 'replaces' 
-                    and trigger != 'replaces'):
-                await asyncio.sleep(1.5)
-                await el['msg'].delete()
-            if el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el[
-                'trigger'] != 'replaces' and trigger == 'replaces':
-                await asyncio.sleep(1.5)
-                await msg.delete()
-                return
-
-        # не откачена ли
-        session = aiohttp.ClientSession(headers=USER_AGENT)
-        is_reverted = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, msg.embeds[0].title,
-                                           session)
-        if not is_reverted:
-            is_reverted = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', msg.embeds[0].title, rev_id,
-                                              session)
-        await session.close()
-        if is_reverted:
-            try:
-                await msg.delete()
-                return
-            except Exception as e:
-                print(f'On_Message error 3: {e}')
-        channel_new_id = 1212498198200062014 if lang == 'ru' else 1219273496371396681
-        channel_new = client.get_channel(channel_new_id)
+    # не откачена ли
+    session = aiohttp.ClientSession(headers=USER_AGENT)
+    is_reverted = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, msg.embeds[0].title,
+                                       session)
+    if not is_reverted:
+        is_reverted = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', msg.embeds[0].title, rev_id,
+                                          session)
+    await session.close()
+    if is_reverted:
         try:
-            new_message = await channel_new.send(embed=msg.embeds[0],
-                                                 view=get_view(lang=lang, disable=True,
-                                                               user=get_name_from_embed(lang, msg.embeds[0].author.url),
-                                                               page=msg.embeds[0].title))
-            STORAGE.append({'wiki': f'{lang}wiki', 'rev_id': rev_id, 'trigger': trigger, 'msg': new_message, 'timestamp':
-                datetime.datetime.now(datetime.UTC).timestamp()})
-
+            await msg.delete()
+            return
         except Exception as e:
-            print(f'On_Message error 4: {e}')
-        else:
+            print(f'Error 47.0: {e}')
+    channel_new_id = 1212498198200062014 if lang == 'ru' else 1219273496371396681
+    channel_new = client.get_channel(channel_new_id)
+    try:
+        new_message = await channel_new.send(embed=msg.embeds[0],
+                                             view=get_view_buttons(disable=True))
+        STORAGE.append({'wiki': f'{lang}wiki', 'rev_id': rev_id, 'trigger': trigger, 'msg': new_message, 'timestamp':
+            datetime.datetime.now(datetime.UTC).timestamp()})
+
+    except Exception as e:
+        print(f'Error 48.0: {e}')
+    else:
+        try:
+            await msg.delete()
+        except Exception as e:
+            print(f'Error 49.0: {e}')
+        finally:
             try:
-                await msg.delete()
+                await asyncio.sleep(3)
+                await new_message.edit(embed=new_message.embeds[0],
+                                       view=get_view_buttons())
             except Exception as e:
-                print(f'On_Message error 5: {e}')
-            finally:
-                try:
-                    await asyncio.sleep(3)
-                    await new_message.edit(embed=new_message.embeds[0],
-                                           view=get_view(lang=lang,
-                                                         user=get_name_from_embed(lang, msg.embeds[0].author.url),
-                                                         page=msg.embeds[0].title))
-                except Exception as e:
-                    print(f'On_Message error 6: {e}')
+                print(f'Error 50.0: {e}')
 
 
 @client.event
@@ -1028,8 +1008,15 @@ async def on_ready():
             if server.id not in CONFIG['SERVER']:
                 guild = discord.utils.get(client.guilds, id=server.id)
                 await guild.leave()
+        client.add_view(get_view_buttons())
+        client.add_view(get_view_rfd())
+        client.add_view(get_view_undo())
         await client.tree.sync()
         await client.change_presence(status=discord.Status.online, activity=discord.Game('pyCharm'))
+        global ALLOWED_USERS
+
+        msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
+        ALLOWED_USERS = json.loads(msg_rights.content.replace('`', ''))
 
         print('Просмотр пропущенных записей лога')
         channel = client.get_channel(CONFIG['SOURCE'])
@@ -1039,7 +1026,7 @@ async def on_ready():
                 await on_message(msg)
         print('Бот запущен')
     except Exception as e:
-        print(f'On_Ready error 1: {e}')
+        print(f'Error 51.0: {e}')
 
 
 @client.event
@@ -1049,7 +1036,7 @@ async def on_guild_join(guild):
         if guild.id not in CONFIG['SERVER']:
             await guild.leave()
     except Exception as e:
-        print(f'on_server_join 1: {e}')
+        print(f'Error 52.0: {e}')
 
 
 client.run(token=TOKEN, reconnect=True, log_level=logging.WARN)
