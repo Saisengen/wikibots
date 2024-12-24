@@ -296,8 +296,8 @@ def get_data(interaction: discord.Interaction):
 def get_view_buttons(disable: bool = False) -> View:
     """Формирование набора компонентов."""
     btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback", disabled=disable)
-    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=disable)
     btn_rfd = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id="btn_rfd", disabled=disable)
+    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=disable)
     btn_good = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id="btn_good", disabled=disable)
     btn_bad = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id="btn_bad", disabled=disable)
 
@@ -386,7 +386,7 @@ def get_view_buttons(disable: bool = False) -> View:
     btn_bad.callback = bad_handler
 
     view_buttons = View(timeout=None)
-    [view_buttons.add_item(i) for i in [btn_rollback, btn_undo, btn_rfd, btn_good, btn_bad]]
+    [view_buttons.add_item(i) for i in [btn_rollback, btn_rfd, btn_undo, btn_good, btn_bad]]
     return view_buttons
 
 
