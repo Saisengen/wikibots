@@ -51,41 +51,37 @@ class Program
     }
     static void Main()
     {
-        int minneededpeakvalue;
         var cl = new WebClient();
         cl.Headers.Add("user-agent", "Stats grabber of ruwiki user MBH");
         var results = new Dictionary<string, result>();
-        var enddate = new Dictionary<string,string>(){{"01","31"},{"02","28"},{"03","31"},{"04","30"},{"05","31"},{"06","30"},{"07","31"},{"08","31"},{"09","30"},{"10","31"},{"11","30"},{"12","31"}};
+        var enddate = new Dictionary<string, string>() { { "01", "31" }, { "02", "29" }, { "03", "31" }, { "04", "30" }, { "05", "31" }, { "06", "30" }, { "07", "31" }, { "08", "31" }, { "09", "30" }, { "10", "31" }, { "11", "30" }, { "12", "31" } };
         bool yearly = false;
-        string startmonth, endmonth, outputpage, datespan, header;
+        string startmonth, endmonth, datespan;
         int year = DateTime.Now.AddMonths(-1).Year;
-        foreach(var lang in new HashSet<string>() { "ru", "uk" })
+        var monthnames = new Dictionary<string, Dictionary<string, string>>();
+        monthnames.Add("ru", new Dictionary<string, string>() { {"01","января"}, {"02","февраля"}, {"03","марта"}, {"04","апреля"}, {"05","мая"}, {"06","июня"}, {"07","июля"}, {"08","августа"},
+                {"09","сентября"}, {"10","октября"}, {"11","ноября"}, {"12","декабря"} });
+        monthnames.Add("uk", new Dictionary<string, string>() { {"01","січня"}, {"02","лютого"}, {"03","березня"}, {"04","квітня"}, {"05","травня"}, {"06","червня"}, {"07","липня"}, {"08","серпня"},
+                {"09","вересня"}, {"10","жовтня"}, {"11","листопада"}, {"12","грудня"} });
+        monthnames.Add("be", new Dictionary<string, string>() { {"01","студзеня"}, {"02","лютага"}, {"03","сакавіка"}, {"04","красавіка"}, {"05","траўня"}, {"06","чэрвеня"}, {"07","ліпеня"}, {"08","жніўня"},
+                {"09","верасня"}, {"10","кастрычніка"}, {"11","лістапада"}, {"12","снежня"} });
+        var tableheader = new Dictionary<string, string>() { { "ru", "Статья!!Пик!!Медиана!!Дата пика" }, { "uk", "Стаття!!Пік!!Медіана!!Дата піку" }, { "be", "Артыкул!!Пік!!Медыяна!!Дата піка" } };
+        var outputpage = new Dictionary<string, Dictionary<string, string>>();
+        outputpage.Add("uk", new Dictionary<string, string>() { { "month", "Вікіпедія:Спалахи інтересу до статей" }, { "year", "Вікіпедія:Спалахи інтересу до статей/За рік" }, { "total", "Вікіпедія:Спалахи інтересу до статей/За весь час" } });
+        outputpage.Add("be", new Dictionary<string, string>() { { "month", "Вікіпедыя:Папулярныя артыкулы" }, { "year", "Вікіпедыя:Папулярныя артыкулы/За год" }, { "total", "Вікіпедыя:Папулярныя артыкулы/За ўвесь час" } });
+        outputpage.Add("ru", new Dictionary<string, string>() { { "month", "ВП:Пики интереса к статьям" }, { "year", "ВП:Пики интереса к статьям/За год" }, { "total", "ВП:Пики интереса к статьям/За всё время"} });
+        var minneededpeakvalue = new Dictionary<string, Dictionary<string, int>>();
+        minneededpeakvalue.Add("ru", new Dictionary<string, int>() { { "month", 10000 }, { "year", 15000 }, { "total", 20000 }, });
+        minneededpeakvalue.Add("uk", new Dictionary<string, int>() { { "month", 1000 }, { "year", 2000 }, { "total", 3000 }, });
+        minneededpeakvalue.Add("be", new Dictionary<string, int>() { { "month", 15 }, { "year", 30 }, { "total", 50 }, });
+        foreach (var lang in new HashSet<string>() { "ru", "uk", "be" })
         {
             results.Clear();
-            string templatename, tableheader;
-            var monthnames = new Dictionary<string, string>();
-            if (lang == "uk")
-            {
-                monthnames = new Dictionary<string, string>() { {"01","січня"}, {"02","лютого"}, {"03","березня"}, {"04","квітня"}, {"05","травня"}, {"06","червня"}, {"07","липня"}, {"08","серпня"},
-                {"09","вересня"}, {"10","жовтня"}, {"11","листопада"}, {"12","грудня"} };
-                templatename = "плаваюча шапка таблиці";
-                tableheader = "Стаття!!Пік!!Медіана!!Дата піку!!Графік";
-            }
-            else
-            {
-                monthnames = new Dictionary<string, string>() { {"01","января"}, {"02","февраля"}, {"03","марта"}, {"04","апреля"}, {"05","мая"}, {"06","июня"}, {"07","июля"}, {"08","августа"},
-                {"09","сентября"}, {"10","октября"}, {"11","ноября"}, {"12","декабря"} };
-                templatename = "плавающая шапка таблицы";
-                tableheader = "Статья!!Пик!!Медиана!!Дата пика!!График";
-            }
             if (yearly)
             {
                 startmonth = "01";
                 endmonth = "12";
                 datespan = "{{#expr:365+({{CURRENTWEEK}}-1)*7+{{CURRENTDOW}}}}";
-                minneededpeakvalue = (lang == "uk" ? 2000 : 15000);
-                outputpage = (lang == "uk" ? "Вікіпедія:Спалахи інтересу до статей/За рік" : "ВП:Пики интереса к статьям/За год");
-                header = (lang == "uk" ? "Див. також [[../|за минулий місяць]]." : "См. также [[../|за последний месяц]].");
             }
             else
             {
@@ -94,14 +90,11 @@ class Program
                     startmonth = "0" + startmonth;
                 endmonth = startmonth;
                 datespan = "{{#expr:31+{{CURRENTDAY}}}}";
-                minneededpeakvalue = (lang == "uk" ? 1000 : 10000);
-                outputpage = (lang == "uk" ? "Вікіпедія:Спалахи інтересу до статей" : "ВП:Пики интереса к статьям");
-                header = (lang == "uk" ? "Див. також [[/За рік|за минулий рік]]." : "См. также [[/За год|за прошедший год]].");
             }
 
             var creds = new StreamReader("p").ReadToEnd().Split('\n');
             var site = Site(lang, creds[0], creds[1]);
-            string cont = "", query = "/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
+            string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
             while (cont != null)
             {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
@@ -141,19 +134,20 @@ class Program
                             }
                             var orderedlist = thispagestats.OrderBy(o => o.Value).ToList();
                             int median = orderedlist[orderedlist.Count / 2].Value;
-                            if (maxviews >= minneededpeakvalue)
+                            int currentminneededpeakvalue = yearly ? minneededpeakvalue[lang]["year"] : minneededpeakvalue[lang]["month"];
+                            if (maxviews >= currentminneededpeakvalue)
                                 results.Add(page, new result() { date = peakdate, max = maxviews, median = median });
                         }
                 }
             }
-            string result = "<center>" + header + "{{" + templatename + "}}\n{|class=\"standard sortable ts-stickytableheader\" style=\"text-align:center\"\n!" + tableheader;
+            string result = "{{popular pages}}{{floating table header}}<center>\n{|class=\"standard sortable ts-stickytableheader\" style=\"text-align:center\"\n!" + tableheader[lang];
             foreach (var r in results.OrderByDescending(r => r.Value.max))
             {
                 string month = r.Value.date.Substring(4, 2);
                 string day = r.Value.date.Substring(6, 2);
-                result += "\n|-\n|[[" + r.Key + "]]||{{formatnum:" + r.Value.max + "}}||" + r.Value.median + "||{{~|" + month + day + "}}" + day + " " + monthnames[month] + "||{{Graph:PageViews|" + datespan + "|" + r.Key + "|height=120|width=240}}";
+                result += "\n|-\n|[[" + r.Key + "]]||{{formatnum:" + r.Value.max + "}}||" + r.Value.median + "||{{~|" + month + day + "}}" + day + " " + monthnames[lang][month];
             }
-            Save(site, lang, outputpage, result + "\n|}");
+            Save(site, lang, yearly ? outputpage[lang]["year"] : outputpage[lang]["month"], result + "\n|}");
         }
     }
 }
