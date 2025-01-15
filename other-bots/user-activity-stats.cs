@@ -47,46 +47,36 @@ class Program
     }
     static void Main()
     {
-        var retireds = new Dictionary<string, int>();
-        var vacation = new Dictionary<string, int>();
+        var days = new Dictionary<string, int>();
+        var edits = new Dictionary<string, int>();
         var itemrgx = new Regex("<item");
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
-        var initialusers = site.GetStringAsync("https://ru.wikipedia.org/wiki/User:MBH/users_for_last_activity_day_stats?action=raw").Result.Split('\n');
-        foreach (var user in initialusers)
-            if (!retireds.ContainsKey(user))
-                retireds.Add(user, 1);
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Шаблон:Участник покинул проект&einamespace=2|3&eilimit=max").Result)))
-            while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
-                {
-                    string user = r.GetAttribute("title");
-                    if (!user.Contains("/"))
-                        user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
-                    else
-                        user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
-                    if (!retireds.ContainsKey(user))
-                        retireds.Add(user, 1);
-                }
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Шаблон:Вики-отпуск&einamespace=2|3&eilimit=max").Result)))
-            while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
-                {
-                    string user = r.GetAttribute("title");
-                    if (!user.Contains("/"))
-                        user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
-                    else
-                        user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
-                    if (!vacation.ContainsKey(user))
-                        vacation.Add(user, 1);
-                }
 
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=sysop&aulimit=max").Result)))
             while (r.Read())
-                if (r.Name == "u" && !retireds.ContainsKey(r.GetAttribute("name")))
-                    retireds.Add(r.GetAttribute("name"), 1);
+                if (r.Name == "u")
+                    days.Add(r.GetAttribute("name"), 1);
+        var initialusers = site.GetStringAsync("https://ru.wikipedia.org/wiki/Шаблон:User activity stats/users?action=raw").Result.Split('\n');
+        foreach (var user in initialusers)
+            if (!days.ContainsKey(user))
+                days.Add(user, 1);
+        
+        foreach (string tmplt in new string[] { "Шаблон:Участник покинул проект", "Шаблон:Вики-отпуск" })
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + tmplt + "&einamespace=2|3&eilimit=max").Result)))
+                while (r.Read())
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
+                    {
+                        string user = r.GetAttribute("title");
+                        if (!user.Contains("/"))
+                            user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
+                        else
+                            user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
+                        if (!edits.ContainsKey(user))
+                            edits.Add(user, 0);
+                    }
 
-        foreach (var u in retireds.Keys.ToList())
+        foreach (var u in days.Keys.ToList())
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + Uri.EscapeDataString(u)).Result)))
                 while (r.Read())
                     if (r.Name == "item")
@@ -95,24 +85,25 @@ class Program
                         int y = Convert.ToInt32(ts.Substring(0, 4));
                         int m = Convert.ToInt32(ts.Substring(5, 2));
                         int d = Convert.ToInt32(ts.Substring(8, 2));
-                        retireds[u] = (DateTime.Now - new DateTime(y, m, d)).Days;
+                        days[u] = (DateTime.Now - new DateTime(y, m, d)).Days;
                     }
 
-        foreach (var v in vacation.Keys.ToList())
+        foreach (var v in edits.Keys.ToList())
         {
             var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + DateTime.Now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") + 
                 ".000Z&ucprop=&ucuser=" + Uri.EscapeDataString(v)).Result;
-            vacation[v] = itemrgx.Matches(res).Count;
+            edits[v] = itemrgx.Matches(res).Count;
         }
 
         string result = "{{#switch:{{{1}}}\n";
-        foreach (var r in retireds.OrderBy(r => r.Value))
+        foreach (var r in days.OrderBy(r => r.Value))
             result += "|" + r.Key + "=" + r.Value + "\n";
-        Save(site, "Шаблон:Участник покинул проект/days", result + "|}}", "");
+        Save(site, "Шаблон:User activity stats/days", result + "|}}", "");
 
         result = "{{#switch:{{{1}}}\n";
-        foreach (var v in vacation.OrderBy(v => v.Value))
-            result += "|" + v.Key + "=" + (v.Value == 0 ? "" : v.Value.ToString()) + "\n";
-        Save(site, "Шаблон:Вики-отпуск/edits", result + "|}}", "");
+        foreach (var v in edits.OrderBy(v => v.Value))
+            if (v.Value > 0)
+                result += "|" + v.Key + "=" + (v.Value == 0 ? "" : v.Value.ToString()) + "\n";
+        Save(site, "Шаблон:User activity stats/edits", result + "|}}", "");
     }
 }
