@@ -23,12 +23,6 @@
   schedule: "21 5 * * *"
   emails: onfailure
 
-- name: retired-users
-  command: mono /data/project/mbh/bots/retired_counter.exe
-  image: tf-mono68
-  schedule: "43 0 * * *"
-  emails: onfailure
-
 - name: zsf-archiving
   command: mono /data/project/mbh/bots/zsf-archiving.exe
   image: tf-mono68
@@ -148,6 +142,12 @@
 #  mem: 16Gi
 
 # user activity stats--------------------------------------------------------------------------------------------------------------------
+- name: user-activity-stats
+  command: mono /data/project/mbh/bots/user-activity-stats.exe
+  image: tf-mono68
+  schedule: "21 0 * * *"
+  emails: onfailure
+
 - name: page-creators
   command: mono /data/project/mbh/bots/page_creators.exe
   image: tf-mono68
@@ -176,19 +176,6 @@
   command: mono /data/project/mbh/bots/patstats.exe
   image: tf-mono68
   schedule: "38 1 1 * *"
-  emails: onfailure
-
-# yearly--------------------------------------------------------------------------------------------------------------------------------
-- name: pageviews-yearly-ru
-  command: mono /data/project/mbh/bots/pageview_yearly_ru.exe
-  image: tf-mono68
-  schedule: "15 18 1 1 *"
-  emails: onfailure
-
-- name: pageviews-yearly-uk
-  command: mono /data/project/mbh/bots/pageview_yearly_uk.exe
-  image: tf-mono68
-  schedule: "15 18 1 1 *"
   emails: onfailure
 
 # incubator
