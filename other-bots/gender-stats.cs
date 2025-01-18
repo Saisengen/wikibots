@@ -6,7 +6,6 @@ using System.IO;
 using System.Net.Http;
 using System.Net;
 using System.Xml;
-using System.Threading;
 
 class langdata
 {
@@ -56,8 +55,8 @@ class Program
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var site = Site(creds[0], creds[1]);
         string result = "{{плавающая шапка таблицы}}<center>Статистика по участникам, выставившим себе мужской/женский пол в настройках вики (выставившие нейтральный игнорируются). Процент - доля мужчин, " +
-            "во всплывающей подсказке - числа мужчин и женщин в указанном слое.\n{|class=\"standard sortable ts-stickytableheader\"\n!Раздел\\Число правок!!Все!!0!!1-3!!3-10!!10-30!!30-100!!100-300!!" +
-            "300-1k!!1k-3k!!3k-10k!!10k-30k!!30k-100k!!100k+!!Откат!!Админы\n";
+            "во всплывающей подсказке - числа мужчин и женщин в указанном слое.\n{|class=\"standard sortable ts-stickytableheader\"\n!Раздел\\Число правок!!Все!!0!!до 10!!до 100!!до 1к!!до 10к!!до 100к!!" +
+            "100к+!!Откат!!Админы\n";
         var data = new Dictionary<string, langdata>
         {
             { "simple", new langdata() { name = "простой англ.", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "en", new langdata() { name = "английский", stats = new Dictionary<string, Dictionary<string, int>>() } },
@@ -77,7 +76,7 @@ class Program
             { "cs", new langdata() { name = "чешский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "sk", new langdata() { name = "словацкий", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "sr", new langdata() { name = "сербский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "ro", new langdata() { name = "румынский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "hr", new langdata() { name = "хорватский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "bg", new langdata() { name = "болгарский", stats = new Dictionary<string, Dictionary<string, int>>() } },
-            { "no", new langdata() { name = "норвежский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "kk", new langdata() { name = "казахский", stats = new Dictionary<string, Dictionary<string, int>>() } }
+            { "no", new langdata() { name = "норвежский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "kk", new langdata() { name = "казахский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "sv", new langdata() { name = "шведский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "az", new langdata() { name = "азербайджанский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "fi", new langdata() { name = "финский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "hy", new langdata() { name = "армянский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "et", new langdata() { name = "эстонский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "ka", new langdata() { name = "грузинский", stats = new Dictionary<string, Dictionary<string, int>>() } },
@@ -85,27 +84,17 @@ class Program
             { "lv", new langdata() { name = "латвийский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "ms", new langdata() { name = "малайский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "ur", new langdata() { name = "урду", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "th", new langdata() { name = "тайский", stats = new Dictionary<string, Dictionary<string, int>>() } },
             { "bn", new langdata() { name = "бенгальский", stats = new Dictionary<string, Dictionary<string, int>>() } },{ "hi", new langdata() { name = "хинди", stats = new Dictionary<string, Dictionary<string, int>>() } },
-            { "ta", new langdata() { name = "тамильский", stats = new Dictionary<string, Dictionary<string, int>>() } } };
+            { "ta", new langdata() { name = "тамильский", stats = new Dictionary<string, Dictionary<string, int>>() } }
+            };
         foreach (var lang in data.Keys.ToList())
         {
             data[lang].stats = new Dictionary<string, Dictionary<string, int>>
-            {
-                { "sysop", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "rollbacker", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "all", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "0", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "1-3", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "3-10", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "10-30", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "30-100", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "100-300", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "300-1k", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "1k-3k", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "3k-10k", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "10k-30k", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "30k-100k", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
-                { "100k+", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }
-            };
+            { { "sysop", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "rollbacker", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
+                { "all", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "0", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
+                { "1", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "2", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
+                { "3", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "4", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
+                { "5", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "6", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } },
+                { "7", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } }, { "8", new Dictionary<string, int>(){{"male", 0 }, {"female", 0 } } } };
             var processed_users = new HashSet<string> ();
             var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
@@ -129,27 +118,8 @@ class Program
                         data[lang].stats["all"][sex]++;
                         if (edits == 0)
                             data[lang].stats["0"][sex]++;
-                        else if (edits <= 3)
-                            data[lang].stats["1-3"][sex]++;
-                        else if (edits <= 10)
-                            data[lang].stats["3-10"][sex]++;
-                        else if (edits <= 30)
-                            data[lang].stats["10-30"][sex]++;
-                        else if (edits <= 100)
-                            data[lang].stats["30-100"][sex]++;
-                        else if (edits <= 300)
-                            data[lang].stats["100-300"][sex]++;
-                        else if (edits <= 1000)
-                            data[lang].stats["300-1k"][sex]++;
-                        else if (edits <= 3000)
-                            data[lang].stats["1k-3k"][sex]++;
-                        else if (edits <= 10000)
-                            data[lang].stats["3k-10k"][sex]++;
-                        else if (edits <= 30000)
-                            data[lang].stats["10k-30k"][sex]++;
-                        else if (edits <= 100000)
-                            data[lang].stats["30k-100k"][sex]++;
-                        else data[lang].stats["100k+"][sex]++;
+                        else
+                            data[lang].stats[edits.ToString().Length.ToString()][sex]++;
                         processed_users.Add(id);
                     }
                 }
@@ -161,10 +131,10 @@ class Program
         {
             Console.WriteLine(data.Count);
             result += "\n|-\n|[[:" + s.Key + ":Main Page|" + s.Value.name + "]]";
-            foreach (string slice in new string[] { "all", "0", "1-3", "3-10", "10-30", "30-100", "100-300", "300-1k", "1k-3k", "3k-10k", "10k-30k", "30k-100k", "100k+", "rollbacker", "sysop" })
+            foreach (string slice in new string[] { "all", "0", "1", "2", "3", "4", "5", "6", "rollbacker", "sysop" })
                 result += s.Value.stats[slice]["male"] == 0 && s.Value.stats[slice]["female"] == 0 ? "||<ref name=no/>" : "||{{abbr|" + Math.Round(100 * (float)s.Value.stats[slice]["male"] / 
                     (s.Value.stats[slice]["female"] + s.Value.stats[slice]["male"]), 1) + "%|{{formatnum:" + s.Value.stats[slice]["male"] + "}} м / {{formatnum:" + s.Value.stats[slice]["female"] + "}} ж|0}}";
         }
-        Save(site, "u:MBH/genders", result + "\n|}{{примечания|refs=<ref name=no>В разделе нет этого флага.</ref>}}", "");
+        Save(site, "u:MBH/genders", result + "\n|}{{примечания|refs=<ref name=no>В разделе нет этого флага либо нет участников, имеющих столько правок.</ref>}}", "");
     }
 }
