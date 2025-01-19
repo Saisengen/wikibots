@@ -28,7 +28,7 @@ class Program
         "join actor on actor_id=rc_actor " +
         "join ores_model on oresc_model=oresm_id " +
         "where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100) " +
-        "and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, diff_text, comment_diff, discord_diff, lw_raw, 
+        "and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, 
         strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
@@ -37,11 +37,11 @@ class Program
     static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, { "multilang", 1 } };
     static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"),
         reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
-        ins_rgx = new Regex(@"<ins[^>]*>([^<>]*)</ins>"),
+        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"),
         tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline),
-        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>([^<>]*)<[^>]*>"),
+        ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
         div_rgx = new Regex(@"</?div[^>]*>"),
-        del_rgx = new Regex(@"<del[^>]*>([^<>]*)</del>"),
+        del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"),
         editcount_rgx = new Regex(@"editcount=""(\d*)"""),
         rev_rgx = new Regex(@"<rev ");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
@@ -80,8 +80,12 @@ class Program
     }
     static void post_suspicious_edit(string lang, string reason, string type)
     {
-        if (lang == "ru")
-            if (suspicious_users.Contains(user))
+        if (suspicious_users.Contains(user))
+        {
+            client.PostAsync("https://discord.com/api/webhooks/" + authors_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + user + "](<https://" + lang +
+                ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeUriString(user) + ">), " + ns_name[ns] + title} }));
+
+            if (lang == "ru")
             {
                 string zkab = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
                 var reportedusers = reportedusers_rgx.Matches(zkab);
@@ -92,8 +96,8 @@ class Program
                 if (!reportedyet)
                     Save("ru", site["ru"], "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
             }
-            else suspicious_users.Add(user);
-
+        }
+        else suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         diff_text = site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", " ");
 
@@ -119,7 +123,7 @@ class Program
 
         string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=10").Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
-        string num_of_revs_str = num_of_revs > 9 ? ">9" : num_of_revs.ToString();
+        string revisions_info = num_of_revs > 9 ? "" : ", revs: " + num_of_revs;
 
         Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
@@ -127,13 +131,17 @@ class Program
         var json = new Root()
         {
             embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + ", " + num_of_revs_str + " revisions](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = 
+            "[" + reason + revisions_info + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = 
             new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + 
                 ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
+
+        
+
         if (res.StatusCode != HttpStatusCode.NoContent)
             Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
+
     }
     static void check(string lang)
     {
@@ -244,10 +252,13 @@ class Program
                 patterns[lang].Clear();
                 patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
                 patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
-                var pattern_source = new StreamReader("patterns-" + lang + ".txt").ReadToEnd().Split('\n');
-                foreach (var pattern in pattern_source)
-                    if (pattern != "")
-                        patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
+                foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" } )
+                {
+                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
+                    foreach (var pattern in pattern_source)
+                        if (pattern != "")
+                            patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
+                }
             }
         }
     }
@@ -285,7 +296,7 @@ class Program
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1];
+        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
 
         gather_trusted_users();
         while (true)
