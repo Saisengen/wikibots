@@ -10,10 +10,19 @@ using System.Threading;
 using System.Xml;
 using System.Text;
 using Newtonsoft.Json;
+public enum type
+{
+    ores, agnostic, multilang, ruukr, pattern, tag
+}
 public class color
 {
     public byte r, g, b; public color(byte r, byte g, byte b) { this.r = r; this.b = b; this.g = g; }
     public long convert() { return 256 * 256 * r + 256 * g + b; }
+}
+public class model
+{
+    public string longname;
+    public double limit;
 }
 public class Author { public string name, url; }
 public class Embed { public Author author; public string title, description, url; public long color; public List<Field> fields; }
@@ -34,7 +43,8 @@ class Program
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
     static double ores_risk, lw_risk, ores_limit = 1;
-    static Dictionary<string, double> lw_limit = new Dictionary<string, double>() { { "agnostic", 1 }, { "multilang", 1 } };
+    static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.agnostic, new model() { longname = "language-agnostic", limit = 1 } }, { type.multilang, new model() { longname = 
+        "multilingual", limit = 1 } } };
     static Regex liftwing_rgx = new Regex(@"""true"":(0.\d+)"),
         reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"),
         ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"),
@@ -55,7 +65,8 @@ class Program
     static bool user_is_anon, new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
-    static Dictionary<string, color> colors = new Dictionary<string, color>() { { "pattern", new color(255, 0, 0) }, { "liftwing", new color(255, 255, 0) }, { "ores", new color(255, 0, 255) }, { "tag", new color(0, 255, 0) } };
+    static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.pattern, new color(255, 0, 0) }, { type.agnostic, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
+        { type.tag, new color(0, 255, 0) }, { type.multilang, new color(255, 128, 0) }, { type.ruukr, new color(0, 0, 255) } };
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -78,7 +89,7 @@ class Program
             { new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token" }, { new StringContent(appendtext), "appendtext" } };
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string lang, string reason, string type)
+    static void post_suspicious_edit(string lang, string reason, type type)
     {
         if (suspicious_users.Contains(user))
         {
@@ -176,7 +187,7 @@ class Program
                 if (!user_is_anon)
                     editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
                         Uri.EscapeDataString(user)).Result).Groups[1].Value);
-                if (editcount > 1000)
+                if (editcount > 500)
                 {
                     trusted_users.Add(user);
                     continue;
@@ -184,7 +195,7 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, "ores");
+                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, type.ores);
                     continue;
                 }
 
@@ -192,32 +203,43 @@ class Program
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
-                            post_suspicious_edit(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size, "tag");
+                            post_suspicious_edit(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size, type.tag);
                             goto End;
                         }
 
-                var all_ins = ins_rgx.Matches(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result);
-                foreach (Match ins in all_ins)
+                var alldiff = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
+                var ins_array = ins_rgx.Matches(alldiff); var del_array = del_rgx.Matches(alldiff); string all_ins = "", all_del = "";
+                foreach(var elem in ins_array)
+                    all_ins += elem;
+                foreach (var elem in del_array)
+                    all_del += elem;
+                if ((all_ins.Contains("Росси") && all_del.Contains("Украин")) || (all_del.Contains("Росси") && all_ins.Contains("Украин")))
+                {
+                    post_suspicious_edit(lang, "ru-ukr", type.ruukr);
+                    continue;
+                }
+
+                foreach (Match ins in ins_array)
                     foreach (var pattern in patterns[lang])
                         if (pattern.IsMatch(ins.Groups[1].Value))
                         {
-                            post_suspicious_edit(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, "pattern");
+                            post_suspicious_edit(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, type.pattern);
                             goto End;
                         }
 
-                foreach (string type in new string[] { "agnostic", "multilang" })
+                foreach (type shortname in liftwing.Keys)
                 {
                     try
                     {
-                        lw_raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-" + (type == "agnostic" ? "language-agnostic" : "multilingual") +
-                            ":predict", new StringContent("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
+                        lw_raw = liftwing_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-" + liftwing[shortname].longname + ":predict", new StringContent
+                            ("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
                         if (lw_raw != null && lw_raw != "")
                             lw_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
                     }
                     catch { goto End; }
-                    if (lw_risk > lw_limit[type])
+                    if (lw_risk > liftwing[shortname].limit)
                     {
-                        post_suspicious_edit(lang, "lw-" + type + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, "liftwing");
+                        post_suspicious_edit(lang, "lw-" + shortname + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, shortname);
                         goto End;
                     }
                 }
@@ -239,13 +261,12 @@ class Program
                 var keyvalue = row.Split(':');
                 if (keyvalue[0] == "ores")
                     ores_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "agnostic")
-                    lw_limit["agnostic"] = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "multilang")
-                    lw_limit["multilang"] = Convert.ToDouble(keyvalue[1]);
                 else if (keyvalue[0] == "goodanons")
                     foreach (var g in keyvalue[1].Split('|'))
                         goodanons.Add(g);
+                foreach (var type in liftwing.Keys)
+                    if (keyvalue[0] == liftwing[type].longname)
+                        liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
             }
             foreach (string lang in new string[] { "ru", "uk" })
             {
@@ -264,8 +285,7 @@ class Program
     }
     static void gather_trusted_users()
     {
-        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token);
-        client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
+        client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in global_flags_bearers)
             trusted_users.Add(g);
@@ -304,7 +324,7 @@ class Program
             update_settings();
             check("ru");
             check("uk");
-            Thread.Sleep(4000);
+            Thread.Sleep(3000);
         }
     }
 }
