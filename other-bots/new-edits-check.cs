@@ -53,7 +53,9 @@ class Program
         div_rgx = new Regex(@"</?div[^>]*>"),
         del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"),
         editcount_rgx = new Regex(@"editcount=""(\d*)"""),
-        rev_rgx = new Regex(@"<rev ");
+        rev_rgx = new Regex(@"<rev "),
+        ros_rgx = new Regex("р[оу]с", RegexOptions.IgnoreCase),
+        ukr_rgx = new Regex("укр", RegexOptions.IgnoreCase);
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
     static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
@@ -213,9 +215,9 @@ class Program
                     all_ins += elem;
                 foreach (var elem in del_array)
                     all_del += elem;
-                if ((all_ins.Contains("Росси") && all_del.Contains("Украин")) || (all_del.Contains("Росси") && all_ins.Contains("Украин")))
+                if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del)) || (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins)))
                 {
-                    post_suspicious_edit(lang, "ru-ukr", type.ruukr);
+                    post_suspicious_edit(lang, "ru-ukr, diffsize:" + diff_size, type.ruukr);
                     continue;
                 }
 
