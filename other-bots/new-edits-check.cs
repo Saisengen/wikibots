@@ -68,7 +68,7 @@ class Program
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.pattern, new color(255, 0, 0) }, { type.agnostic, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
-        { type.tag, new color(0, 255, 0) }, { type.multilang, new color(255, 128, 0) }, { type.ruukr, new color(0, 0, 255) } };
+        { type.tag, new color(0, 255, 0) }, { type.multilang, new color(255, 128, 0) }, { type.ruukr, new color(0, 255, 255) } };
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -141,12 +141,13 @@ class Program
         Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + Uri.EscapeDataString(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
+        string page_title = ns_name[ns] + title;
         var json = new Root()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = ns_name[ns] + title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + revisions_info + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + ns_name[ns] + Uri.EscapeDataString(title) + ">)", fields = 
-            new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + 
-                ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
+            "[" + reason + revisions_info + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(page_title) + ">)", fields = new List<Field>(){ new Field(){ name 
+            = comment, value = discord_diff + "\n[Current page version](<https://" + lang + ".wikipedia.org/wiki/" + Uri.EscapeDataString(page_title) + ">)" }}, author = new Author(){ name = 
+            user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
 
