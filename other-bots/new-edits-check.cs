@@ -30,15 +30,11 @@ public class Field { public string name, value; }
 public class Root { public List<Embed> embeds; }
 class Program
 {
-    static string commandtext = "select actor_user, cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, " +
-        "rc_last_oldid, rc_old_len, rc_new_len, rc_namespace, rc_cur_id from recentchanges " +
-        "join comment on rc_comment_id=comment_id " +
-        "join ores_classification on oresc_rev=rc_this_oldid " +
-        "join actor on actor_id=rc_actor " +
-        "join ores_model on oresc_model=oresm_id " +
-        "where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 or rc_namespace=100) " +
-        "and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, 
-        strings_with_changes, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+    static string commandtext = "select cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, " +
+        "rc_old_len, rc_new_len, rc_namespace, rc_cur_id from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
+        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 " +
+        "or rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff,
+        discord_diff, lw_raw, strings_with_changes, lang, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
@@ -64,7 +60,7 @@ class Program
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "тест" }, { "Тест" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
-    static bool user_is_anon, new_timestamp_saved, new_id_saved;
+    static bool new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, newid, oldid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.pattern, new color(255, 0, 0) }, { type.agnostic, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
@@ -91,7 +87,7 @@ class Program
             { new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token" }, { new StringContent(appendtext), "appendtext" } };
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void post_suspicious_edit(string lang, string reason, type type)
+    static void post_suspicious_edit(string reason, type type)
     {
         if (suspicious_users.Contains(user))
         {
@@ -144,10 +140,10 @@ class Program
         string page_title = ns_name[ns] + title;
         var json = new Root()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description =
-            "[" + reason + revisions_info + "](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(page_title) + ">)", fields = new List<Field>(){ new Field(){ name 
-            = comment, value = discord_diff + "\n[Current page version](<https://" + lang + ".wikipedia.org/wiki/" + Uri.EscapeDataString(page_title) + ">)" }}, author = new Author(){ name = 
-            user_is_anon ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?diff=" + newid, description = reason + 
+            revisions_info + ", [history](<https://" + lang + ".wikipedia.org/wiki/special:history/" + Uri.EscapeDataString(page_title) + ">), [current](<https://" + lang + ".wikipedia.org/wiki/" + 
+            Uri.EscapeDataString(page_title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = editcount == 0 ? user : user + ", " +
+            editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + Uri.EscapeDataString(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
 
@@ -157,7 +153,7 @@ class Program
             Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
 
     }
-    static void check(string lang)
+    static void check()
     {
         connection[lang] = new MySqlConnection(creds[1].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
         connection[lang].Open();
@@ -168,7 +164,6 @@ class Program
             user = sqlreader.GetString("user") ?? "";
             if (goodanons.Contains(user))
                 continue;
-            user_is_anon = sqlreader.IsDBNull(0);
             ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
             title = sqlreader.GetString("title").Replace('_', ' ');
             ns = sqlreader.GetInt16("rc_namespace");
@@ -185,11 +180,17 @@ class Program
             {
                 last_checked_id[lang] = newid; new_id_saved = true;
             }
-            if (user_is_anon || !trusted_users.Contains(user))
+            if (!trusted_users.Contains(user))
             {
-                if (!user_is_anon)
-                    editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount&ususers=" +
-                        Uri.EscapeDataString(user)).Result).Groups[1].Value);
+                try
+                {
+                    editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
+                        "&ususers=" +Uri.EscapeDataString(user)).Result).Groups[1].Value);
+                }
+                catch
+                {
+                    editcount = 0;
+                }
                 if (editcount > 500)
                 {
                     trusted_users.Add(user);
@@ -198,7 +199,7 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    post_suspicious_edit(lang, "ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, type.ores);
+                    post_suspicious_edit("ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, type.ores);
                     continue;
                 }
 
@@ -206,7 +207,7 @@ class Program
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
-                            post_suspicious_edit(lang, edit_tag.Groups[1].Value + ", diffsize:" + diff_size, type.tag);
+                            post_suspicious_edit(edit_tag.Groups[1].Value + ", diffsize:" + diff_size, type.tag);
                             goto End;
                         }
 
@@ -218,7 +219,7 @@ class Program
                     all_del += elem;
                 if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del)) || (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins)))
                 {
-                    post_suspicious_edit(lang, "ru-ukr, diffsize:" + diff_size, type.ruukr);
+                    post_suspicious_edit("ru-ukr, diffsize:" + diff_size, type.ruukr);
                     continue;
                 }
 
@@ -226,7 +227,7 @@ class Program
                     foreach (var pattern in patterns[lang])
                         if (pattern.IsMatch(ins.Groups[1].Value))
                         {
-                            post_suspicious_edit(lang, pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, type.pattern);
+                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, type.pattern);
                             goto End;
                         }
 
@@ -242,7 +243,7 @@ class Program
                     catch { goto End; }
                     if (lw_risk > liftwing[shortname].limit)
                     {
-                        post_suspicious_edit(lang, "lw-" + shortname + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, shortname);
+                        post_suspicious_edit("lw-" + shortname + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, shortname);
                         goto End;
                     }
                 }
@@ -325,8 +326,8 @@ class Program
         while (true)
         {
             update_settings();
-            check("ru");
-            check("uk");
+            lang = "ru"; check();
+            lang = "uk"; check();
             Thread.Sleep(3000);
         }
     }
