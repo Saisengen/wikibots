@@ -35,7 +35,7 @@ class Program
         "rc_old_len, rc_new_len, rc_namespace, rc_cur_id from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
         "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 " +
         "or rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff,
-        discord_diff, lw_raw, strings_with_changes, lang, newid, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+        discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
@@ -47,14 +47,14 @@ class Program
         editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex(@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline);
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
-    static Dictionary<string, string> last_checked_id = new Dictionary<string, string>() { { "ru", "0" }, { "uk", "0" } };
+    static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
     static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
     { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, oldid, pageid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, oldid, newid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.rgx, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.ruukr, new color(0, 255, 255) } };
@@ -137,7 +137,7 @@ class Program
         bool single_author = false;
         string revs1 = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
         if (revid_rgx.IsMatch(revs1))
-            newid = revid_rgx.Match(revs1).Groups[1].Value;
+            first_another_author_edit_id = revid_rgx.Match(revs1).Groups[1].Value;
         else
             single_author = true;
 
@@ -145,9 +145,9 @@ class Program
         var json = new Root()
         {
             embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?" + (single_author ? "diff=" + newid : 
-            "oldid=" + newid + "&diff=curr"), description = reason + revisions_info + ", [hist](<https://" + lang + ".wikipedia.org/wiki/special:history/" + e(page_title) + ">), [curr](<https://" + lang +
-            ".wikipedia.org/wiki/" + e(page_title) + ">)" + (single_author ? ", single author" : ""), fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new 
-            Author(){ name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + e(user) } } }
+            "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + revisions_info + ", [hist](<https://" + lang + ".wikipedia.org/wiki/special:history/" + e(page_title) +
+            ">), " + "[curr](<https://" + lang + ".wikipedia.org/wiki/" + e(page_title) + ">)" + (single_author ? ", single" : ""), fields = new List<Field>(){ new Field(){ name = comment, value =
+            discord_diff }}, author = new Author(){ name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + e(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
@@ -159,7 +159,7 @@ class Program
         connection[lang] = new MySqlConnection(creds[1].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
         connection[lang].Open();
         new_timestamp_saved = false; new_id_saved = false;
-        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang]), connection[lang]).ExecuteReader();
+        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang].ToString()), connection[lang]).ExecuteReader();
         while (sqlreader.Read())
         {
             user = sqlreader.GetString("user") ?? "";
@@ -168,7 +168,7 @@ class Program
             ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
             title = sqlreader.GetString("title").Replace('_', ' ');
             ns = sqlreader.GetInt16("rc_namespace");
-            newid = sqlreader.GetInt32("rc_this_oldid").ToString();
+            newid = sqlreader.GetInt32("rc_this_oldid");
             oldid = sqlreader.GetInt32("rc_last_oldid");
             pageid = sqlreader.GetInt32("rc_cur_id");
             comment = sqlreader.GetString("comment");
@@ -200,7 +200,7 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    post_suspicious_edit("ores:" + ores_risk.ToString() + ", diffsize:" + diff_size, type.ores);
+                    post_suspicious_edit("ores:" + ores_risk.ToString() + ", diff:" + diff_size, type.ores);
                     continue;
                 }
 
@@ -208,7 +208,7 @@ class Program
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
-                            post_suspicious_edit(edit_tag.Groups[1].Value + ", diffsize:" + diff_size, type.tag);
+                            post_suspicious_edit(edit_tag.Groups[1].Value + ", diff:" + diff_size, type.tag);
                             goto End;
                         }
 
@@ -218,9 +218,10 @@ class Program
                     all_ins += elem;
                 foreach (var elem in del_array)
                     all_del += elem;
-                if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del)) || (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins)))
+                if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del) && !ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_del)) ||
+                    (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_ins) && !ukr_rgx.IsMatch(all_del)))
                 {
-                    post_suspicious_edit("ru-ukr, diffsize:" + diff_size, type.ruukr);
+                    post_suspicious_edit("ru-ukr, diff:" + diff_size, type.ruukr);
                     continue;
                 }
 
@@ -228,7 +229,7 @@ class Program
                     foreach (var pattern in patterns[lang])
                         if (pattern.IsMatch(ins.Groups[1].Value))
                         {
-                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value + ", diffsize:" + diff_size, type.rgx);
+                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value + ", diff:" + diff_size, type.rgx);
                             goto End;
                         }
 
@@ -244,7 +245,7 @@ class Program
                     catch { goto End; }
                     if (lw_risk > liftwing[shortname].limit)
                     {
-                        post_suspicious_edit(shortname + ":" + lw_risk.ToString() + ", diffsize:" + diff_size, shortname);
+                        post_suspicious_edit(shortname + ":" + lw_risk.ToString() + ", diff:" + diff_size, shortname);
                         goto End;
                     }
                 }
