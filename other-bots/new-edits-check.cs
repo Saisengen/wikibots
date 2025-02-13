@@ -86,6 +86,7 @@ class Program
     }
     static void post_suspicious_edit(string reason, type type)
     {
+        reason += ", dsize:" + diff_size;
         if (suspicious_users.Contains(user))
         {
             client.PostAsync("https://discord.com/api/webhooks/" + authors_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + user + "](<https://" + lang +
@@ -200,7 +201,7 @@ class Program
 
                 if (ores_risk > ores_limit)
                 {
-                    post_suspicious_edit("ores:" + ores_risk.ToString() + ", diff:" + diff_size, type.ores);
+                    post_suspicious_edit("ores:" + ores_risk.ToString(), type.ores);
                     continue;
                 }
 
@@ -208,7 +209,7 @@ class Program
                     foreach (string susp_tag in suspicious_tags)
                         if (edit_tag.Groups[1].Value.Contains(susp_tag))
                         {
-                            post_suspicious_edit(edit_tag.Groups[1].Value + ", diff:" + diff_size, type.tag);
+                            post_suspicious_edit(edit_tag.Groups[1].Value, type.tag);
                             goto End;
                         }
 
@@ -221,7 +222,7 @@ class Program
                 if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del) && !ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_del)) ||
                     (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_ins) && !ukr_rgx.IsMatch(all_del)))
                 {
-                    post_suspicious_edit("ru-ukr, diff:" + diff_size, type.ruukr);
+                    post_suspicious_edit("ru-ukr", type.ruukr);
                     continue;
                 }
 
@@ -229,7 +230,7 @@ class Program
                     foreach (var pattern in patterns[lang])
                         if (pattern.IsMatch(ins.Groups[1].Value))
                         {
-                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value + ", diff:" + diff_size, type.rgx);
+                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value, type.rgx);
                             goto End;
                         }
 
@@ -245,7 +246,7 @@ class Program
                     catch { goto End; }
                     if (lw_risk > liftwing[shortname].limit)
                     {
-                        post_suspicious_edit(shortname + ":" + lw_risk.ToString() + ", diff:" + diff_size, shortname);
+                        post_suspicious_edit(shortname + ":" + lw_risk.ToString(), shortname);
                         goto End;
                     }
                 }
