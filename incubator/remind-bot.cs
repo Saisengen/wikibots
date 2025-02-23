@@ -8,109 +8,6 @@ using DotNetWikiBot;
 class MyBot : Bot
 {
     static string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-    public string[] Settings(byte num, Site site)
-    {
-        string[] ar = new string[num];
-        Page setting = new Page(site, "user:MBH/incubator.js");
-        setting.Load();
-        Regex all = new Regex(@"all.?=.?true", RegexOptions.Singleline);                   // permission for launching all bots
-        Regex mr = new Regex(@"remindbot.?=.?true", RegexOptions.Singleline);              // permission for launching this bot
-        Regex mr_page = new Regex(@"remind_page.?=.*?;", RegexOptions.Singleline);         // page to save on
-        Regex main_cat = new Regex(@"main_cat.?=.*?;", RegexOptions.Singleline);            // category for mr_t1
-        Regex mr_t1 = new Regex(@"remind_template1.?=.?\d*", RegexOptions.Singleline);     // time for void mr1 (remind about forgotten article)
-        Regex mr_t2 = new Regex(@"remind_template2.?=.?\d*", RegexOptions.Singleline);     // time for void mr2 (remind about ending of terms)
-        Regex mr_t = new Regex(@"remind_template.?=.?\d*", RegexOptions.Singleline);       // time for void mrec (marking for review)
-        Regex mr_ex = new Regex(@"remind_expired.?=.?\d*", RegexOptions.Singleline);       // time for void mrec (marking for review - expired) - test
-        Regex cands_cat = new Regex(@"remind_category1.?=.*?;", RegexOptions.Singleline);  // category for mr_t1
-        Regex forgot_cat = new Regex(@"remind_category2.?=.*?;", RegexOptions.Singleline); // category for mr_t2
-        Regex mr_cat = new Regex(@"remind_category.?=.*?;", RegexOptions.Singleline);     // category for mr_t3
-        Regex inc_except = new Regex(@"inc_except.?=.*?" + Regex.Escape(";"), RegexOptions.Singleline); // exceptions
-        if (all.Matches(setting.text).Count > 0)
-        {
-            if (mr.Matches(setting.text).Count > 0)
-            {
-                ar[0] = "1";
-                if (mr_t1.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_t1.Matches(setting.text)[0].ToString();
-                    ar[1] = a.Substring(a.IndexOf("=") + 1).Trim();
-                }
-                if (mr_t2.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_t2.Matches(setting.text)[0].ToString();
-                    ar[2] = a.Substring(a.IndexOf("=") + 1).Trim();
-                }
-                if (mr_t.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_t.Matches(setting.text)[0].ToString();
-                    ar[3] = a.Substring(a.IndexOf("=") + 1).Trim();
-                }
-                if (cands_cat.Matches(setting.text).Count > 0)
-                {
-                    string a = cands_cat.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1);
-                    a = a.Replace("\"", "");
-                    a = a.Replace(";", "");
-                    a = a.Replace("\n", "");
-                    ar[4] = a.Trim();
-                }
-                if (forgot_cat.Matches(setting.text).Count > 0)
-                {
-                    string a = forgot_cat.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1);
-                    a = a.Replace("\"", "");
-                    a = a.Replace(";", "");
-                    a = a.Replace("\n", "");
-                    ar[5] = a.Trim();
-                }
-                if (mr_cat.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_cat.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1);
-                    a = a.Replace("\"", "");
-                    a = a.Replace(";", "");
-                    a = a.Replace("\n", "");
-                    ar[6] = a.Trim();
-                }
-                if (mr_page.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_page.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1);
-                    a = a.Replace("\"", "");
-                    a = a.Replace(";", "");
-                    a = a.Replace("\n", "");
-                    ar[7] = a.Trim();
-                }
-                if (mr_ex.Matches(setting.text).Count > 0)
-                {
-                    string a = mr_ex.Matches(setting.text)[0].ToString();
-                    ar[8] = a.Substring(a.IndexOf("=") + 1).Trim();
-                }
-                if (main_cat.Matches(setting.text).Count > 0)
-                {
-                    string a = main_cat.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1);
-                    a = a.Replace("\"", "");
-                    a = a.Replace(";", "");
-                    a = a.Replace("\n", "");
-                    ar[9] = a.Trim();
-                }
-                if (inc_except.Matches(setting.text).Count > 0)
-                {
-                    string a = inc_except.Matches(setting.text)[0].ToString();
-                    a = a.Substring(a.IndexOf("=") + 1).Trim();
-                    a = a.Replace(";", "");
-                    a = a.Replace("\"", "");
-                    ar[10] = a;
-                }
-                return ar;
-            }
-            else
-            { ar[0] = "0"; return ar; }
-        }
-        else
-        { ar[0] = "0"; return ar; }
-    }
     public PageList GetCategoryMembers(Site site, string cat, int limit)
     {
         PageList allpages = new PageList(site);
@@ -146,180 +43,96 @@ class MyBot : Bot
     {
         Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         PageList all = new PageList(site);
-        PageList iskl = new PageList(site);
+        PageList exc = new PageList(site);
         MyBot bot = new MyBot();
-        string[] set = bot.Settings(11, site);
-        if (set[0] == "1")
+        all.FillFromAllPages("", 102, true, 5000);
+        var exceptions = "Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ".Split('|');
+        var candidats = bot.GetCategoryMembers(site, "Проект:Инкубатор:Кандидаты на мини-рецензирование", 5000);
+        var forgotten = bot.GetCategoryMembers(site, "Проект:Инкубатор:Брошенные статьи", 5000);
+        var reviewing = bot.GetCategoryMembers(site, "Проект:Инкубатор:Статьи на мини-рецензировании", 5000);
+        string[,] pages = new string[5000, 5];
+        int pn = 0;
+        foreach (Page n in all)
         {
-            all.FillFromAllPages("", 102, true, 5000);
-            // start of exceptions
-            Regex set_parser = new Regex(@".*?" + Regex.Escape("|"), RegexOptions.Singleline);
-            int count = set_parser.Matches(set[10]).Count;
-            string[] exceptions = new string[count];
-            int kk = 0;
-            foreach (Match m in set_parser.Matches(set[10])) // exceptions for bot
+            bool except = false;
+            for (int ik = 0; ik < exceptions.Length; ik++)
             {
-                exceptions[kk] = m.ToString();
-                exceptions[kk] = exceptions[kk].Remove(exceptions[kk].Length - 1); // remove "|" in the end of the string
-                kk++;
-            }
-            // end of exceptions
-            var candidats = bot.GetCategoryMembers(site, set[4], 5000);
-            var forgotten = bot.GetCategoryMembers(site, set[5], 5000);
-            var reviewing = bot.GetCategoryMembers(site, set[6], 5000);
-            string[,] pages = new string[5000, 5];
-            int pn = 0;
-            // обрабатываем рабочий список
-            foreach (Page n in all)
-            {
-                bool except = false;
-                for (int ik = 0; ik < kk; ik++)
+                if (n.title == exceptions[ik])
                 {
-                    if (n.title == exceptions[ik])
-                    {
-                        iskl.Add(n);
-                        except = true;
-                    }
+                    exc.Add(n);
+                    except = true;
                 }
-                if (except == false)
+            }
+            if (!except)
+            {
+                // проверяем, что нет в категориях
+                if (!reviewing.Contains(n) && !candidats.Contains(n) && !forgotten.Contains(n))
                 {
-                    // проверяем, что нет в категориях
-                    if (reviewing.Contains(n) != true)
-                    {
-                        if (candidats.Contains(n) != true)
+                    string tit = n.title.Replace(" ", "_");
+                    // и достаем дату последней правки
+                    string pURL = site.apiPath + "?action=query&prop=revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvprop=timestamp|content&format=xml";
+                    string h = site.GetWebPage(pURL);
+                    string dl = "";
+                    string df = "";
+                    string pt = "";
+                    XmlTextReader rdr = new XmlTextReader(new StringReader(h));
+                    while (rdr.Read())
+                        if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "rev")
                         {
-                            if (forgotten.Contains(n) != true)
-                            {
-                                try
-                                {
-                                    // заменяем пробелы
-                                    string tit = n.title.Replace(" ", "_");
-                                    // и достаем дату последней правки
-                                    string pURL = site.apiPath + "?action=query&prop=revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvprop=timestamp|content&format=xml";
-                                    string h = site.GetWebPage(pURL);
-                                    string dl = "";
-                                    string df = "";
-                                    string pt = "";
-                                    XmlTextReader rdr = new XmlTextReader(new StringReader(h));
-                                    while (rdr.Read())
-                                    {
-                                        if (rdr.NodeType == XmlNodeType.Element)
-                                        {
-                                            if (rdr.Name == "rev")
-                                            {
-                                                dl = rdr.GetAttribute("timestamp");
-                                                pt = rdr.ReadString();
-                                            }
-                                        }
-                                    }
-                                    // и  дату первой правки
-                                    pURL = site.apiPath + "?action=query&prop=revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvprop=timestamp&rvdir=newer&rvlimit=1&format=xml";
-                                    h = site.GetWebPage(pURL);
-                                    XmlTextReader rdr2 = new XmlTextReader(new StringReader(h));
-                                    while (rdr2.Read())
-                                    {
-                                        if (rdr2.NodeType == XmlNodeType.Element)
-                                        {
-                                            if (rdr2.Name == "rev")
-                                            {
-                                                df = rdr2.GetAttribute("timestamp");
-                                            }
-                                        }
-                                    }
-                                    // исключаем, если стоит шаблон {{nobots}} или {{Инкубатор, черновик ВУС}}, сохраняя в отдельный список упоминание
-                                    if (pt.IndexOf("{{nobots}}") != -1 | pt.IndexOf("{{Инкубатор, черновик ВУС") != -1 | pt.IndexOf("{{инкубатор, черновик ВУС}") != -1)
-                                    {
-                                        iskl.Add(n);
-                                    }
-                                    else
-                                    {
-                                        DateTime dfirst = DateTime.Parse(df); // дата и время создания
-                                        DateTime dlast = DateTime.Parse(dl); // дата и время последней правки
-                                        DateTime dnow = DateTime.UtcNow; // текущие дата и время
-                                        TimeSpan diff1 = dnow - dfirst; // считаем разницу
-                                        TimeSpan diff2 = dnow - dlast; // считаем разницу
-                                        pages[pn, 0] = n.title;
-                                        pages[pn, 1] = diff1.Days.ToString(); // разница от создания
-                                        pages[pn, 2] = diff2.Days.ToString(); // разница от посл правки
-                                        pn++;
-
-                                    }
-                                    //   }
-                                }
-                                catch
-                                {
-                                    Console.WriteLine("Error with parsing info about \"" + n.title + "\"");
-                                }
-                            }
+                            dl = rdr.GetAttribute("timestamp");
+                            pt = rdr.ReadString();
                         }
+                    // и  дату первой правки
+                    pURL = site.apiPath + "?action=query&prop=revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvprop=timestamp&rvdir=newer&rvlimit=1&format=xml";
+                    h = site.GetWebPage(pURL);
+                    XmlTextReader rdr2 = new XmlTextReader(new StringReader(h));
+                    while (rdr2.Read())
+                        if (rdr2.NodeType == XmlNodeType.Element && rdr2.Name == "rev")
+                            df = rdr2.GetAttribute("timestamp");
+                    if (pt.IndexOf("{{nobots}}") != -1 | pt.IndexOf("{{Инкубатор, черновик ВУС") != -1 | pt.IndexOf("{{инкубатор, черновик ВУС}") != -1)
+                        exc.Add(n);
+                    else
+                    {
+                        DateTime dfirst = DateTime.Parse(df); // дата и время создания
+                        DateTime dlast = DateTime.Parse(dl); // дата и время последней правки
+                        DateTime dnow = DateTime.UtcNow; // текущие дата и время
+                        TimeSpan diff1 = dnow - dfirst; // считаем разницу
+                        TimeSpan diff2 = dnow - dlast; // считаем разницу
+                        pages[pn, 0] = n.title;
+                        pages[pn, 1] = diff1.Days.ToString(); // разница от создания
+                        pages[pn, 2] = diff2.Days.ToString(); // разница от посл правки
+                        pn++;
                     }
                 }
-            }
-            if ((set[1] != "0"))
-            {
-                // запускаем напоминание о заброшенной статье
-                bot.mr1(site, set, pages);
-            }
-            if ((set[2] != "0"))
-            {
-                // запускаем уведомление, что пора как бы заканчивать
-                bot.mr2(site, set, pages);
-            }
-            if ((set[3] != "0"))
-            {
-                // выставляем на мини-рецензирование
-                bot.mrec(site, set, pages);
             }
         }
+            bot.mr1(site, pages);
+            bot.mr2(site, pages);
+            bot.mrec(site, pages);
     }
-
-    /// <summary>
     /// напоминаем о забытой статье
-    /// </summary>
-    public void mr1(Site site, string[] set, string[,] pages)
+    public void mr1(Site site, string[,] pages)
     {
-        byte term = Convert.ToByte(set[1]);
         DateTime dnow = DateTime.UtcNow;
         Page logpage = new Page(site, "Участник:IncubatorBot/Лог напоминаний");
         logpage.Load();
         string log = logpage.text;
         for (int i = 0; i < 5000; i++)
-        {
             if (!string.IsNullOrEmpty(pages[i, 0]))
             {
                 Page n = new Page(site, pages[i, 0]);
-                if (Convert.ToInt32(pages[i, 2]) > term)           // если посл.правка была более term дней назад, обрабатываем
+                if (Convert.ToInt32(pages[i, 2]) > 15) // если посл.правка была более 15 дней назад, обрабатываем
                 {
-                    //if (Convert.ToInt32(pages[i, 2]) < (term + 3)) // временный костыль, чтобы не хавал статьи, которые пропускались из-за бага
-                    //{
                     n.Load();
                     n.text = "{{Инкубатор, Уведомление|wait={{subst:#time:Ymd}}}}\n" + n.text;
-                    try
-                    {
-                        n.Save("[[User:IncubatorBot/RemindBot|напоминание о завершении срока]]", true);
-                        log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|}}";
-                    }
-                    catch
-                    {
-                        try
-                        {
-                            n.Save("[[User:IncubatorBot/RemindBot|напоминание о завершении срока]]", true);
-                            log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|}}";
-                        }
-                        catch
-                        {
-                            log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|не удалось сохранить}}";
-                        }
-                    }
-                    //}
+                    n.Save("[[User:IncubatorBot/RemindBot|напоминание о завершении срока]]", true);
                 }
             }
-        }
         Regex logs = new Regex(@"{{\.\..*?}}", RegexOptions.Singleline);
         Regex logdate = new Regex(@"\d{4}-\d{1,2}-\d{1,2}", RegexOptions.Singleline);
         Regex loglink = new Regex(Regex.Escape("|") + @".*?Инкубатор.*?" + Regex.Escape("|"), RegexOptions.Singleline);
         PageList candidats = new PageList(site);
-        candidats.FillFromCategory(set[4]);
+        candidats.FillFromCategory("Проект:Инкубатор:Кандидаты на мини-рецензирование");
         foreach (Match m in logs.Matches(log))
         {
             string datelog = logdate.Matches(m.ToString())[0].ToString();
@@ -340,32 +153,21 @@ class MyBot : Bot
                 log = log.Replace(m.ToString(), "{{../Log|" + pagelog + "|" + datelog + "|шаблон снят}}");
         }
         logpage.text = log;
-        // сохраняем лог
-        try
-        {
-            logpage.Save("обновление", true);
-        }
-        catch { Console.WriteLine("Error with log saving."); }
+        logpage.Save("обновление", true);
     }
-    /// <summary>
     /// выгоняем из Инкубатора
-    /// </summary>
-    public void mr2(Site site, string[] set, string[,] pages)
+    public void mr2(Site site, string[,] pages)
     {
-        byte term = Convert.ToByte(set[2]);
         DateTime dnow = DateTime.UtcNow;
         Page logpage = new Page(site, "Участник:IncubatorBot/Лог уведомлений");
         logpage.Load();
         string log = logpage.text;
         for (int i = 0; i < 5000; i++)
-        {
             if (!string.IsNullOrEmpty(pages[i, 0]))
             {
                 Page n = new Page(site, pages[i, 0]);
-                if (Convert.ToInt32(pages[i, 1]) > term)           // если создано более N дней назад, обрабатываем
+                if (Convert.ToInt32(pages[i, 1]) > 70) // если создано более 70 дней назад, обрабатываем
                 {
-                    //if (Convert.ToInt32(pages[i, 1]) < (term + 3)) // временный костыль, чтобы не хавал статьи, которые пропускались из-за бага
-                    // {
                     PageList fromKU = new PageList(site); // перенести из цикла
                     fromKU.FillFromCategory("Проект:Инкубатор:Статьи на доработке");
                     if (fromKU.Contains(n) != true) // если не с ВП:КУ
@@ -374,35 +176,16 @@ class MyBot : Bot
                         {
                             n.Load();
                             n.text = "{{Инкубатор, Уведомление|away={{subst:#time:Ymd}}}}\n" + n.text;
-
-                            try
-                            {
-                                n.Save("[[User:IncubatorBot/RemindBot|уведомление о завершении срока]]", true);
-                                log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|}}";
-                            }
-                            catch
-                            {
-                                try
-                                {
-                                    n.Save("[[User:IncubatorBot/RemindBot|уведомление о завершении срока]]", true);
-                                    log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|}}";
-                                }
-                                catch
-                                {
-                                    log = log + "\n{{../Log|" + n.title + "|" + dnow.ToString("yyyy-MM-dd") + "|не удалось сохранить}}";
-                                }
-                            }
+                            n.Save("[[User:IncubatorBot/RemindBot|уведомление о завершении срока]]", true);
                         }
                     }
-                    //}
                 }
             }
-        }
         Regex logs = new Regex(@"{{\.\..*?}}", RegexOptions.Singleline);
         Regex logdate = new Regex(@"\d{4}-\d{1,2}-\d{1,2}", RegexOptions.Singleline);
         Regex loglink = new Regex(Regex.Escape("|") + @".*?Инкубатор.*?" + Regex.Escape("|"), RegexOptions.Singleline);
         PageList candidats = new PageList(site);
-        candidats.FillFromCategory(set[4]);
+        candidats.FillFromCategory("Проект:Инкубатор:Кандидаты на мини-рецензирование");
         foreach (Match m in logs.Matches(log))
         {
             string datelog = logdate.Matches(m.ToString())[0].ToString();
@@ -415,32 +198,19 @@ class MyBot : Bot
             Page lpage = new Page(site, pagelog);
             bool a = candidats.Contains(lpage);
             if (difflog.Days > 30)
-            {
-                log = log.Replace(m.ToString(), "");
-                log = log.Replace("\n\n", "\n");
-            }
+                log = log.Replace(m.ToString(), "").Replace("\n\n", "\n");
             else if (a != true)
-            {
                 log = log.Replace(m.ToString(), "{{../Log|" + pagelog + "|" + datelog + "|шаблон снят}}");
-            }
         }
         logpage.text = log;
-        // сохраняем лог
-        try
-        {
-            logpage.Save("обновление", true);
-        }
-        catch { Console.WriteLine("Error with log saving."); }
+        logpage.Save("обновление", true);
     }
-    /// <summary>
     /// Мини-рецензирование
-    /// </summary>
-    public void mrec(Site site, string[] set, string[,] pages)
+    public void mrec(Site site, string[,] pages)
     {
-        byte term = Convert.ToByte(set[3]);
         MyBot bot = new MyBot();
-        var forgotten = bot.GetCategoryMembers(site, set[5], 5000);
-        Page rp = new Page(site, set[7]);
+        var forgotten = bot.GetCategoryMembers(site, "Проект:Инкубатор:Брошенные статьи", 5000);
+        Page rp = new Page(site, "Проект:Инкубатор/Мини-рецензирование");
         PageList pact = new PageList(site);
         PageList prez = new PageList(site);
         DateTime dnow = DateTime.UtcNow;
@@ -451,9 +221,7 @@ class MyBot : Bot
         d_7 = ""; // "== * --- 5-9 правок --- == \n\n";
         d10 = ""; // "== * --- 10-15 правок --- == \n\n";
         d16 = ""; // "== * --- Более 16 правок --- == \n\n";
-        // загружаем страницу мини-рецензирования и логов
         rp.Load();
-        // если сроки вышли
         PageList fromKU = new PageList(site);
         fromKU.FillFromCategory("Проект:Инкубатор:Статьи на доработке");
         for (int i = 0; i < 5000; i++)
@@ -461,35 +229,12 @@ class MyBot : Bot
             if (!String.IsNullOrEmpty(pages[i, 0]))
             {
                 Page n = new Page(site, pages[i, 0]);
-                if (Convert.ToInt32(pages[i, 1]) > term)           // в днях, если больше term обрабатываем
-                {
-                    //if (Convert.ToInt32(pages[i, 1]) < (term + 3))  // временный костыль, чтобы не хавал статьи, которые пропускались из-за бага
-                    //{
+                if (Convert.ToInt32(pages[i, 1]) > 90 || Convert.ToInt32(pages[i, 2]) > 20) // 90 дней возраст или 20 нет правок
                     if (rp.text.IndexOf("== [[" + pages[i, 0] + "]] ==") == -1)
-                    {
                         if (fromKU.Contains(n) != true) // если не с ВП:КУ
-                        {
                             forgotten.Add(n); // закидываем в список для последующей обработки
-                        }
-                    }
-                    //}
-                }
-                if (!String.IsNullOrEmpty(set[8]))
-                {
-                    if (Convert.ToInt32(pages[i, 2]) > Convert.ToByte(set[8]))  // временный костыль - нет правок более X дней
-                    {
-                        if (rp.text.IndexOf("== [[" + pages[i, 0] + "]] ==") == -1)
-                        {
-                            if (fromKU.Contains(n) != true) // если не с ВП:КУ
-                            {
-                                forgotten.Add(n); // закидываем в список для последующей обработки
-                            }
-                        }
-                    }
-                }
             }
         }
-        // обрабатываем рабочий список
         foreach (Page n in forgotten)
         {
             n.Load();
@@ -503,7 +248,6 @@ class MyBot : Bot
                          // веб-запрос, из которого парсим дату и автора первой и последней правок, общее кол-во правок и кол-во авторов
             string pageURL = site.apiPath + "?action=query&prop=info|revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvlimit=100&rvprop=flags|timestamp|user&format=xml";
             string html = site.GetWebPage(pageURL);
-            // парсим данные
             ne = 0;
             XmlTextReader reader = new XmlTextReader(new StringReader(html));
             while (reader.Read())
@@ -511,16 +255,15 @@ class MyBot : Bot
                 if (reader.NodeType == XmlNodeType.Element)
                 {
                     if (reader.Name == "page")
-                    { // находим длину страницы
                         length = reader.GetAttribute("length");
-                    }
                     if (reader.Name == "rev")
                     { // заносим в массив все правки в странице
                         users[ne, 0] = reader.GetAttribute("user");
                         users[ne, 1] = reader.GetAttribute("timestamp");
                         if (reader.GetAttribute("minor") != null)
-                        { users[ne, 2] = "true"; }
-                        else { users[ne, 2] = "false"; }
+                            users[ne, 2] = "true";
+                        else
+                            users[ne, 2] = "false";
                         ne++;
                     }
                 }
@@ -536,29 +279,16 @@ class MyBot : Bot
                 while (k < nu & a == false)
                 {
                     if (users[i, 0] == unusers[k])
-                    { a = true; }
+                        a = true;
                     k++;
                 }
                 if (a == true)
-                {
                     un[k - 1]++;
-                }
                 else { unusers[k] = users[i, 0]; un[k] = 1; nu++; }
-            }
-            // определяем были ли анонимы
-            Regex IP = new Regex(@"\d\d?\d?\.\d\d?\d?\.\d\d?\d?\.\d\d?\d?", RegexOptions.Singleline);
-            int IPs = 0;
-            for (int k = 0; k < nu; k++)
-            {
-                if (IP.IsMatch(unusers[k], 0) != false) { IPs++; }
             }
             // готовим к выводу
             numedits = ne.ToString();
             numusers = nu.ToString();
-            if (IPs > 0)
-            {
-                numusers = numusers + "(" + IPs + " IPs)";
-            }
             DateTime date2 = DateTime.Parse(users[0, 1]);
             DateTime date1 = DateTime.Parse(users[ne - 1, 1]);
             TimeSpan ddiff1 = date2 - date1;
@@ -650,9 +380,7 @@ class MyBot : Bot
             }
             pagetext = pagetext.Replace("<ref>", "").Replace("</ref>", "").Replace("<!--", "").Replace("-->", "").Replace("\'", "").Replace("*", " ").Replace("#", " ").Replace("  ", " ").Replace("  ", " ");
             for (int q1 = 0; q1 < 20; q1++)
-            {
                 pagetext = pagetext.Replace("\n\n", "\n");
-            }
             // выводим текст страницы в предварительный просмотр <nowiki></nowiki>
             if (pagetext.Length > 300)
                 textextract = pagetext.Substring(0, 300) + " <...>";
@@ -677,7 +405,7 @@ class MyBot : Bot
             {
                 // чтобы не дублировать код в каждой секции ниже
                 string review_section = "== [[" + n.title + "]] ==\n{{User:IncubatorBot/Review\n|fe=" + date1.ToString("yyyy.MM.dd HH:mm") + "|fu=" + user1 + "\n|le=" + date2.ToString("yyyy.MM.dd HH:mm") +
-                    "|lu=" + userN + "\n|te=" + numedits + "|tu=" + nu.ToString() + "|ip=" + IPs + "\n|d=" + ddiff1.Days + "|h=" + ddiff1.Hours + "|in=" + ddiff.Days + "\n|tp=" + titlefortalk +
+                    "|lu=" + userN + "\n|te=" + numedits + "|tu=" + nu.ToString() + "\n|d=" + ddiff1.Days + "|h=" + ddiff1.Hours + "|in=" + ddiff.Days + "\n|tp=" + titlefortalk +
                     "\n|hp=" + titleforhist + "\n|date=~~~~~" + "\n|text=<nowiki>" + textextract + "</nowiki>}}\n<!-- пишите ниже этой строки -->\n\n";
                 if (ne < 5)
                     d_3 += review_section;
@@ -694,7 +422,6 @@ class MyBot : Bot
         {
             // из переменных сортированных по кол-ву правок составляем итоговый текст
             rp.text = rp.text + "\n\n" + d16 + d10 + d_7 + d_3;
-
             /* а теперь убираем лишние шаблоны с выставленных страниц, и ставим на них шаблон мини-рецензирования */
             // pact.SaveTitlesToFile("template.txt", false);
             // загружаем активный список
@@ -711,37 +438,19 @@ class MyBot : Bot
                     }
                 }
                 n.text = "{{subst:i-recense}}" + n.text;
-                try   // вводим исключение при сохранении
-                {
-                    n.Save("[[User:IncubatorBot/RemindBot|выставлено на мини-рецензирование]]", true);
-                }
-                catch // пробуем еще раз
-                {
-                    try { n.Save("[[User:IncubatorBot/RemindBot|выставлено на мини-рецензирование]]", true); } // если повторно не вышло
-                    catch
-                    {
-                        Console.WriteLine("Can't save page '" + n.title + "'\n");
-                    }
-                }
+                n.Save("[[User:IncubatorBot/RemindBot|выставлено на мини-рецензирование]]", true);
             }
             for (int z = 0; z < 3; z++)
             {
                 MatchCollection specsections = new Regex(@"==.?" + Regex.Escape("* ---") + ".*?==[^=]*?==.?" + Regex.Escape("*"), RegexOptions.IgnoreCase).Matches(rp.text);
                 foreach (Match m in specsections)
-                {
                     rp.text = rp.text.Replace(m.ToString(), "== *");
-                }
                 MatchCollection mainsections = new Regex(@"==.?" + Regex.Escape("* Загружены") + ".*?==[^=]*?==.?" + Regex.Escape("* Загружены"), RegexOptions.IgnoreCase).Matches(rp.text);
                 foreach (Match m in mainsections)
-                {
                     rp.text = rp.text.Replace(m.ToString(), "== * Загружены");
-                }
                 while (rp.text.IndexOf("\n\n\n") != -1)
-                {
                     rp.text = rp.text.Replace("\n\n\n", "\n\n");
-                }
             }
-            // сохраняем страницу мини-рецензирования
             rp.Save("новая партия просроченных статей (" + numpages + ")", true);
         }
     }
