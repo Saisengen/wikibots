@@ -43,14 +43,16 @@ class Program
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
         "multilingual", limit = 1 } } };
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
-        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), ros_rgx = new Regex("р[оу]с", RegexOptions.IgnoreCase), ukr_rgx = new Regex("укр", RegexOptions.IgnoreCase),
-        editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex(@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline);
-    static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" } };
-    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time } };
-    static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 } };
+        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), ros_rgx = new Regex("р[оау]с", RegexOptions.IgnoreCase), ukr_rgx = new Regex("укр", RegexOptions.IgnoreCase),
+        editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex(@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline),
+        empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex(@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>");
+    static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" },
+        { "be", "user:Рейму_Хакурей/Падазроныя праўкі" } };
+    static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time }, { "be", default_time } };
+    static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 }, { "be", 0 } };
     static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
-    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), suspicious_tags = new List<string>()
-    { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
+    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }/*, { "be" }*/ },
+        suspicious_tags = new List<string>() { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static MySqlDataReader sqlreader;
     static bool new_timestamp_saved, new_id_saved;
@@ -107,10 +109,9 @@ class Program
         else suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         diff_text = site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", " ");
-
+        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(diff_text, ""), ""), ""), "").Replace("\\n", "\n");
         strings_with_changes = "";
-        string prepared_text = div_rgx.Replace(diff_text, "").Replace("\\n", "\n");
-        foreach (string str in prepared_text.Split('\n'))
+        foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
             {
                 var matches = ins_del_rgx.Matches(str);
@@ -132,7 +133,8 @@ class Program
         int num_of_revs = rev_rgx.Matches(revs).Count;
         string revisions_info = num_of_revs > 9 ? "" : ", revs: " + num_of_revs;
 
-        Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
+        if (lang != "be")
+            Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
             title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
         bool single_author = false;
@@ -155,8 +157,9 @@ class Program
             Console.WriteLine(res.StatusCode + " " + JsonConvert.SerializeObject(json));
 
     }
-    static void check()
+    static void check(string lang)
     {
+        Program.lang = lang;
         connection[lang] = new MySqlConnection(creds[1].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
         connection[lang].Open();
         new_timestamp_saved = false; new_id_saved = false;
@@ -275,18 +278,23 @@ class Program
                     if (keyvalue[0] == liftwing[type].longname)
                         liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
             }
-            foreach (string lang in new string[] { "ru", "uk" })
+            foreach (string lang in langs)
             {
                 patterns[lang].Clear();
                 patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
                 patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
                 foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" } )
-                {
-                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
-                    foreach (var pattern in pattern_source)
-                        if (pattern != "")
-                            patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
-                }
+                    try
+                    {
+                        var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
+                        foreach (var pattern in pattern_source)
+                            if (pattern != "")
+                                patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
+                    }
+                    catch
+                    {
+                        continue;
+                    }
             }
         }
     }
@@ -296,7 +304,7 @@ class Program
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in global_flags_bearers)
             trusted_users.Add(g);
-        foreach (string lang in new string[] { "ru", "uk" })
+        foreach (string lang in langs)
         {
             site.Add(lang, Site(lang, creds[0].Split(':')[0], creds[0].Split(':')[1]));
             patterns.Add(lang, new List<Regex>());
@@ -329,8 +337,8 @@ class Program
         while (true)
         {
             update_settings();
-            lang = "ru"; check();
-            lang = "uk"; check();
+            foreach (var lang in langs)
+                check(lang);
             Thread.Sleep(2000);
         }
     }
