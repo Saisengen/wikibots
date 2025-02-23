@@ -20,7 +20,7 @@ internal class MyBot : Bot
         for (int i = 0; i < m.GetLength(1); i++)
             (m[row2, i], m[row1, i]) = (m[row1, i], m[row2, i]);
     }
-    public PageList GetCategoryMembers(DotNetWikiBot.Site site, string cat, int limit)
+    public PageList GetCategoryMembers(Site site, string cat, int limit)
     {
         PageList allpages = new PageList(site);
         string[] all = new string[limit];
@@ -59,14 +59,12 @@ internal class MyBot : Bot
         mrpage.Load();
         int num = 0;
         PageList cand_list;
-
-        // предварительный пробег на предмет номинации к удалению старейших стабов
         DateTime nn = DateTime.Now;
         string[] mon = { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         Page kuP = new Page(site, "Википедия:К удалению/" + nn.Day + " " + mon[nn.Month - 1] + " " + nn.Year);
         int max = 0;
         string nom = "";
-        cand_list = bot.GetCategoryMembers(site, "Проект:Инкубатор:Статьи на мини-рецензировании", 5000);
+        cand_list = bot.GetCategoryMembers(site, "Проект:Инкубатор:Статьи на мини-рецензировании", 5000);// предварительный пробег на предмет номинации к удалению старейших стабов
         string[,] forKU = new string[cand_list.Count(), 2];
         int kunum = 0;
         // смотрим дату последней правки
@@ -91,19 +89,15 @@ internal class MyBot : Bot
             {
                 if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
                 {   // проверяем "ссылки сюда"
-                    string[] textArray3 = new string[] { site.apiPath, "?action=query&titles=", HttpUtility.UrlEncode(forKU[ku, 0]), "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml" };
-                    string pageHTM = site.GetWebPage(string.Concat(textArray3));
-                    // если есть ссылки с ВУС на статью, то уточняем актуальность
-                    if (pageHTM.IndexOf("Википедия:К восстановлению") != -1 | pageHTM.IndexOf("Википедия:К_восстановлению") != -1)
+                    string apiout = site.GetWebPage(string.Concat(site.apiPath + "?action=query&titles=" + HttpUtility.UrlEncode(forKU[ku, 0]) + "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml"));
+                    if (apiout.IndexOf("Википедия:К восстановлению") != -1 | apiout.IndexOf("Википедия:К_восстановлению") != -1) // если есть ссылки с ВУС на статью, то уточняем актуальность
                     {
                         PageList actvus = new PageList();
                         actvus.FillAllFromCategory("Википедия:Незакрытые обсуждения восстановления страниц");
                         foreach (Page b in actvus)
-                            if (pageHTM.IndexOf(b.title) != -1) // если хотя бы одна ссыдка является актуальным обсуждением
+                            if (apiout.IndexOf(b.title) != -1) // если хотя бы одна ссыдка является актуальным обсуждением
                                 work = false; // то выключаем обработку этой страницы
                     }
-
-                    // если все норм, продолжаем
                     if (work)
                     {
                         bool not_moved = false;
@@ -198,11 +192,7 @@ internal class MyBot : Bot
                 kuP.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
             }
         }
-
-        // работаем по заголовкам
-        // получаем список статей на мини-рец
         cand_list = bot.GetCategoryMembers(site, "Проект:Инкубатор:Статьи на мини-рецензировании", 5000);
-        // получаем список заголовков на странице мини-рец
         string[] regtitle = new string[] { "== ", @"\[\[", ".*?", @"\]\]", " ==" };
         MatchCollection titles = new Regex(string.Concat(regtitle), RegexOptions.IgnoreCase).Matches(mrpage.text);
         string[] datestring = new string[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
@@ -221,27 +211,20 @@ internal class MyBot : Bot
             if (!cand_list.Contains(title))
             {
                 // положение след. заголовка или конца страницы
-                int length = mrpage.text.IndexOf("\n== [[", (int)(index + 6));
+                int length = mrpage.text.IndexOf("\n== [[", index + 6);
                 int length_add = 0;
                 if (length == -1)
                     length = mrpage.text.Length;
                 
-                if (mrpage.text.IndexOf("=== Итог ===", index, (int)(length - index)) == -1) // проверяем наличие секции "Итог"
+                if (mrpage.text.IndexOf("=== Итог ===", index, length - index) == -1) // проверяем наличие секции "Итог"
                 {
                     string pageHTM; // если ее нет
                     for (int qaza = 0; qaza < 5; qaza++)
                     {
-                        if (string.IsNullOrEmpty(title))
-                            throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-                        // проверяем на переименования
-                        string[] textArray3 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title), "&letype=move&ledir=newer&format=xml" };
-                        string pageURL = string.Concat(textArray3);
-                        try { pageHTM = site.GetWebPage(pageURL); }
-                        catch { pageHTM = ""; }
-                        // видимо, условие для проверки наличия записи в логах, и если переименование было обрабатываем данные
-                        if (pageHTM.IndexOf("<item") != -1)
+                        string xmlresult = site.GetWebPage(site.apiPath + "?action=query&list=logevents&letitle=" + HttpUtility.UrlEncode(title) + "&letype=move&ledir=newer&format=xml");
+                        if (xmlresult.IndexOf("<item") != -1)
                         {
-                            XmlTextReader reader = new XmlTextReader(new StringReader(pageHTM));
+                            XmlTextReader reader = new XmlTextReader(new StringReader(xmlresult));
                             while (reader.Read())
                                 if (reader.NodeType == XmlNodeType.Element)
                                 {
@@ -351,9 +334,7 @@ internal class MyBot : Bot
             }
         }
         while (mrpage.text.IndexOf("\n\n\n") != -1)
-        {
             mrpage.text = mrpage.text.Replace("\n\n\n", "\n\n");
-        }
         mrpage.Save("автоматическое подведение итогов (" + num + "), коррекция заголовков", true);
     }
 }
