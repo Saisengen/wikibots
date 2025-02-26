@@ -12,7 +12,7 @@ using System.Text;
 using Newtonsoft.Json;
 public enum type
 {
-    ores, lwa, lwm, ruukr, rgx, tag
+    ores, lwa, lwm, replaces, rgx, tag
 }
 public class color
 {
@@ -27,8 +27,44 @@ public class model
 public class Author { public string name, url; }
 public class Embed { public Author author; public string title, description, url; public long color; public List<Field> fields; }
 public class Field { public string name, value; }
-public class Root { public List<Embed> embeds; }
-
+public class discordjson { public List<Embed> embeds; }
+public class Continue
+{
+    public string rccontinue;
+    public string @continue;
+}
+public class Query
+{
+    public List<Recentchange> recentchanges;
+}
+public class Recentchange
+{
+    public string type;
+    public int ns;
+    public string title;    
+    public int pageid;  
+    public int revid;
+    public int old_revid;   
+    public int rcid;    
+    public string user;
+    public int oldlen;
+    public int newlen;
+    public DateTime timestamp;
+    public string comment;
+    public List<string> tags;
+    public object oresscores;
+    public bool? anon;
+}
+public class rchanges
+{
+    public bool batchcomplete;
+    public Continue @continue;
+    public Query query;
+}
+public class rgxpair
+{
+    public Regex one, two;
+}
 class Program
 {
     static string commandtext = "select cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, " +
@@ -43,9 +79,9 @@ class Program
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
         "multilingual", limit = 1 } } };
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
-        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), ros_rgx = new Regex("р[оау]с", RegexOptions.IgnoreCase), ukr_rgx = new Regex("укр", RegexOptions.IgnoreCase),
-        editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex(@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline),
-        empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex(@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>");
+        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
+        (@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex(@"<del[^>]*>\s*</del>"),
+        a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" },
         { "be", "user:Рейму_Хакурей/Падазроныя праўкі" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time }, { "be", default_time } };
@@ -54,12 +90,15 @@ class Program
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }/*, { "be" }*/ },
         suspicious_tags = new List<string>() { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
+    static List<rgxpair> replaces = new List<rgxpair>() { { new rgxpair() { one = new Regex("р[оау]с", RegexOptions.IgnoreCase), two = new Regex("укр", RegexOptions.IgnoreCase) } },
+        { new rgxpair() { one = new Regex("татар", RegexOptions.IgnoreCase), two = new Regex("башк", RegexOptions.IgnoreCase) } },
+        { new rgxpair() { one = new Regex("окк?уп", RegexOptions.IgnoreCase), two = new Regex("свобод", RegexOptions.IgnoreCase) } } };
     static MySqlDataReader sqlreader;
     static bool new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, oldid, newid, pageid;
     static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.rgx, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
-        { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.ruukr, new color(0, 255, 255) } };
+        { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replaces, new color(0, 255, 255) } };
     static string e(string input)
     {
         return Uri.EscapeUriString(input);
@@ -109,7 +148,7 @@ class Program
         else suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         diff_text = site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", " ");
-        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(diff_text, ""), ""), ""), "").Replace("\\n", "\n");
+        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(diff_text, ""), ""), ""), ""), "").Replace("\\n", "\n").Replace("\\\"", "\"");
         strings_with_changes = "";
         foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
@@ -145,11 +184,11 @@ class Program
             single_author = true;
 
         string page_title = ns_name[ns] + title;
-        var json = new Root()
+        var json = new discordjson()
         {
             embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?" + (single_author ? "diff=" + newid : 
             "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + revisions_info + ", [hist](<https://" + lang + ".wikipedia.org/wiki/special:history/" + e(page_title) +
-            ">), " + "[curr](<https://" + lang + ".wikipedia.org/wiki/" + e(page_title) + ">)" + (single_author ? ", single" : ""), fields = new List<Field>(){ new Field(){ name = comment, value =
+            ">), " + "[curr](<https://" + lang + ".wikipedia.org/wiki/" + e(page_title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value =
             discord_diff }}, author = new Author(){ name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + e(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
@@ -222,12 +261,13 @@ class Program
                     all_ins += elem;
                 foreach (var elem in del_array)
                     all_del += elem;
-                if ((ros_rgx.IsMatch(all_ins) && ukr_rgx.IsMatch(all_del) && !ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_del)) ||
-                    (ros_rgx.IsMatch(all_del) && ukr_rgx.IsMatch(all_ins) && !ros_rgx.IsMatch(all_ins) && !ukr_rgx.IsMatch(all_del)))
-                {
-                    post_suspicious_edit("ru-ukr", type.ruukr);
-                    continue;
-                }
+                foreach(var rgxpair in replaces)
+                    if ((rgxpair.one.IsMatch(all_ins) && rgxpair.two.IsMatch(all_del) && !rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_del)) ||
+                    (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
+                    {
+                        post_suspicious_edit("замена", type.replaces);
+                        continue;
+                    }
 
                 foreach (Match ins in ins_array)
                     foreach (var pattern in patterns[lang])
@@ -282,7 +322,8 @@ class Program
             {
                 patterns[lang].Clear();
                 patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
-                patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLлl]\w*")); //исключаем фамилию Хохлов
+                patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLЛl]\w*")); //исключаем фамилию Хохлов
+                patterns[lang].Add(new Regex(@"[мmM][oaо0аАОAO][сСcC][kKкК][аАaA][лЛlL]\w*"));//Москалёв
                 foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" } )
                     try
                     {
