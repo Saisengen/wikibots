@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -8,25 +9,16 @@ using DotNetWikiBot;
 class MyBot : Bot
 {
     static string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-    public PageList GetCategoryMembers(Site site, string cat, int limit)
+    public PageList GetCategoryMembers(Site site, string cat)
     {
         PageList allpages = new PageList(site);
-        string[] all = new string[limit];
-        int page_num = 0;
-        XmlTextReader rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=max&cmtitle=" +
-            HttpUtility.UrlEncode("К:" + cat) + "&format=xml")));
+        var all = new HashSet<string>();
+        string apiout = site.GetWebPage(site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmnamespace=102&cmlimit=max&cmtitle=К:" + HttpUtility.UrlEncode(cat) + "&format=xml");
+        XmlTextReader rdr = new XmlTextReader(new StringReader(apiout));
         while (rdr.Read())
-        {
             if (rdr.NodeType == XmlNodeType.Element)
                 if (rdr.Name == "cm")
-                {
-                    all[page_num] = rdr.GetAttribute("title");
-                    page_num++;
-                }
-            if (page_num > limit)
-                break;
-        }
-        Console.WriteLine("Loaded " + page_num + " pages from Category:" + cat);
+                    all.Add(rdr.GetAttribute("title"));
         foreach (string m in all)
             {
                 Page n = new Page(site, m);
@@ -57,9 +49,9 @@ class MyBot : Bot
         for (int j = 0; j < set_parser.Matches("Проект:Инкубатор:Статьи nb0|Проект:Инкубатор:Статьи nb1|Проект:Инкубатор:Статьи nb2").Count; j++)
         {
             nb[j] = "|";
-            nblist = bot.GetCategoryMembers(site, nbcats[j], 1000);
+            nblist = bot.GetCategoryMembers(site, nbcats[j]);
             foreach (Page pp in nblist)
-            { nb[j] = nb[j] + pp.title + "|"; }
+                nb[j] = nb[j] + pp.title + "|";
             nblist.Clear();
         }
         PageList pl = new PageList(site);
