@@ -35,13 +35,5 @@
   image: tf-mono68
   emails: none
   continuous: true
-  filelog-stdout: new-edits-check.out
-  filelog-stderr: new-edits-check.err
-
-- name: ruukr
-  command: pyvenv/bin/python ./py/rukr.py
-  image: python3.11
-  emails: none
-  continuous: true
-  filelog-stdout: logs/rukr.out
-  filelog-stderr: logs/rukr.err
+  filelog-stdout: logs/new-edits-check.out
+  filelog-stderr: logs/new-edits-check.err
