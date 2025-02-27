@@ -90,9 +90,7 @@ class Program
     static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }/*, { "be" }*/ },
         suspicious_tags = new List<string>() { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
-    static List<rgxpair> replaces = new List<rgxpair>() { { new rgxpair() { one = new Regex("р[оау]с", RegexOptions.IgnoreCase), two = new Regex("укр", RegexOptions.IgnoreCase) } },
-        { new rgxpair() { one = new Regex("татар", RegexOptions.IgnoreCase), two = new Regex("башк", RegexOptions.IgnoreCase) } },
-        { new rgxpair() { one = new Regex("окк?уп", RegexOptions.IgnoreCase), two = new Regex("свобод", RegexOptions.IgnoreCase) } } };
+    static List<rgxpair> replaces = new List<rgxpair>();
     static MySqlDataReader sqlreader;
     static bool new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, oldid, newid, pageid;
@@ -266,7 +264,7 @@ class Program
                     (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
                     {
                         post_suspicious_edit("замена", type.replaces);
-                        continue;
+                        goto End;
                     }
 
                 foreach (Match ins in ins_array)
@@ -301,46 +299,54 @@ class Program
     }
     static void update_settings()
     {
-        if (currminute != DateTime.UtcNow.Minute / 10)
+        goodanons.Clear();
+        currminute = DateTime.UtcNow.Minute / 10;
+        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+        foreach (var row in settings)
         {
-            goodanons.Clear();
-            currminute = DateTime.UtcNow.Minute / 10;
-            var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
-            foreach (var row in settings)
+            var keyvalue = row.Split(':');
+            if (keyvalue[0] == "ores")
+                ores_limit = Convert.ToDouble(keyvalue[1]);
+            else if (keyvalue[0] == "goodanons")
+                foreach (var g in keyvalue[1].Split('|'))
+                    goodanons.Add(g);
+            foreach (var type in liftwing.Keys)
+                if (keyvalue[0] == liftwing[type].longname)
+                    liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
+        }
+        foreach (string lang in langs)
+        {
+            patterns[lang].Clear();
+            foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" })
+                try
+                {
+                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
+                    bool ignorecase = false;
+                    foreach (var pattern in pattern_source)
+                        if (pattern == "--------")
+                            ignorecase = true;
+                        else
+                            patterns[lang].Add(ignorecase ? new Regex(pattern, RegexOptions.IgnoreCase) : new Regex(pattern));
+                }
+                catch
+                {
+                    continue;
+                }
+
+            replaces.Clear();
+            var pairs_list = new StreamReader("replaces.txt").ReadToEnd().Split('\n');
+            foreach (var pair in pairs_list)
             {
-                var keyvalue = row.Split(':');
-                if (keyvalue[0] == "ores")
-                    ores_limit = Convert.ToDouble(keyvalue[1]);
-                else if (keyvalue[0] == "goodanons")
-                    foreach (var g in keyvalue[1].Split('|'))
-                        goodanons.Add(g);
-                foreach (var type in liftwing.Keys)
-                    if (keyvalue[0] == liftwing[type].longname)
-                        liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
-            }
-            foreach (string lang in langs)
-            {
-                patterns[lang].Clear();
-                patterns[lang].Add(new Regex(@"\b[СC][ВB][OО]\b")); //нельзя использовать в ignore case, как остальные
-                patterns[lang].Add(new Regex(@"[хxX][oaо0аАОAO][XХxх][лLЛl]\w*")); //исключаем фамилию Хохлов
-                patterns[lang].Add(new Regex(@"[мmM][oaо0аАОAO][сСcC][kKкК][аАaA][лЛlL]\w*"));//Москалёв
-                foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" } )
-                    try
-                    {
-                        var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
-                        foreach (var pattern in pattern_source)
-                            if (pattern != "")
-                                patterns[lang].Add(new Regex(pattern, RegexOptions.IgnoreCase));
-                    }
-                    catch
-                    {
-                        continue;
-                    }
+                var components = pair.Split('|');
+                replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
             }
         }
     }
-    static void gather_trusted_users()
+    static void initialize()
     {
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
+
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in global_flags_bearers)
@@ -371,13 +377,11 @@ class Program
     }
     static void Main()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
-
-        gather_trusted_users();
+        initialize();
         while (true)
         {
-            update_settings();
+            if (currminute != DateTime.UtcNow.Minute / 10)
+                update_settings();
             foreach (var lang in langs)
                 check(lang);
             Thread.Sleep(2000);
