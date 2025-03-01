@@ -1,5 +1,3 @@
-
-using MySql.Data.MySqlClient;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -67,39 +65,199 @@ public class rgxpair
 }
 class Program
 {
-    static string commandtext = "select cast(rc_title as char) title, cast(comment_text as char) comment, oresc_probability, rc_timestamp, cast(actor_name as char) user, rc_this_oldid, rc_last_oldid, " +
-        "rc_old_len, rc_new_len, rc_namespace, rc_cur_id from recentchanges join comment on rc_comment_id=comment_id join ores_classification on oresc_rev=rc_this_oldid join actor on actor_id=rc_actor " +
-        "join ores_model on oresc_model=oresm_id where rc_timestamp>%time% and rc_this_oldid>%id% and (rc_type=0 or rc_type=1) and (rc_namespace=0 or rc_namespace=6 or rc_namespace=10 or rc_namespace=14 " +
-        "or rc_namespace=100) and oresm_name=\"damaging\" order by rc_this_oldid desc;", user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff,
-        discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyyMMddHHmmss");
+    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id,
+        all_ins, all_del, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
-    static double ores_risk, lw_risk, ores_limit = 1;
+    static double ores_value, lw_value, ores_limit = 1;
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
         "multilingual", limit = 1 } } };
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
         ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
-        (@"revid=""(\d*)"""),tag_rgx = new Regex(@"<tag>([^<>]*)</tag>", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex(@"<del[^>]*>\s*</del>"),
-        a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>");
+        (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
+        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>");
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" },
         { "be", "user:Рейму_Хакурей/Падазроныя праўкі" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time }, { "be", default_time } };
     static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 }, { "be", 0 } };
     static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
-    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), goodanons = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }/*, { "be" }*/ },
-        suspicious_tags = new List<string>() { { "blank" }, { "replace" }, { "emoji" }, { "spam" }, { "спам" }, { "ожлив" }, { "ест" }, { "ASCI" } };
+    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }, { "be" } }, suspicious_tags = new List<string>();
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static List<rgxpair> replaces = new List<rgxpair>();
-    static MySqlDataReader sqlreader;
     static bool new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 20, startpos, endpos, editcount, ns, oldid, newid, pageid;
-    static Dictionary<string, MySqlConnection> connection = new Dictionary<string, MySqlConnection>();
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, startpos, endpos, editcount, ns, oldid, newid, pageid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.rgx, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replaces, new color(0, 255, 255) } };
     static string e(string input)
     {
         return Uri.EscapeUriString(input);
+    }
+    static void update_replaces()
+    {
+        replaces.Clear();
+        var pairs_list = new StreamReader("./reimu/replaces.txt").ReadToEnd().Split('\n');
+        foreach (var pair in pairs_list)
+        {
+            var components = pair.Split('|');
+            replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+        }
+    }
+    static void update_tags()
+    {
+        suspicious_tags.Clear();
+        var tags_list = new StreamReader("./reimu/tags.txt").ReadToEnd().Split('\n');
+        foreach (var tag in tags_list)
+            suspicious_tags.Add(tag);
+    }
+    static void update_trusted_users()
+    {
+        var trusers_list = new StreamReader("./reimu/trusted-users.txt").ReadToEnd().Split('\n');
+        foreach (var truser in trusers_list)
+            if (!trusted_users.Contains(truser))
+                trusted_users.Add(truser);
+    }
+    static void update_patterns()
+    {
+        foreach (string lang in langs)
+        {
+            patterns[lang].Clear();
+            foreach (string patterns_file_name in new string[] { "./reimu/patterns-common.txt", "./reimu/patterns-" + lang + ".txt" })
+                try
+                {
+                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
+                    bool ignorecase = false;
+                    foreach (var pattern in pattern_source)
+                        if (pattern == "--------")
+                            ignorecase = true;
+                        else if (pattern != "")
+                            patterns[lang].Add(ignorecase ? new Regex(pattern, RegexOptions.IgnoreCase) : new Regex(pattern));
+                }
+                catch { continue; }
+        }
+    }
+    static void read_config()
+    {
+        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+        foreach (var row in settings)
+        {
+            var keyvalue = row.Split(':');
+            if (keyvalue[0] == "ores")
+                ores_limit = Convert.ToDouble(keyvalue[1]);
+            foreach (var type in liftwing.Keys)
+                if (keyvalue[0] == liftwing[type].longname)
+                    liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
+        }
+    }
+    static bool tags_is_triggered(Recentchange edit)
+    {
+        foreach (string susp_tag_substring in suspicious_tags)
+            foreach (string edit_tag in edit.tags)
+                if (edit_tag.Contains(susp_tag_substring))
+                {
+                    post_suspicious_edit(edit_tag, type.tag);
+                    return true;
+                }
+        return false;
+    }
+    static bool ores_is_triggered(Recentchange edit)
+    {
+        ores_value = 0;
+        try
+        {
+            if (edit.oresscores.ToString() != "[]")
+                ores_value = Convert.ToDouble(damage_rgx.Match(edit.oresscores.ToString()).Groups[1].Value);
+        }
+        catch { }
+        if (ores_value >= ores_limit)
+        {
+            post_suspicious_edit("ores:" + ores_value.ToString(), type.ores);
+            return true;
+        }
+        else return false;
+    }
+    static bool lw_is_triggered(Recentchange edit)
+    {
+        foreach (type shortname in liftwing.Keys)
+        {
+            try
+            {
+                lw_raw = lw_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-" + liftwing[shortname].longname + ":predict", new StringContent
+                    ("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
+                if (lw_raw != null && lw_raw != "")
+                    lw_value = Math.Round(Convert.ToDouble(lw_raw), 3);
+            }
+            catch { return false; }
+            if (lw_value > liftwing[shortname].limit)
+            {
+                post_suspicious_edit(shortname + ":" + lw_value.ToString(), shortname);
+                return true;
+            }
+        }
+        return false;
+    }
+    static bool pattern_is_triggered(Recentchange edit)
+    {
+        foreach (var pattern in patterns[lang])
+            if (pattern.IsMatch(all_ins))
+            {
+                post_suspicious_edit(pattern.Match(all_ins).Value, type.rgx);
+                return true;
+            }
+        return false;
+    }
+    static void check_replaces(Recentchange edit)
+    {
+        foreach (var rgxpair in replaces)
+            if ((rgxpair.one.IsMatch(all_ins) && rgxpair.two.IsMatch(all_del) && !rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_del)) ||
+            (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
+            {
+                post_suspicious_edit("замена", type.replaces);
+                return;
+            }
+    }
+    static void initialize_edit_data(Recentchange edit)
+    {
+        user = edit.user;
+        title = edit.title.Replace('_', ' ');
+        ns = edit.ns;
+        newid = edit.revid;
+        oldid = edit.old_revid;
+        comment = edit.comment;
+        diff_size = edit.newlen - edit.oldlen;
+        pageid = edit.pageid;
+
+        try
+        {
+            editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
+                "&ususers=" + e(user)).Result).Groups[1].Value);
+        }
+        catch { editcount = 0; }
+        if (editcount > 1000)
+            trusted_users.Add(user);
+
+        if (!new_timestamp_saved)
+        {
+            last_checked_edit_time[lang] = edit.timestamp.ToString("yyyy-MM-ddTHH:mm:ss.000Z");
+            new_timestamp_saved = true;
+        }
+        if (!new_id_saved)
+        {
+            last_checked_id[lang] = newid;
+            new_id_saved = true;
+        }
+    }
+    static void analyze_diff()
+    {
+        var alldiff = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
+        var ins_array = ins_rgx.Matches(alldiff);
+        all_ins = "";
+        foreach (var elem in ins_array)
+            all_ins += elem;
+        var del_array = del_rgx.Matches(alldiff);
+        all_del = "";
+        foreach (var elem in del_array)
+            all_del += elem;
     }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -197,154 +355,24 @@ class Program
     static void check(string lang)
     {
         Program.lang = lang;
-        connection[lang] = new MySqlConnection(creds[1].Replace("%project%", lang + "wiki").Replace("analytics", "web"));
-        connection[lang].Open();
         new_timestamp_saved = false; new_id_saved = false;
-        sqlreader = new MySqlCommand(commandtext.Replace("%time%", last_checked_edit_time[lang]).Replace("%id%", last_checked_id[lang].ToString()), connection[lang]).ExecuteReader();
-        while (sqlreader.Read())
-        {
-            user = sqlreader.GetString("user") ?? "";
-            if (goodanons.Contains(user))
-                continue;
-            ores_risk = Math.Round(sqlreader.GetDouble("oresc_probability"), 3);
-            title = sqlreader.GetString("title").Replace('_', ' ');
-            ns = sqlreader.GetInt16("rc_namespace");
-            newid = sqlreader.GetInt32("rc_this_oldid");
-            oldid = sqlreader.GetInt32("rc_last_oldid");
-            pageid = sqlreader.GetInt32("rc_cur_id");
-            comment = sqlreader.GetString("comment");
-            diff_size = sqlreader.GetInt32("rc_new_len") - sqlreader.GetInt32("rc_old_len");
-            if (!new_timestamp_saved)
+        var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2&rcend=" +
+            last_checked_edit_time[lang] + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new").Result);
+        foreach(var edit in edits.query.recentchanges)
+            if (edit.revid > last_checked_id[lang] && !trusted_users.Contains(edit.user))
             {
-                last_checked_edit_time[lang] = sqlreader.GetString("rc_timestamp"); new_timestamp_saved = true;
+                initialize_edit_data(edit);
+                if (!ores_is_triggered(edit) && !tags_is_triggered(edit) && !lw_is_triggered(edit))
+                {
+                    analyze_diff();
+                    if (!pattern_is_triggered(edit))
+                        check_replaces(edit);
+                }
             }
-            if (!new_id_saved)
-            {
-                last_checked_id[lang] = newid; new_id_saved = true;
-            }
-            if (!trusted_users.Contains(user))
-            {
-                try
-                {
-                    editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
-                        "&ususers=" + e(user)).Result).Groups[1].Value);
-                }
-                catch
-                {
-                    editcount = 0;
-                }
-                if (editcount > 500)
-                {
-                    trusted_users.Add(user);
-                    continue;
-                }
-
-                if (ores_risk > ores_limit)
-                {
-                    post_suspicious_edit("ores:" + ores_risk.ToString(), type.ores);
-                    continue;
-                }
-
-                foreach (Match edit_tag in tag_rgx.Matches(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&revids=" + newid + "&rvprop=tags").Result))
-                    foreach (string susp_tag in suspicious_tags)
-                        if (edit_tag.Groups[1].Value.Contains(susp_tag))
-                        {
-                            post_suspicious_edit(edit_tag.Groups[1].Value, type.tag);
-                            goto End;
-                        }
-
-                var alldiff = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
-                var ins_array = ins_rgx.Matches(alldiff); var del_array = del_rgx.Matches(alldiff); string all_ins = "", all_del = "";
-                foreach(var elem in ins_array)
-                    all_ins += elem;
-                foreach (var elem in del_array)
-                    all_del += elem;
-                foreach(var rgxpair in replaces)
-                    if ((rgxpair.one.IsMatch(all_ins) && rgxpair.two.IsMatch(all_del) && !rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_del)) ||
-                    (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
-                    {
-                        post_suspicious_edit("замена", type.replaces);
-                        goto End;
-                    }
-
-                foreach (Match ins in ins_array)
-                    foreach (var pattern in patterns[lang])
-                        if (pattern.IsMatch(ins.Groups[1].Value))
-                        {
-                            post_suspicious_edit(pattern.Match(ins.Groups[1].Value).Value, type.rgx);
-                            goto End;
-                        }
-
-                foreach (type shortname in liftwing.Keys)
-                {
-                    try
-                    {
-                        lw_raw = lw_rgx.Match(client.PostAsync("https://api.wikimedia.org/service/lw/inference/v1/models/revertrisk-" + liftwing[shortname].longname + ":predict", new StringContent
-                            ("{\"lang\":\"" + lang + "\",\"rev_id\":" + newid + "}", Encoding.UTF8, "application/json")).Result.Content.ReadAsStringAsync().Result).Groups[1].Value;
-                        if (lw_raw != null && lw_raw != "")
-                            lw_risk = Math.Round(Convert.ToDouble(lw_raw), 3);
-                    }
-                    catch { goto End; }
-                    if (lw_risk > liftwing[shortname].limit)
-                    {
-                        post_suspicious_edit(shortname + ":" + lw_risk.ToString(), shortname);
-                        goto End;
-                    }
-                }
-            End:;
-            }
-        }
-        sqlreader.Close();
-        connection[lang].Close();
     }
-    static void update_settings()
+    static void initialize_bot()
     {
-        goodanons.Clear();
-        currminute = DateTime.UtcNow.Minute / 10;
-        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
-        foreach (var row in settings)
-        {
-            var keyvalue = row.Split(':');
-            if (keyvalue[0] == "ores")
-                ores_limit = Convert.ToDouble(keyvalue[1]);
-            else if (keyvalue[0] == "goodanons")
-                foreach (var g in keyvalue[1].Split('|'))
-                    goodanons.Add(g);
-            foreach (var type in liftwing.Keys)
-                if (keyvalue[0] == liftwing[type].longname)
-                    liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
-        }
-        foreach (string lang in langs)
-        {
-            patterns[lang].Clear();
-            foreach (string patterns_file_name in new string[] { "patterns-common.txt", "patterns-" + lang + ".txt" })
-                try
-                {
-                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
-                    bool ignorecase = false;
-                    foreach (var pattern in pattern_source)
-                        if (pattern == "--------")
-                            ignorecase = true;
-                        else
-                            patterns[lang].Add(ignorecase ? new Regex(pattern, RegexOptions.IgnoreCase) : new Regex(pattern));
-                }
-                catch
-                {
-                    continue;
-                }
-
-            replaces.Clear();
-            var pairs_list = new StreamReader("replaces.txt").ReadToEnd().Split('\n');
-            foreach (var pair in pairs_list)
-            {
-                var components = pair.Split('|');
-                replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
-            }
-        }
-    }
-    static void initialize()
-    {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p2").ReadToEnd().Split('\n');
         liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
 
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
@@ -355,7 +383,6 @@ class Program
         {
             site.Add(lang, Site(lang, creds[0].Split(':')[0], creds[0].Split(':')[1]));
             patterns.Add(lang, new List<Regex>());
-            connection.Add(lang, new MySqlConnection());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
                 string apiout, cont = "", request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
@@ -377,11 +404,18 @@ class Program
     }
     static void Main()
     {
-        initialize();
+        initialize_bot();
         while (true)
         {
             if (currminute != DateTime.UtcNow.Minute / 10)
-                update_settings();
+            {
+                currminute = DateTime.UtcNow.Minute / 10;
+                read_config();
+                update_patterns();
+                update_replaces();
+                update_tags();
+                update_trusted_users();
+            }
             foreach (var lang in langs)
                 check(lang);
             Thread.Sleep(2000);
