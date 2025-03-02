@@ -76,13 +76,12 @@ class Program
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
         ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>");
+        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>"), suspicious_tags_rgx;
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" },
         { "be", "user:Рейму_Хакурей/Падазроныя праўкі" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time }, { "be", default_time } };
     static Dictionary<string, int> last_checked_id = new Dictionary<string, int>() { { "ru", 0 }, { "uk", 0 }, { "be", 0 } };
-    static Dictionary<int, string> ns_name = new Dictionary<int, string>() { { 0, "" }, { 6, "file:" }, { 10, "template:" }, { 14, "category:" }, { 100, "portal:" } };
-    static List<string> suspicious_users = new List<string>(), trusted_users = new List<string>(), langs = new List<string>() { { "ru" }, { "uk" }, { "be" } }, suspicious_tags = new List<string>();
+    static HashSet<string> suspicious_users = new HashSet<string>(), trusted_users = new HashSet<string>(), langs = new HashSet<string>() { { "ru" }, { "uk" }, { "be" } };
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static List<rgxpair> replaces = new List<rgxpair>();
     static bool new_timestamp_saved, new_id_saved;
@@ -93,39 +92,15 @@ class Program
     {
         return Uri.EscapeUriString(input);
     }
-    static void update_replaces()
-    {
-        replaces.Clear();
-        var pairs_list = new StreamReader("./reimu/replaces.txt").ReadToEnd().Split('\n');
-        foreach (var pair in pairs_list)
-        {
-            var components = pair.Split('|');
-            replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
-        }
-    }
-    static void update_tags()
-    {
-        suspicious_tags.Clear();
-        var tags_list = new StreamReader("./reimu/tags.txt").ReadToEnd().Split('\n');
-        foreach (var tag in tags_list)
-            suspicious_tags.Add(tag);
-    }
-    static void update_trusted_users()
-    {
-        var trusers_list = new StreamReader("./reimu/trusted-users.txt").ReadToEnd().Split('\n');
-        foreach (var truser in trusers_list)
-            if (!trusted_users.Contains(truser))
-                trusted_users.Add(truser);
-    }
     static void update_patterns()
     {
         foreach (string lang in langs)
         {
             patterns[lang].Clear();
-            foreach (string patterns_file_name in new string[] { "./reimu/patterns-common.txt", "./reimu/patterns-" + lang + ".txt" })
+            foreach (string patterns_file_name in new string[] { "patterns-common", "patterns-" + lang })
                 try
                 {
-                    var pattern_source = new StreamReader(patterns_file_name).ReadToEnd().Split('\n');
+                    var pattern_source = site["ru"].GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/" + patterns_file_name + ".css?action=raw").Result.Split('\n');
                     bool ignorecase = false;
                     foreach (var pattern in pattern_source)
                         if (pattern == "--------")
@@ -138,7 +113,7 @@ class Program
     }
     static void read_config()
     {
-        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=user:MBH/reimu-config.css&action=raw").Result.Split('\n');
+        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/reimu-config.css?action=raw").Result.Split('\n');
         foreach (var row in settings)
         {
             var keyvalue = row.Split(':');
@@ -147,17 +122,32 @@ class Program
             foreach (var type in liftwing.Keys)
                 if (keyvalue[0] == liftwing[type].longname)
                     liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
+            if (keyvalue[0] == "trusted-users")
+                if (!trusted_users.Contains(keyvalue[1]))
+                    trusted_users.Add(keyvalue[1]);
+            if (keyvalue[0] == "tags")
+                suspicious_tags_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
+            if (keyvalue[0] == "replaces")
+            {
+                replaces.Clear();
+                var pairs_list = keyvalue[1].Split('|');
+                foreach (var pair in pairs_list)
+                {
+                    var components = pair.Split('/');
+                    replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+                }
+            }
+
         }
     }
     static bool tags_is_triggered(Recentchange edit)
     {
-        foreach (string susp_tag_substring in suspicious_tags)
-            foreach (string edit_tag in edit.tags)
-                if (edit_tag.Contains(susp_tag_substring))
-                {
-                    post_suspicious_edit(edit_tag, type.tag);
-                    return true;
-                }
+        foreach (string edit_tag in edit.tags)
+            if (suspicious_tags_rgx.IsMatch(edit_tag))
+            {
+                post_suspicious_edit(edit_tag, type.tag);
+                return true;
+            }
         return false;
     }
     static bool ores_is_triggered(Recentchange edit)
@@ -287,8 +277,7 @@ class Program
         if (suspicious_users.Contains(user))
         {
             client.PostAsync("https://discord.com/api/webhooks/" + authors_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + user + "](<https://" + lang +
-                ".wikipedia.org/wiki/special:contribs/" + e(user) + ">), " + ns_name[ns] + title} }));
-
+                ".wikipedia.org/wiki/special:contribs/" + e(user) + ">), " + title} }));
             if (lang == "ru")
             {
                 string zkab = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
@@ -301,7 +290,8 @@ class Program
                     Save("ru", site["ru"], "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
             }
         }
-        else suspicious_users.Add(user);
+        else
+            suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         diff_text = site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", " ");
         diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(diff_text, ""), ""), ""), ""), "").Replace("\\n", "\n").Replace("\\\"", "\"");
@@ -339,13 +329,12 @@ class Program
         else
             single_author = true;
 
-        string page_title = ns_name[ns] + title;
         var json = new discordjson()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = page_title, url = "https://" + lang + ".wikipedia.org/w/index.php?" + (single_author ? "diff=" + newid : 
-            "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + revisions_info + ", [hist](<https://" + lang + ".wikipedia.org/wiki/special:history/" + e(page_title) +
-            ">), " + "[curr](<https://" + lang + ".wikipedia.org/wiki/" + e(page_title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value =
-            discord_diff }}, author = new Author(){ name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + e(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = title, url = "https://" + lang + ".wikipedia.org/w/index.php?" + (single_author ? "diff=" + newid : 
+            "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + revisions_info + ", [hist](<https://" + lang + ".wikipedia.org/wiki/special:history/" + e(title) +
+            ">), " + "[curr](<https://" + lang + ".wikipedia.org/wiki/" + e(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = 
+            editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + lang + ".wikipedia.org/wiki/special:contribs/" + e(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
@@ -376,8 +365,8 @@ class Program
         liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
 
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
-        var global_flags_bearers = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
-        foreach (var g in global_flags_bearers)
+        var swviewer_trusted_users = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
+        foreach (var g in swviewer_trusted_users)
             trusted_users.Add(g);
         foreach (string lang in langs)
         {
@@ -412,9 +401,6 @@ class Program
                 currminute = DateTime.UtcNow.Minute / 10;
                 read_config();
                 update_patterns();
-                update_replaces();
-                update_tags();
-                update_trusted_users();
             }
             foreach (var lang in langs)
                 check(lang);
