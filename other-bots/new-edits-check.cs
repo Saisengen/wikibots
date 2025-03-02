@@ -66,7 +66,7 @@ public class rgxpair
 class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id,
-        all_ins, all_del, default_time = DateTime.UtcNow.AddMinutes(-1).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
+        all_ins, all_del, default_time = DateTime.UtcNow.AddMinutes(-5).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
     static string[] creds;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
@@ -100,7 +100,7 @@ class Program
             foreach (string patterns_file_name in new string[] { "patterns-common", "patterns-" + lang })
                 try
                 {
-                    var pattern_source = site["ru"].GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/" + patterns_file_name + ".css?action=raw").Result.Split('\n');
+                    var pattern_source = site["ru"].GetStringAsync("https://test.wikipedia.org/wiki/u:MBH/" + patterns_file_name + ".css?action=raw").Result.Split('\n');
                     bool ignorecase = false;
                     foreach (var pattern in pattern_source)
                         if (pattern == "--------")
@@ -113,7 +113,7 @@ class Program
     }
     static void read_config()
     {
-        var settings = site["ru"].GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/reimu-config.css?action=raw").Result.Split('\n');
+        var settings = site["ru"].GetStringAsync("https://test.wikipedia.org/wiki/u:MBH/reimu-config.css?action=raw").Result.Split('\n');
         foreach (var row in settings)
         {
             var keyvalue = row.Split(':');
@@ -153,12 +153,8 @@ class Program
     static bool ores_is_triggered(Recentchange edit)
     {
         ores_value = 0;
-        try
-        {
-            if (edit.oresscores.ToString() != "[]")
-                ores_value = Convert.ToDouble(damage_rgx.Match(edit.oresscores.ToString()).Groups[1].Value);
-        }
-        catch { }
+        if (edit.oresscores != null && edit.oresscores.ToString() != "[]")
+            ores_value = Convert.ToDouble(damage_rgx.Match(edit.oresscores.ToString()).Groups[1].Value);
         if (ores_value >= ores_limit)
         {
             post_suspicious_edit("ores:" + ores_value.ToString(), type.ores);
@@ -186,14 +182,23 @@ class Program
         }
         return false;
     }
-    static bool pattern_is_triggered(Recentchange edit)
+    static bool addition_is_triggered(string text)
     {
         foreach (var pattern in patterns[lang])
-            if (pattern.IsMatch(all_ins))
+            if (pattern.IsMatch(text))
             {
-                post_suspicious_edit(pattern.Match(all_ins).Value, type.rgx);
+                post_suspicious_edit(pattern.Match(text).Value, type.rgx);
                 return true;
             }
+        return false;
+    }
+    static bool deletion_is_triggered(string text)
+    {
+        if (text.Contains("сепар"))
+        {
+            post_suspicious_edit("сепар", type.rgx);
+            return true;
+        }
         return false;
     }
     static void check_replaces(Recentchange edit)
@@ -249,6 +254,17 @@ class Program
         foreach (var elem in del_array)
             all_del += elem;
     }
+    static void zkab_report()
+    {
+        string zkab = site["ru"].GetStringAsync("https://ru.wikipedia.org/wiki/ВП:Запросы_к_администраторам/Быстрые?action=raw").Result;
+        var reportedusers = reportedusers_rgx.Matches(zkab);
+        bool reportedyet = false;
+        foreach (Match r in reportedusers)
+            if (user == r.Groups[1].Value)
+                reportedyet = true;
+        if (!reportedyet)
+            Save("ru", site["ru"], "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
+    }
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -279,22 +295,13 @@ class Program
             client.PostAsync("https://discord.com/api/webhooks/" + authors_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + user + "](<https://" + lang +
                 ".wikipedia.org/wiki/special:contribs/" + e(user) + ">), " + title} }));
             if (lang == "ru")
-            {
-                string zkab = site["ru"].GetStringAsync("https://ru.wikipedia.org/w/index.php?title=ВП:Запросы_к_администраторам/Быстрые&action=raw").Result;
-                var reportedusers = reportedusers_rgx.Matches(zkab);
-                bool reportedyet = false;
-                foreach (Match r in reportedusers)
-                    if (user == r.Groups[1].Value)
-                        reportedyet = true;
-                if (!reportedyet)
-                    Save("ru", site["ru"], "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
-            }
+                zkab_report();
         }
         else
             suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
-        diff_text = site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", " ");
-        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(diff_text, ""), ""), ""), ""), "").Replace("\\n", "\n").Replace("\\\"", "\"");
+        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(site[lang].GetStringAsync(diff_request).Result, ""), ""), ""), ""), "").Replace("\\n", "\n")
+            .Replace("\\\"", "\"").Replace("&#160;", "").Replace("&#9650;", "");
         strings_with_changes = "";
         foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
@@ -314,13 +321,13 @@ class Program
         if (comment.Length > 254)
             comment = comment.Substring(0, 254);
 
-        string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=10").Result;
+        string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=50").Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
-        string revisions_info = num_of_revs > 9 ? "" : ", revs: " + num_of_revs;
+        string revisions_info = num_of_revs > 49 ? "" : ", revs: " + num_of_revs;
 
         if (lang != "be")
-            Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[" + (lang == "ru" ? "откат" : "відкат") + "] ]] [[special:diff/" + newid + "|" +
-            title + "]] ([[special:history/" + title + "|" + (lang == "ru" ? "история" : "історія") + "]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + comment_diff);
+            Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[rollback] ]] [[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
+                "|history]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
         bool single_author = false;
         string revs1 = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
@@ -346,7 +353,7 @@ class Program
         Program.lang = lang;
         new_timestamp_saved = false; new_id_saved = false;
         var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2&rcend=" +
-            last_checked_edit_time[lang] + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new").Result);
+            last_checked_edit_time[lang] + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new&rclimit=max").Result);
         foreach(var edit in edits.query.recentchanges)
             if (edit.revid > last_checked_id[lang] && !trusted_users.Contains(edit.user))
             {
@@ -354,7 +361,7 @@ class Program
                 if (!ores_is_triggered(edit) && !tags_is_triggered(edit) && !lw_is_triggered(edit))
                 {
                     analyze_diff();
-                    if (!pattern_is_triggered(edit))
+                    if (!addition_is_triggered(edit.comment) && !deletion_is_triggered(all_del) && !addition_is_triggered(all_ins))
                         check_replaces(edit);
                 }
             }
