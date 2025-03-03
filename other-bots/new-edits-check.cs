@@ -76,7 +76,7 @@ class Program
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
         ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>"), suspicious_tags_rgx;
+        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
     static Dictionary<string, string> notifying_page_name = new Dictionary<string, string>() { { "ru", "user:Рейму_Хакурей/Проблемные_правки" }, { "uk", "user:Рейму_Хакурей/Підозрілі_редагування" },
         { "be", "user:Рейму_Хакурей/Падазроныя праўкі" } };
     static Dictionary<string, string> last_checked_edit_time = new Dictionary<string, string>() { { "ru", default_time }, { "uk", default_time }, { "be", default_time } };
@@ -100,7 +100,7 @@ class Program
             foreach (string patterns_file_name in new string[] { "patterns-common", "patterns-" + lang })
                 try
                 {
-                    var pattern_source = site["ru"].GetStringAsync("https://test.wikipedia.org/wiki/u:MBH/" + patterns_file_name + ".css?action=raw").Result.Split('\n');
+                    var pattern_source = new StreamReader(patterns_file_name + ".txt").ReadToEnd().Split('\n');
                     bool ignorecase = false;
                     foreach (var pattern in pattern_source)
                         if (pattern == "--------")
@@ -113,32 +113,40 @@ class Program
     }
     static void read_config()
     {
-        var settings = site["ru"].GetStringAsync("https://test.wikipedia.org/wiki/u:MBH/reimu-config.css?action=raw").Result.Split('\n');
+        var settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
         foreach (var row in settings)
-        {
-            var keyvalue = row.Split(':');
-            if (keyvalue[0] == "ores")
-                ores_limit = Convert.ToDouble(keyvalue[1]);
-            foreach (var type in liftwing.Keys)
-                if (keyvalue[0] == liftwing[type].longname)
-                    liftwing[type].limit = Convert.ToDouble(keyvalue[1]);
-            if (keyvalue[0] == "trusted-users")
-                if (!trusted_users.Contains(keyvalue[1]))
-                    trusted_users.Add(keyvalue[1]);
-            if (keyvalue[0] == "tags")
-                suspicious_tags_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
-            if (keyvalue[0] == "replaces")
+            if (!row.Contains(":"))
             {
-                replaces.Clear();
-                var pairs_list = keyvalue[1].Split('|');
-                foreach (var pair in pairs_list)
+                var limits = row.Split('|');
+                ores_limit = Convert.ToDouble(limits[0]);
+                liftwing[type.lwa].limit = Convert.ToDouble(limits[1]);
+                liftwing[type.lwm].limit = Convert.ToDouble(limits[2]);
+            }
+            else
+            {
+                var keyvalue = row.Split(':');
+                if (keyvalue[0] == "trusted-users")
+                    if (!trusted_users.Contains(keyvalue[1]))
+                        trusted_users.Add(keyvalue[1]);
+                if (keyvalue[0] == "tags")
+                    suspicious_tags_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
+                if (keyvalue[0] == "deletions")
+                    deletions_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
+                if (keyvalue[0] == "whitelist-text")
+                    whitelist_text_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
+                if (keyvalue[0] == "whitelist-title")
+                    whitelist_title_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
+                if (keyvalue[0] == "replaces")
                 {
-                    var components = pair.Split('/');
-                    replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+                    replaces.Clear();
+                    var pairs_list = keyvalue[1].Split('|');
+                    foreach (var pair in pairs_list)
+                    {
+                        var components = pair.Split('/');
+                        replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+                    }
                 }
             }
-
-        }
     }
     static bool tags_is_triggered(Recentchange edit)
     {
@@ -153,8 +161,11 @@ class Program
     static bool ores_is_triggered(Recentchange edit)
     {
         ores_value = 0;
-        if (edit.oresscores != null && edit.oresscores.ToString() != "[]")
+        try //даже при проверках на формат строки вылетает
+        {
             ores_value = Convert.ToDouble(damage_rgx.Match(edit.oresscores.ToString()).Groups[1].Value);
+        }
+        catch { return false; }
         if (ores_value >= ores_limit)
         {
             post_suspicious_edit("ores:" + ores_value.ToString(), type.ores);
@@ -184,19 +195,26 @@ class Program
     }
     static bool addition_is_triggered(string text)
     {
-        foreach (var pattern in patterns[lang])
-            if (pattern.IsMatch(text))
-            {
-                post_suspicious_edit(pattern.Match(text).Value, type.rgx);
-                return true;
-            }
+        try
+        {
+            foreach (var pattern in patterns[lang])
+                if (pattern.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.Match(text).Value))
+                {
+                    post_suspicious_edit(pattern.Match(text).Value, type.rgx);
+                    return true;
+                }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(text + ex.ToString());
+        }
         return false;
     }
-    static bool deletion_is_triggered(string text)
+    static bool deletion_is_triggered()
     {
-        if (text.Contains("сепар"))
+        if (deletions_rgx.IsMatch(all_del))
         {
-            post_suspicious_edit("сепар", type.rgx);
+            post_suspicious_edit(deletions_rgx.Match(all_del).Value, type.rgx);
             return true;
         }
         return false;
@@ -242,7 +260,7 @@ class Program
             new_id_saved = true;
         }
     }
-    static void analyze_diff()
+    static void read_diff_text()
     {
         var alldiff = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
         var ins_array = ins_rgx.Matches(alldiff);
@@ -263,7 +281,7 @@ class Program
             if (user == r.Groups[1].Value)
                 reportedyet = true;
         if (!reportedyet)
-            Save("ru", site["ru"], "edit", "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
+            Save("ru", site["ru"], "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
     }
     static HttpClient Site(string lang, string login, string password)
     {
@@ -278,12 +296,12 @@ class Program
             { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } }));
         return client;
     }
-    static string Save(string lang, HttpClient site, string action, string title, string appendtext, string comment)
+    static string Save(string lang, HttpClient site, string title, string appendtext, string comment)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var request = new MultipartFormDataContent{{ new StringContent(action),"action" },{ new StringContent(title),"title" },{ new StringContent(comment), "summary" },{ new StringContent("xml"),"format" },
+        var request = new MultipartFormDataContent{{ new StringContent("edit"),"action" },{ new StringContent(title),"title" },{ new StringContent(comment), "summary" },{ new StringContent("xml"),"format" },
             { new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token" }, { new StringContent(appendtext), "appendtext" } };
         return site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
@@ -326,7 +344,7 @@ class Program
         string revisions_info = num_of_revs > 49 ? "" : ", revs: " + num_of_revs;
 
         if (lang != "be")
-            Save(lang, site[lang], "edit", notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[rollback] ]] [[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
+            Save(lang, site[lang], notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[rollback] ]] [[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
                 "|history]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + comment_diff);
 
         bool single_author = false;
@@ -358,10 +376,10 @@ class Program
             if (edit.revid > last_checked_id[lang] && !trusted_users.Contains(edit.user))
             {
                 initialize_edit_data(edit);
-                if (!ores_is_triggered(edit) && !tags_is_triggered(edit) && !lw_is_triggered(edit))
+                if (!whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !lw_is_triggered(edit))
                 {
-                    analyze_diff();
-                    if (!addition_is_triggered(edit.comment) && !deletion_is_triggered(all_del) && !addition_is_triggered(all_ins))
+                    read_diff_text();
+                    if (!deletion_is_triggered() && !addition_is_triggered(all_ins))
                         check_replaces(edit);
                 }
             }
