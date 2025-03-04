@@ -85,7 +85,7 @@ class Program
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static List<rgxpair> replaces = new List<rgxpair>();
     static bool new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, startpos, endpos, editcount, ns, oldid, newid, pageid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, oldid, newid, pageid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.rgx, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replaces, new color(0, 255, 255) } };
     static string e(string input)
@@ -233,7 +233,6 @@ class Program
     {
         user = edit.user;
         title = edit.title.Replace('_', ' ');
-        ns = edit.ns;
         newid = edit.revid;
         oldid = edit.old_revid;
         comment = edit.comment;
@@ -319,7 +318,7 @@ class Program
             suspicious_users.Add(user);
         string diff_request = "https://" + lang + ".wikipedia.org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
         diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(site[lang].GetStringAsync(diff_request).Result, ""), ""), ""), ""), "").Replace("\\n", "\n")
-            .Replace("\\\"", "\"").Replace("&#160;", "").Replace("&#9650;", "");
+            .Replace("\\\"", "\"").Replace("&#160;", "(nbsp)").Replace("&#9650;", "▲").Replace("&#9660;", "▼");
         strings_with_changes = "";
         foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
@@ -331,17 +330,17 @@ class Program
                 if (endpos >= str.Length) endpos = str.Length - 1;
                 strings_with_changes += str.Substring(startpos, endpos - startpos + 1).Replace("&lt;", "<").Replace("&gt;", ">") + "<...>";
             }
-        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ");
+        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-1 "), "+1 ");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~1~~ "), "`1` ");
 
         if (discord_diff.Length > 1022)
             discord_diff = discord_diff.Substring(0, 1022);
         if (comment.Length > 254)
             comment = comment.Substring(0, 254);
 
-        string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=50").Result;
+        string revs = site[lang].GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
-        string revisions_info = num_of_revs > 49 ? "" : ", revs: " + num_of_revs;
+        string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs;
 
         if (lang != "be")
             Save(lang, site[lang], notifying_page_name[lang], ".", "[[toollabs:rv/r.php/" + newid + "|[rollback] ]] [[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
@@ -393,6 +392,7 @@ class Program
         var swviewer_trusted_users = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in swviewer_trusted_users)
             trusted_users.Add(g);
+        Console.WriteLine("swv trusers: " + trusted_users.Count);
         foreach (string lang in langs)
         {
             site.Add(lang, Site(lang, creds[0].Split(':')[0], creds[0].Split(':')[1]));
@@ -415,6 +415,7 @@ class Program
                 }
             }
         }
+        Console.WriteLine("total trusers:" + trusted_users.Count);
     }
     static void Main()
     {
