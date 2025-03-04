@@ -17,12 +17,12 @@ class Program
     static Dictionary<string, string> datespan = new Dictionary<string, string>() { { "month", "{{#expr:31+{{CURRENTDAY}}}}" }, { "year", "{{#expr:365+({{CURRENTWEEK}}-1)*7+{{CURRENTDOW}}}}" } };
     static Dictionary<string, string> tableheader = new Dictionary<string, string>() { { "ru", "Статья!!Пик!!Медиана!!Дата пика" }, { "uk", "Стаття!!Пік!!Медіана!!Дата піку" },
         { "be", "Артыкул!!Пік!!Медыяна!!Дата піка" } };
-    static Dictionary<string, string> enddate = new Dictionary<string, string>() { { "01", "31" }, { "02", "29" }, { "03", "31" }, { "04", "30" }, { "05", "31" }, { "06", "30" }, { "07", "31" },
+    static Dictionary<string, string> enddate = new Dictionary<string, string>() { { "01", "31" }, { "02", "28" }, { "03", "31" }, { "04", "30" }, { "05", "31" }, { "06", "30" }, { "07", "31" },
             { "08", "31" }, { "09", "30" }, { "10", "31" }, { "11", "30" }, { "12", "31" } };
     static Dictionary<string, Dictionary<string, string>> outputpage = new Dictionary<string, Dictionary<string, string>>
         { { "uk", new Dictionary<string, string>() { { "month", "Вікіпедія:Спалахи інтересу до статей" }, { "year", "Вікіпедія:Спалахи інтересу до статей/За рік" }, { "total", "Вікіпедія:Спалахи інтересу до статей/За весь час" } } },
             { "be", new Dictionary<string, string>() { { "month", "Вікіпедыя:Папулярныя артыкулы" }, { "year", "Вікіпедыя:Папулярныя артыкулы/За год" }, { "total", "Вікіпедыя:Папулярныя артыкулы/За ўвесь час" } } },
-            { "ru", new Dictionary<string, string>() { { "month", "ВП:Пики интереса к статьям/За месяц" }, { "year", "ВП:Пики интереса к статьям/За год" }, { "total", "ВП:Пики интереса к статьям/За всё время" } } } };
+            { "ru", new Dictionary<string, string>() { { "month", "ВП:Популярные статьи/Пики за месяц" }, { "year", "ВП:Популярные статьи/Пики за год" }, { "total", "ВП:Популярные статьи/Пики за всё время" } } } };
     static Dictionary<string, Dictionary<string, int>> minneededpeakvalue = new Dictionary<string, Dictionary<string, int>>
         { { "ru", new Dictionary<string, int>() { { "month", 10000 }, { "year", 15000 }, { "total", 20000 }, } },
             { "uk", new Dictionary<string, int>() { { "month", 1000 }, { "year", 2000 }, { "total", 3000 }, } },
@@ -73,7 +73,7 @@ class Program
     static void process(string mode, string reqstr_period)
     {
         cl.Headers.Add("user-agent", "Stats grabber of ruwiki user MBH");
-        foreach (string lang in new HashSet<string>() { "ru", "uk", "be" })
+        foreach (string lang in new HashSet<string>() { "uk", "be", "ru" })
         {
             var results = new Dictionary<string, result>();
             var creds = new StreamReader("p").ReadToEnd().Split('\n');
