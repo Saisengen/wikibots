@@ -335,7 +335,6 @@ def get_trigger(embed: Embed) -> str:
 
 
 async def check_rights(interaction: discord.Interaction) -> bool:
-    r = subprocess.run('groups well', shell=True, capture_output=True, text=True)
     if str(interaction.user.id) not in ALLOWED_USERS:
         try:
             await interaction.followup.send(
@@ -361,11 +360,9 @@ def get_view_buttons(embed: Embed = None, disable: bool = False) -> View:
     t = open(__file__, 'r').read()
 
     revert_disabled = True if embed is not None and 'ilu=' not in embed.url else disable
-    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback",
-                          disabled=revert_disabled)
+    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback", disabled=revert_disabled)
     btn_rfd = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id="btn_rfd", disabled=disable)
-    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo",
-                      disabled=revert_disabled)
+    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=revert_disabled)
     btn_good = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id="btn_good", disabled=disable)
     btn_bad = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id="btn_bad", disabled=disable)
 
