@@ -31,9 +31,9 @@
   filelog-stderr: logs/metro.err
 
 - name: new-edits-check
-  command: mono ./new-edits-check/new-edits-check.exe
+  command: mono ./reimu/new-edits-check.exe
   image: tf-mono68
   emails: none
   continuous: true
-  filelog-stdout: logs/new-edits-check.out
-  filelog-stderr: logs/new-edits-check.err
+  filelog-stdout: reimu/reimu.out
+  filelog-stderr: reimu/reimu.err
