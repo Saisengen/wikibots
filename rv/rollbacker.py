@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+import subprocess
 import json
 import logging
 import time
@@ -14,8 +15,8 @@ from discord.ui import Button, View, Select, TextInput, Modal
 import pymysql
 import toolforge
 import aiohttp
-from antivand_cleaner import revision_check, flagged_check
 
+from antivand_cleaner import revision_check, flagged_check
 
 DEBUG = False
 DB_CREDITS = {'user': os.environ['TOOL_TOOLSDB_USER'], 'port': 4711, 'host': '127.0.0.1',
@@ -25,67 +26,111 @@ BEARER_TOKEN = os.environ['BEARER_TOKEN']
 
 # Целевой сервер, ID каналов с потоками, ID бота, ID ботов-источников, ID канала с командами,
 # ID сообщения со списком откатывающих, ID канала с источником, список администраторов бота.
-CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1219273496371396681, 1212498198200062014],
+CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1212498198200062014, 1219273496371396681, 1342471984671625226],
           'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662, 1299324425878900818],
           'BOTCOMMANDS': 1212507148982947901, 'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
           'ADMINS': [352826965494988822, 512545053223419924, 223219998745821194]}
 USER_AGENT = {'User-Agent': 'D-V; iluvatar@tools.wmflabs.org; python3.11'}
-STORAGE, ALLOWED_USERS = [], {}
+ALLOWED_USERS = {}
 Intents = discord.Intents.default()
 Intents.members, Intents.message_content = True, True
 discord.Intents.all()
 allowed_mentions = discord.AllowedMentions(roles=True)
 client = commands.Bot(intents=Intents, command_prefix='/')
 
-select_options_undo = {
-    '1': ['Неконструктивная правка', 'очевидно ошибочная правка', 'акт [[Вікіпедія:Вандалізм|вандалізму]]'],
-    '2': ['Нет АИ',
-          'добавление сомнительного содержимого [[ВП:ПРОВ|без источников]] или [[ВП:ОРИСС|оригинального исследования]]',
-          'додавання [[ВП:ОД|оригінального дослідження]] або сумнівної інформації [[ВП:В|без джерел]]'],
-    '3': ['Порча вики-разметки', 'порча [[ВП:Викиразметка|викиразметки]] статьи',
-          'псування [[Вікірозмітка|вікірозмітки]] статті'],
-    '4': ['Спам', 'добавление [[ВП:ВС|ненужных / излишних ссылок]] или спам',
-          'додавання [[ВП:УНИКАТИПОС|непотрібних / зайвих посилань]] або спам'],
-    '5': ['Незначимый факт', 'отсутствует [[ВП:Значимость факта|энциклопедическая значимость]] факта',
-          'відсутня [[ВП:ЗВ|значущість]] факту'],
-    '6': ['Переименование без КПМ',
-          'попытка переименования объекта по тексту без [[ВП:ПЕРЕ|переименования страницы]] или иное сомнит. '
-          'переименование. Воспользуйтесь [[ВП:КПМ|специальной процедурой]].', 'перейменування по тексту без '
-                                                                               'перейменування сторінки.'],
-    '7': ['Тестовая правка', 'экспериментируйте в [[ВП:Песочница|песочнице]]',
-          'експерементуйте в [[Вікіпедія:Пісочниця|пісочниці]]'],
-    '8': ['Удаление содержимого', 'необъяснённое удаление содержимого страницы', 'видалення вмісту сторінки'],
-    '9': ['Орфография, пунктуация', 'добавление орфографических или пунктуационных ошибок',
-          'додавання орфографічних або пунктуаційних помилок'],
-    '10': ['Не на языке проекта', 'добавление содержимого не на русском языке',
-           'додавання вмісту не українською мовою'],
-    '11': ['Удаление шаблонов', 'попытка необоснованного удаления служебных или номинационных шаблонов',
-           'спроба необґрунтованого видалення службових або номінаційних шаблонів'],
-    '12': ['Личное мнение',
-           '[[ВП:НЕФОРУМ|изложение личного мнения]] об объекте статьи. Википедия не является [[ВП:НЕФОРУМ|форумом]] или'
-           ' [[ВП:НЕТРИБУНА|трибуной]]', 'виклад особистої думки про об\'єкт статті. [[ВП:НЕТРИБУНА|Вікіпедія — '
-                                         'не трибуна]]'],
-    '13': ['Комментарии в статье',
-           'добавление комментариев в статью. Комментарии и пометки оставляйте на [[Talk:$7|странице обсуждения]] '
-           'статьи', 'додавання коментарів до статті. Коментарі та позначки залишайте на '
-                     '[[Сторінка обговорення:$1|сторінці обговорення]] статті'],
-    '14': ['своя причина', '', ''],  # не менять название пункта без изменения в callback
-    '15': ['Закрыть', '', '']  # не менять название пункта без изменения в callback
-}
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
+logging_handler = logging.FileHandler(filename='logs/antvand.log', encoding='utf-8', mode='w')
+logging_handler.setLevel(logging.DEBUG)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+logging_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+logger.addHandler(logging_handler)
+logger.addHandler(console_handler)
+
+select_options_undo = {'1':  ['Нарушение АП',
+                              '[[ВП:КОПИВИО|копирование текста из несвободных источников]]',
+                              '[[ВП:АП|копіювання тексту з невільних джерел]]',
+                              '[[ВП:КОПІВІА|капіраванне тэксту з несвабодных крыніц]]'],
+                       '2':  ['Нет АИ',
+                              'добавление сомнительного содержимого [[ВП:ПРОВ|без источников]] или '
+                              '[[ВП:ОРИСС|оригинального исследования]]',
+                              'додавання [[ВП:ОД|оригінального дослідження]] або сумнівної інформації [[ВП:В|без '
+                              'джерел]]', 'дабаўленне [[ВП:НУДА|ўласнага даследвання]] або сумніўнай інфармацыі '
+                                          '[[ВП:ПРАВ|без крыніц]]'],
+                       '3':  ['Порча вики-разметки', 'порча [[ВП:Викиразметка|викиразметки]] статьи',
+                              'псування [[Вікірозмітка|вікірозмітки]] статті', 'псаванне [[Вікіпедыя:Вікіразметка|'
+                                                                               'вікіразметкі]] артыкула'],
+                       '4':  ['Спам', 'добавление [[ВП:ВС|ненужных / излишних ссылок]] или спам',
+                              'додавання [[ВП:УНИКАТИПОС|непотрібних / зайвих посилань]] або спам',
+                              'дабаўленне непатрэбных / залішніх спасылак або спам'],
+                       '5':  ['Незначимый факт', 'отсутствует [[ВП:Значимость факта|энциклопедическая значимость]] факта',
+                              'відсутня [[ВП:ЗВ|значущість]] факту', 'адсутнічае [[ВП:КЗ|значнасць]] факта'],
+                       '6':  ['Переименование без КПМ',
+                              'попытка переименования объекта по тексту без [[ВП:ПЕРЕ|переименования страницы]] или иное '
+                              'сомнит. переименование. Воспользуйтесь [[ВП:КПМ|специальной процедурой]]',
+                              'перейменування по тексту без перейменування сторінки',
+                              'перайменаванне ў тэксце без перайменавання артыкула. Карыстайцесь [[ВП:Да перайменавання|'
+                              'адмысловай старонкай]]'],
+                       '7':  ['Подлог источника',
+                              '[[ВП:ПОДИСТ|изменение информации, подтверждённой источником, без его изменения]]',
+                              '[[ВП:ВАНД|заміна інформації, підтвердженої джерелом, без зміни джерела]]',
+                              '[[ВП:ПРАВ|змяненне пацверджанай інфармацыі без замены крыніцы]]'],
+                       '8':  ['Удаление содержимого', 'необъяснённое удаление содержимого страницы',
+                              'видалення вмісту сторінки', 'выдаленне змесціва старонкі без тлумачэння'],
+                       '9':  ['Орфография, пунктуация', 'добавление орфографических или пунктуационных ошибок',
+                              'додавання орфографічних або пунктуаційних помилок', 'дабаўленне арфаграфічных або '
+                                                                                   'пунктуацыйных памылак'],
+                       '10': ['Не на языке проекта', 'добавление содержимого не на русском языке',
+                              'додавання вмісту не українською мовою', 'дабаўленне змесціва не на беларускай мове'],
+                       '11': ['Удаление шаблонов', 'попытка необоснованного удаления служебных или номинационных '
+                                                   'шаблонов',
+                              'спроба необґрунтованого видалення службових або номінаційних шаблонів',
+                              'спроба неабгрунтаванага выдалення службовых або намінацыйных шаблонаў'],
+                       '12': ['Личное мнение',
+                              '[[ВП:НЕФОРУМ|изложение личного мнения]] об объекте статьи. Википедия не является '
+                              '[[ВП:НЕФОРУМ|форумом]] или [[ВП:НЕТРИБУНА|трибуной]]',
+                              'виклад особистої думки про об\'єкт статті. [[ВП:НЕТРИБУНА|Вікіпедія — не трибуна]]',
+                              'выказванне асабістага меркавання аб аб\'екце артыкула. [[ВП:ЧНЗВ|Вікіпедыя не '
+                              'з\'яўляецца форумам або трыбунай]]'],
+                       '13': ['Комментарии в статье', 'добавление комментариев в статью. Комментарии и пометки '
+                                                      'оставляйте на [[Talk:$1|странице обсуждения]] статьи',
+                              'додавання коментарів до статті. Коментарі та позначки залишайте на [[Сторінка '
+                              'обговорення:$1|сторінці обговорення]] статті',
+                              'дабаўленне каментароў у артыкул. Каментары і паметкі пакідайце на адмысловай '
+                              '[[Размовы:$1|старонцы размоў]]'],
+                       '14': ['Ненейтральный стиль',
+                              'добавление текста в [[ВП:НТЗ|ненейтральном]] или [[ВП:СТИЛЬ|рекламном]] стиле',
+                              'додавання тексту в [[ВП:НТЗ|ненейтральному]] або [[ВП:СТИЛЬ|рекламному]] стилі',
+                              'дабаўленне тэксту ў [[ВП:НПГ|ненейтральным]] або '
+                              '[[Вікіпедыя:Чым не з’яўляецца Вікіпедыя#Вікіпедыя — не трыбуна|рэкламным]] стылі'],
+                       '15': ['НЕГУЩА',
+                              '[[ВП:НЕГУЩА|описание ещё не случившихся возможных событий]]',
+                              '[[ВП:ПРОРОК|опис можливих подій, які ще не відбулися]]',
+                              '[[Вікіпедыя:Чым не з’яўляецца Вікіпедыя#'
+                              'Вікіпедыя — не кававая гушча|апісанне падзей, якія яшчэ не здарыліся]]'],
+                       '16': ['своя причина', '', '', ''],  # не менять название пункта без изменения в callback
+                       '17': ['Закрыть', '', '', '']  # не менять название пункта без изменения в callback
+                       }
+
 options_undo, options_rfd = [], []
 for option, index in select_options_undo.items():
     options_undo.append(SelectOption(label=index[0], value=str(option)))
 
 select_options_rfd = {
-    '1': ['Бессвязное содержимое', '{{уд-бессвязно}}', '{{Db-nonsense}}'],
-    '2': ['Вандализм', '{{уд-ванд}}', '{{Db-vand}}'],
-    '3': ['Тестовая страница', '{{уд-тест}}', '{{Db-test}}'],
-    '4': ['Реклама / спам', '{{уд-реклама}}', '{{Db-spam}}'],
-    '5': ['Пустая статья', '{{{уд-пусто}}', '{{Db-nocontext}}'],
-    '6': ['На иностранном языке', '{{уд-иностр}}', '{{Db-lang}}'],
-    '7': ['Нет значимости', '{{уд-нз}}', '{{Db-nn}}'],
-    '8': ['своя причина', '', ''],  # не менять название пункта без изменения в callback
-    '9': ['Закрыть', '', '']  # не менять название пункта без изменения в callback
+    '1': ['Бессвязное содержимое', '{{уд-бессвязно}}', '{{Db-nonsense}}', '{{хв|Бессэнсоўнае змесціва}}'],
+    '2': ['Вандализм', '{{уд-ванд}}', '{{Db-vand}}', '{{хв|Вандалізм}}'],
+    '3': ['Тестовая страница', '{{уд-тест}}', '{{Db-test}}', '{{хв|Тэставая старонка}}'],
+    '4': ['Реклама / спам', '{{уд-реклама}}', '{{Db-spam}}', '{{хв|Рэклама або спам}}'],
+    '5': ['Пустая статья', '{{{уд-пусто}}', '{{Db-nocontext}}', '{{хв|Пустая старонка}}'],
+    '6': ['На иностранном языке', '{{уд-иностр}}', '{{Db-lang}}', '{{хв|На замежнай мове}}'],
+    '7': ['Нет значимости', '{{уд-нз}}', '{{Db-nn}}', '{{хв|Няма значнасці}}'],
+    '8': ['Форк', '{{db-fork|$1}}', '{{db-duplicate|$1}}', '{{хв|Дублікат артыкула [[$1]]}}'], # не менять название пункта без изменения в callback
+    '9': ['Нецелевое использование СО', '{{db-badtalk}}', '{{db-reason|Нецільове використання сторінки обговорення}}', '{{хв|Немэтавае выкарыстоўванне старонкі размоваў}}'],
+    '10': ['своя причина', '{{delete|$1}}', '{{db-reason|$1}}', '{{хв|$1}}'],  # не менять название пункта без изменения в callback
+    '11': ['Закрыть', '', '', '']  # не менять название пункта без изменения в callback
 }
 for option, index in select_options_rfd.items():
     options_rfd.append(SelectOption(label=index[0], value=str(option)))
@@ -98,10 +143,14 @@ select_component_rfd = Select(placeholder='Выбор причины КБУ', mi
                               custom_id='select_component_rfd')
 
 undo_prefix = ['Бот: отмена правки [[Special:Contribs/$author|$author]] по запросу [[User:$actor|$actor]]:',
-               'скасовано останнє редагування [[Special:Contribs/$author|$author]] за запитом [[User:$actor|$actor]]:']
+               'скасовано останнє редагування [[Special:Contribs/$author|$author]] за запитом [[User:$actor|$actor]]:',
+               'Бот: адкат праўкі [[Special:Contribs/$author|$author]] па запыце [[User:$actor|$actor]]:']
 rfd_summary = ['Бот: Номинация на КБУ по запросу [[User:$actor|$actor]]',
-               'Номінація на швидке вилучення за запитом [[User:$actor|$actor]]']
-
+               'Номінація на швидке вилучення за запитом [[User:$actor|$actor]]',
+               'Бот: намінацыя на хуткае выдаленне па запыце [[User:$actor|$actor]]']
+rollback_summary= ['Бот: откат правок [[Special:Contribs/$2|$2]] по запросу [[User:$1|$1]]',
+                   'Бот: відкинуто редагування [[Special:Contribs/$2|$2]] за запитом [[User:$1|$1]]',
+                   'Бот: хуткі адкат правак [[Special:Contribs/$2|$2]] па запыце [[User:$1|$1]]']
 
 class ReasonUndo(Modal, title='Причина'):
     """Строка ввода причины отмены."""
@@ -114,7 +163,7 @@ class ReasonUndo(Modal, title='Причина'):
         if not await check_rights(interaction):
             return
         actor, msg, channel = get_data(interaction)
-        lang_selector = 0 if get_lang(msg.embeds[0].url) != 'uk' else 1
+        lang_selector = get_lang_number(get_lang(msg.embeds[0].url))
 
         reason = f'{undo_prefix[lang_selector].replace("$actor", actor)} {self.children[0].value}'
 
@@ -127,21 +176,27 @@ class ReasonRFD(Modal, title='Причина'):
     res = TextInput(custom_id='menu_rfd', label='Причина КБУ', min_length=2, max_length=255,
                     placeholder='введите причину', required=True, style=discord.TextStyle.short)
 
+    def __init__(self, template=None):
+        super().__init__()
+        self.template = template
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction_defer(interaction, '0.2')
         if not await check_rights(interaction):
             return
         actor, msg, channel = get_data(interaction)
-        lang_selector = 0 if get_lang(msg.embeds[0].url) != 'uk' else 1
+        lang_selector = get_lang_number(get_lang(msg.embeds[0].url))
         summary = rfd_summary[lang_selector].replace('$actor', actor)
-        r = await do_rfd(msg.embeds[0], rfd=self.children[0].value, summary=summary)
+        r = await do_rfd(msg.embeds[0], rfd=self.template.replace('$1', self.children[0].value), summary=summary)
         await result_rfd_handler(r, interaction)
 
 
 async def result_rfd_handler(r, interaction: discord.Interaction) -> None:
     actor, msg, channel = get_data(interaction)
     try:
+        if r == [] or r[1] == '':
+            msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
         if r[0] == 'Success':
             await channel.send(content=f'{actor} номинировал {r[1]} на КБУ.')
             await send_to_db(actor, 'rfd', get_trigger(msg.embeds[0]))
@@ -151,13 +206,10 @@ async def result_rfd_handler(r, interaction: discord.Interaction) -> None:
             new_embed = Embed(color=msg.embeds[0].color, title='Страница была удалена.')
             await interaction.message.edit(embed=new_embed, view=None, delete_after=12.0)
         else:
-            if r[1] != '':
-                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
-            else:
-                msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
-            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+            msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
     except Exception as e:
-        print(f'Error 1.0: {e}')
+        logging.error(f'Error 1.0: {e}')
 
 
 async def result_undo_handler(r, interaction: discord.Interaction) -> None:
@@ -175,15 +227,15 @@ async def result_undo_handler(r, interaction: discord.Interaction) -> None:
             await interaction.message.edit(embed=new_embed, view=None, delete_after=12.0)
         elif 'версии принадлежат' in r[0]:
             msg.embeds[0].set_footer(text='Отмена не удалась: все версии страницы принадлежат одному участнику.')
-            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
         else:
             if r[1] != '':
                 msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}, {r[1]}.')
             else:
                 msg.embeds[0].set_footer(text=f'Действие не удалось: {r[0]}.')
-            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
     except Exception as e:
-        print(f'Error 2.0: {e}')
+        logging.error(f'Error 2.0: {e}')
 
 
 def get_view_undo() -> View:
@@ -196,22 +248,22 @@ def get_view_undo() -> View:
         actor, msg, channel = get_data(interaction)
         lang = get_lang(msg.embeds[0].url)
         try:
-            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
         except Exception as e:
-            print(f'Error 3.0: {e}')
+            logging.error(f'Error 3.0: {e}')
 
         if selected[0] == 'своя причина':
             try:
                 await interaction.response.send_modal(ReasonUndo())
             except Exception as e:
-                print(f'Error 4.0: {e}')
+                logging.error(f'Error 4.0: {e}')
             return
 
         await interaction_defer(interaction, '0.3')
         if selected[0] == 'Закрыть':
             return
 
-        lang_selector = 0 if lang != 'uk' else 1
+        lang_selector = get_lang_number(lang)
         reason = (f'{undo_prefix[lang_selector].replace("$actor", actor)} '
                   f'{selected[lang_selector + 1].replace("$1", msg.embeds[0].title)}')
         r = await do_rollback(msg.embeds[0], actor, action_type='undo', reason=reason)
@@ -233,24 +285,25 @@ def get_view_rfd() -> View:
         actor, msg, channel = get_data(interaction)
         lang = get_lang(msg.embeds[0].url)
         try:
-            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+            await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
         except Exception as e:
-            print(f'Error 5.0: {e}')
+            logging.error(f'Error 5.0: {e}')
 
-        if selected[0] == 'своя причина':
+        lang_selector = get_lang_number(lang)
+        summary = rfd_summary[lang_selector].replace('$actor', actor)
+        rfd_reason = selected[lang_selector + 1]
+
+        if selected[0] == 'своя причина' or selected[0] == 'Форк':
             try:
-                await interaction.response.send_modal(ReasonRFD())
+                await interaction.response.send_modal(ReasonRFD(template=rfd_reason))
             except Exception as e:
-                print(f'Error 6.0: {e}')
+                logging.error(f'Error 6.0: {e}')
             return
 
         await interaction_defer(interaction, '0.4')
         if selected[0] == 'Закрыть':
             return
 
-        lang_selector = 0 if lang != 'uk' else 1
-        summary = rfd_summary[lang_selector].replace('$actor', actor)
-        rfd_reason = selected[lang_selector + 1]
         r = await do_rfd(msg.embeds[0], rfd=rfd_reason, summary=summary)
         await result_rfd_handler(r, interaction)
 
@@ -262,24 +315,34 @@ def get_view_rfd() -> View:
 
 def get_lang(url: str) -> str:
     """Получение кода языкового раздела из ссылки."""
-    return 'ru' if 'ru.wikipedia.org' in url else 'uk'
+    if 'ru.wikipedia.org' in url:
+        return 'ru'
+    elif 'uk.wikipedia.org' in url:
+        return 'uk'
+    else:
+        return 'be'
+
+def get_lang_number(lang: str) -> int:
+    """Получение индекса раздела."""
+    return {'ru': 0, 'uk': 1, 'be': 2}[lang]
 
 
 def get_trigger(embed: Embed) -> str:
     """Получение причины реакции по цвету."""
     triggers_dict = {'#ff0000': 'patterns', '#ffff00': 'LW', '#ff00ff': 'ORES', '#00ff00': 'tags',
-                     '#0000ff': 'replaces'}
+                     '#0000ff': 'replaces', '#ff8000': 'LW', '#00ffff': 'replaces'}
     return 'unknown' if (color:=str(embed.color)) not in triggers_dict else triggers_dict[color]
 
 
 async def check_rights(interaction: discord.Interaction) -> bool:
+    r = subprocess.run('groups well', shell=True, capture_output=True, text=True)
     if str(interaction.user.id) not in ALLOWED_USERS:
         try:
             await interaction.followup.send(
                 content='К сожалению, у вас нет разрешение на выполнение откатов и отмен через бот. Обратитесь к '
                         f'участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Error 7.0: {e}')
+            logging.error(f'Error 7.0: {e}')
             return False
         else:
             return False
@@ -293,11 +356,16 @@ def get_data(interaction: discord.Interaction):
     return actor, msg, channel
 
 
-def get_view_buttons(disable: bool = False) -> View:
+def get_view_buttons(embed: Embed = None, disable: bool = False) -> View:
     """Формирование набора компонентов."""
-    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback", disabled=disable)
+    t = open(__file__, 'r').read()
+
+    revert_disabled = True if embed is not None and 'ilu=' not in embed.url else disable
+    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback",
+                          disabled=revert_disabled)
     btn_rfd = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id="btn_rfd", disabled=disable)
-    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=disable)
+    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo",
+                      disabled=revert_disabled)
     btn_good = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id="btn_good", disabled=disable)
     btn_bad = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id="btn_bad", disabled=disable)
 
@@ -325,9 +393,9 @@ def get_view_buttons(disable: bool = False) -> View:
                     footer_info = f'{r[0]}, {r[1]}' if r[1] != '' else f'{r[0]}'
                     if r[1] != '':
                         msg.embeds[0].set_footer(text=f'Действие не удалось: {footer_info}.')
-                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons())
+                    await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_buttons(embed=msg.embeds[0]))
         except Exception as e:
-            print(f'Error 8.0: {e}')
+            logging.error(f'Error 8.0: {e}')
 
     async def rfd_handler(interaction: discord.Interaction):
         await interaction_defer(interaction, '0.6')
@@ -337,7 +405,7 @@ def get_view_buttons(disable: bool = False) -> View:
         try:
             await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_rfd())
         except Exception as e:
-            print(f'Error 9.0: {e}')
+            logging.error(f'Error 9.0: {e}')
 
     async def undo_handler(interaction: discord.Interaction):
         await interaction_defer(interaction, '0.7')
@@ -349,7 +417,7 @@ def get_view_buttons(disable: bool = False) -> View:
         try:
             await msg.edit(content=msg.content, embed=msg.embeds[0], view=get_view_undo())
         except Exception as e:
-            print(f'Error 10.0: {e}')
+            logging.error(f'Error 10.0: {e}')
 
     async def good_handler(interaction: discord.Interaction):
         await interaction_defer(interaction, '0.8')
@@ -362,7 +430,7 @@ def get_view_buttons(disable: bool = False) -> View:
                                        f'[{msg.embeds[0].title}](<{msg.embeds[0].url}>).')
             await send_to_db(actor, 'approves', get_trigger(msg.embeds[0]), bad=True)
         except Exception as e:
-            print(f'Error 11.0: {e}')
+            logging.error(f'Error 11.0: {e}')
 
     async def bad_handler(interaction: discord.Interaction):
         await interaction_defer(interaction, '0.9')
@@ -376,7 +444,7 @@ def get_view_buttons(disable: bool = False) -> View:
                         f'как неконструктивную, но уже отменённую.')
             await send_to_db(actor, 'approves', get_trigger(msg.embeds[0]))
         except Exception as e:
-            print(f'Error 12.0: {e}')
+            logging.error(f'Error 12.0: {e}')
 
 
     btn_rollback.callback = rollback_handler
@@ -394,7 +462,7 @@ async def interaction_defer(interaction: discord.Interaction, error_description:
     try:
         await interaction.response.defer(ephemeral=True)
     except Exception as e:
-        print(f'Error {error_description}: {e}')
+        logging.error(f'Error {error_description}: {e}')
 
 
 async def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = False) -> None:
@@ -417,7 +485,7 @@ async def send_to_db(actor: str, action_type: str, trigger: str, bad: bool = Fal
                 conn.commit()
         conn.close()
     except Exception as e:
-        print(f'Error 13.0: {e}')
+        logging.error(f'Error 13.0: {e}')
 
 
 async def get_from_db(is_all: bool = True, actor: str = None):
@@ -467,7 +535,7 @@ async def get_from_db(is_all: bool = True, actor: str = None):
             return {'rollbacks': 0, 'undos': 0, 'approves': 0, 'rfd': 0, 'patterns': 0, 'LW': 0, 'ORES': 0, 'tags': 0,
                     'replaces': 0}
     except Exception as e:
-        print(f'Error 14.0: {e}')
+        logging.error(f'Error 14.0: {e}')
         return False
 
 
@@ -480,7 +548,7 @@ async def delete_from_db(actor: str) -> None:
             conn.commit()
         conn.close()
     except Exception as e:
-        print(f'Error 15.0: {e}')
+        logging.error(f'Error 15.0: {e}')
 
 
 @client.tree.context_menu(name='Поприветствовать')
@@ -491,14 +559,14 @@ async def welcome_user(interaction: discord.Interaction, message: discord.Messag
         try:
             await interaction.followup.send(content='К сожалению, у вас нет разрешения на выполнение данной команды.')
         except Exception as e:
-            print(f'Error 16.0: {e}')
+            logging.error(f'Error 16.0: {e}')
         return
     try:
         await interaction.followup.send(content=f'Приветствуем, <@{message.author.id}>! Если вы желаете получить '
                                                 'доступ к остальным каналам сервера, сообщите, пожалуйста, имя вашей '
                                                 'учётной записи в проектах Викимедиа.')
     except Exception as e:
-        print(f'Error 17.0: {e}')
+        logging.error(f'Error 17.0: {e}')
 
 
 @client.tree.command(name='rollback_restart_cleaner')
@@ -511,7 +579,7 @@ async def rollback_restart_cleaner(interaction: discord.Interaction):
                                                     f'Обратитесь к участнику <@{223219998745821194}> или '
                                                     f'<@{352826965494988822}>.', ephemeral=True)
         except Exception as e:
-            print(f'Error 18.0: {e}')
+            logging.error(f'Error 18.0: {e}')
         return
     session = aiohttp.ClientSession(headers=USER_AGENT)
     try:
@@ -519,7 +587,7 @@ async def rollback_restart_cleaner(interaction: discord.Interaction):
                               f'&token={os.environ["BOT_TOKEN"]}')
         await interaction.followup.send(content='Запрос отправлен.', ephemeral=True)
     except Exception as e:
-        print(f'error 19.0: {e}')
+        logging.error(f'Error 19.0: {e}')
     finally:
         await session.close()
 
@@ -529,18 +597,18 @@ async def rollback_help(interaction: discord.Interaction):
     """Список команд бота."""
     await interaction_defer(interaction, '0.12')
     try:
-        await interaction.followup.send(content="""/rollback_help — список команд бота.\n
-                                                /rollback_clear — очистка фид-каналов от всех сообщений бота.\n
-                                                /rollbackers — список участников, кому разрешены действия через бот.\n
-                                                /add_rollbacker — разрешить участнику действия через бот.\n"
-                                                /remove_rollbacker — запретить участника действия через бот.\n
-                                                /rollback_stats_all — статистика откатов через бот.\n
-                                                /rollback_stats — статистика действий участника через бот.\n
-                                                /rollback_stats_delete — удалить всю статистику действий участника.\n
-                                                По вопросам работы бота обращайтесь к <@352826965494988822>.""",
+        await interaction.followup.send(content='/rollback_help — список команд бота.\n'
+                                                '/rollback_clear — очистка фид-каналов от всех сообщений бота.\n'
+                                                '/rollbackers — список участников, кому разрешены действия через бот.\n'
+                                                '/add_rollbacker — разрешить участнику действия через бот.\n'
+                                                '/remove_rollbacker — запретить участника действия через бот.\n'
+                                                '/rollback_stats_all — статистика откатов через бот.\n'
+                                                '/rollback_stats — статистика действий участника через бот.\n'
+                                                '/rollback_stats_delete — удалить всю статистику действий участника.\n\n'
+                                                'По вопросам работы бота обращайтесь к <@352826965494988822>.',
                                         ephemeral=True)
     except Exception as e:
-        print(f'Error 20.0: {e}')
+        logging.error(f'Error 20.0: {e}')
 
 
 @client.tree.command(name='rollback_stats_all')
@@ -560,7 +628,7 @@ async def rollback_stats_all(interaction: discord.Interaction):
                                           f'замены — {r["replaces"]}.\n'
                                           f'{r["triggers"]}', ephemeral=True)
     except Exception as e:
-        print(f'Error 21.0: {e}')
+        logging.error(f'Error 21.0: {e}')
 
 
 @client.tree.command(name='rollback_stats')
@@ -590,7 +658,7 @@ async def rollback_stats(interaction: discord.Interaction, wiki_name: str):
                                                     f'{r["patterns"]}, замены — {r["replaces"]}, ORES — {r["ORES"]}, '
                                                     f'LW — {r["LW"]}, метки — {r["tags"]}.', ephemeral=True)
     except Exception as e:
-        print(f'Error 22.0: {e}')
+        logging.error(f'Error 22.0: {e}')
 
 
 @client.tree.command(name='rollback_stats_delete')
@@ -610,7 +678,7 @@ async def rollback_stats_delete(interaction: discord.Interaction, wiki_name: str
                                                     f'<@{223219998745821194}> или <@{352826965494988822}>.',
                                             ephemeral=True)
         except Exception as e:
-            print(f'Error 23.0: {e}')
+            logging.error(f'Error 23.0: {e}')
         return
 
     await delete_from_db(wiki_name)
@@ -618,7 +686,7 @@ async def rollback_stats_delete(interaction: discord.Interaction, wiki_name: str
         await interaction.followup.send(content='Статистика участника удалена, убедитесь в этом через соответствующую '
                                                 'команду.', ephemeral=True)
     except Exception as e:
-        print(f'Error 24.0: {e}')
+        logging.error(f'Error 24.0: {e}')
 
 
 @client.tree.command(name='last_metro')
@@ -632,7 +700,7 @@ async def last_metro(interaction: discord.Interaction):
         metro = r.split('<br>')[0].replace('Задание запущено', 'Последний запуск задания:')
         await interaction.followup.send(content=metro, ephemeral=True)
     except Exception as e:
-        print(f'Error 25.0: {e}')
+        logging.error(f'Error 25.0: {e}')
     finally:
         await session.close()
 
@@ -648,13 +716,13 @@ async def rollback_clear(interaction: discord.Interaction):
                                               'на выполнение данной команды. '
                                               f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Error 26.0: {e}')
+            logging.error(f'Error 26.0: {e}')
         return
 
     try:
         await interaction.followup.send(content='Очистка каналов начата.', ephemeral=True)
     except Exception as e:
-        print(f'Error 27.0: {e}')
+        logging.error(f'Error 27.0: {e}')
     for channel_id in CONFIG['IDS']:
         channel = client.get_channel(channel_id)
         messages = channel.history(limit=100000)
@@ -664,7 +732,7 @@ async def rollback_clear(interaction: discord.Interaction):
                     await msg.delete()
                     await asyncio.sleep(1.5)
                 except Exception as e:
-                    print(f'Error 28.0: {e}')
+                    logging.error(f'Error 28.0: {e}')
                 time.sleep(1.0)
 
 
@@ -678,7 +746,7 @@ async def rollbackers(interaction: discord.Interaction):
                                         f'`{", ".join(rights_content)}`.\nДля запроса права или отказа от него '
                                         f'обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
     except Exception as e:
-        print(f'Error 29.0: {e}')
+        logging.error(f'Error 29.0: {e}')
 
 
 @client.tree.command(name='add_rollbacker')
@@ -693,12 +761,12 @@ async def add_rollbacker(interaction: discord.Interaction, discord_name: discord
         Имя участника в вики
     """
     await interaction_defer(interaction, '0.19')
-    if interaction.user.id not in CONFIG['ADMINS']:
+    if interaction.user.id not in CONFIG['ADMINS'] or interaction.user.id == discord_name.id:
         try:
             await interaction.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
                                               f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Error 30.0: {e}')
+            logging.error(f'Error 30.0: {e}')
         return
 
     global ALLOWED_USERS
@@ -711,12 +779,12 @@ async def add_rollbacker(interaction: discord.Interaction, discord_name: discord
             msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
             await msg_rights.edit(content=json.dumps(ALLOWED_USERS))
         except Exception as e:
-            print(f'Error 31.0: {e}')
+            logging.error(f'Error 31.0: {e}')
             return
     try:
         await interaction.followup.send(content=add_rollbacker_result, ephemeral=True)
     except Exception as e:
-        print(f'Error 32.0: {e}')
+        logging.error(f'Error 32.0: {e}')
 
 
 @client.tree.command(name='remove_rollbacker')
@@ -734,7 +802,7 @@ async def remove_rollbacker(interaction: discord.Interaction, wiki_name: str):
             await interaction.followup.send(content=f'К сожалению, у вас нет разрешения на выполнение данной команды. '
                                               f'Обратитесь к участнику <@{223219998745821194}>.', ephemeral=True)
         except Exception as e:
-            print(f'Error 33.0: {e}')
+            logging.error(f'Error 33.0: {e}')
         return
 
     global ALLOWED_USERS
@@ -749,12 +817,12 @@ async def remove_rollbacker(interaction: discord.Interaction, wiki_name: str):
             msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
             await msg_rights.edit(content=json.dumps(ALLOWED_USERS))
         except Exception as e:
-            print(f'Error 34.0: {e}')
+            logging.error(f'Error 34.0: {e}')
             return
     try:
         await interaction.followup.send(content=remove_rollbacker_result, ephemeral=True)
     except Exception as e:
-        print(f'Error 35.0: {e}')
+        logging.error(f'Error 35.0: {e}')
 
 
 async def do_rollback(embed, actor, action_type='rollback', reason=''):
@@ -762,12 +830,12 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
     diff_url = embed.url
     title = embed.title
     lang = get_lang(diff_url)
-    rev_id = diff_url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
+    rev_id = diff_url.split('ilu=')[1]
     session = aiohttp.ClientSession(headers=USER_AGENT)
     try:
         r = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, title, session)
     except Exception as e:
-        print(f'Error 36.0: {e}')
+        logging.error(f'Error 36.0: {e}')
         await session.close()
     else:
         if not r:
@@ -783,7 +851,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
         r = await session.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
         r = await r.json()
     except Exception as e:
-        print(f'Error 37.0: {e}')
+        logging.error(f'Error 37.0: {e}')
         await session.close()
     else:
         if '-1' in r['query']['pages']:
@@ -797,11 +865,12 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
             headers = {'Authorization': f'Bearer {BEARER_TOKEN}', 'User-Agent': 'Reimu; iluvatar@tools.wmflabs.org'}
             session_with_auth = aiohttp.ClientSession(headers=headers)
 
+            if action_type == 'rollback' and lang == 'be':  # в bewiki нет флага откатывающего
+                action_type = 'undo'
+                reason = f'{undo_prefix[2].replace("$actor", actor)} {select_options_undo["1"][3]}'
+
             if action_type == 'rollback':
-                comment_body_uk = ('Бот: відкинуто редагування [[Special:Contribs/$2|$2]] за запитом '
-                                   f'[[User:{actor}|{actor}]]')
-                comment_body_ru = f'Бот: откат правок [[Special:Contribs/$2|$2]] по запросу [[u:{actor}|{actor}]]'
-                comment = comment_body_ru if lang == 'ru' else comment_body_uk
+                rollback_comment = rollback_summary[get_lang_number(lang)].replace('$1', actor)
                 try:
                     r_token = await session_with_auth.get(f'{api_url}?format=json&action=query&meta=tokens'
                                                           f'&type=rollback')
@@ -810,16 +879,16 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                 except Exception as e:
                     await session_with_auth.close()
                     await session.close()
-                    print(f'Error 38.0: {e}')
+                    logging.error(f'Error 38.0: {e}')
                 else:
                     data = {'action': 'rollback', 'format': 'json', 'title': title,
                             'user': get_name_from_embed(lang, embed.author.url), 'utf8': 1, 'watchlist': 'nochange',
-                            'summary': comment, 'token': rollback_token, 'uselang': 'ru'}
+                            'summary': rollback_comment, 'token': rollback_token, 'uselang': 'ru'}
                     try:
                         r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
                         r = await r.json()
                     except Exception as e:
-                        print(f'Error 39.0: {e}')
+                        logging.error(f'Error 39.0: {e}')
                     else:
                         return [r['error']['info'],
                                 f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
@@ -838,7 +907,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                     r = await r.json()
                     check_revs = len(r['query']['pages'][page_id]['revisions'])
                 except Exception as e:
-                    print(f'Error 40.0: {e}')
+                    logging.error(f'Error 40.0: {e}')
                 else:
                     if check_revs == 0:
                         await session_with_auth.close()
@@ -857,7 +926,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                     except Exception as e:
                         await session.close()
                         await session_with_auth.close()
-                        print(f'Error 41.0: {e}')
+                        logging.error(f'Error 41.0: {e}')
                     else:
                         reason = reason.replace('$author', get_name_from_embed(lang, embed.author.url)).replace(
                             '$lastauthor', last_author)
@@ -868,11 +937,12 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                             r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
                             r = await r.json()
                         except Exception as e:
-                            print(f'Error 42.0: {e}')
+                            logging.error(f'Error 42.0: {e}')
                         else:
                             if ('error' not in r and 'edit' in r and 'newrevid' not in r['edit'] and
                                     'revid' not in r['edit']):
-                                return print(r)  # debug
+                                logging.debug(r)
+                                return  # debug
                             return [r['error']['info'], f'[{title}](<https://{lang}'
                                                         f'.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                                         f'(ID: {rev_id})'] if 'error' in r else \
@@ -892,13 +962,12 @@ def get_name_from_embed(lang: str, link: str) -> str:
     return unquote(link.replace(f'https://{lang}.wikipedia.org/wiki/special:contribs/', ''))
 
 
-async def do_rfd(embed: Embed, rfd: str, summary: str):
+async def do_rfd(embed: Embed, rfd: str, summary: str) -> list[str]:
     """Номинация на быстрое удаление."""
     diff_url, title = embed.url, embed.title
     lang = get_lang(diff_url)
     api_url = f'https://{lang}.wikipedia.org/w/api.php'
     headers = {'Authorization': f'Bearer {BEARER_TOKEN}', 'User-Agent': 'Reimu; iluvatar@tools.wmflabs.org'}
-    rfd = '{{delete|' + rfd + '}}' if '{{' not in rfd or '}}' not in rfd else rfd
 
     session = aiohttp.ClientSession(headers=headers)
     try:
@@ -907,7 +976,7 @@ async def do_rfd(embed: Embed, rfd: str, summary: str):
         edit_token = edit_token['query']['tokens']['csrftoken']
     except Exception as e:
         await session.close()
-        print(f'Error 43.0: {e}')
+        logging.error(f'Error 43.0: {e}')
     else:
         payload = {'action': 'edit', 'format': 'json', 'title': title, 'prependtext': f'{rfd}\n\n', 'token': edit_token,
                    'utf8': 1, 'nocreate': 1, 'summary': summary, 'uselang': 'ru'}
@@ -915,16 +984,18 @@ async def do_rfd(embed: Embed, rfd: str, summary: str):
             r = await session.post(url=api_url, data=payload)
             r = await r.json()
         except Exception as e:
-            print(f'Error 44.0: {e}')
+            logging.error(f'Error 44.0: {e}')
+            await session.close()
+            return []
         else:
             if 'error' not in r and 'edit' in r and 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
-                return print(r)  # debug
+                logging.debug(r)
+                return []  # debug
             return [r['error']['info'], f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
                                         f'(ID: {title})'] if 'error' in r \
                 else ['Success', f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r["edit"]["newrevid"]}>)',
                       title]
-        finally:
-            await session.close()
+    return []
 
 
 @client.event
@@ -936,31 +1007,18 @@ async def on_message(msg):
         try:
             await client.process_commands(msg)
         except Exception as e:
-            print(f'Error 45.0: {e}')
+            logging.error(f'Error 45.0: {e}')
         return
     if msg.channel.id != CONFIG['SOURCE']:
         try:
             await client.process_commands(msg)
         except Exception as e:
-            print(f'Error 46.0: {e}')
+            logging.error(f'Error 46.0: {e}')
         return
 
-    # предотвращение массовых уведомлений от территориальных замен
-    global STORAGE
-    STORAGE = [el for el in STORAGE if el['timestamp'] + 1800 >= datetime.datetime.now(datetime.UTC).timestamp()]
     lang = get_lang(msg.embeds[0].url)
-    rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
-    trigger = get_trigger(msg.embeds[0])
-    for el in STORAGE:
-        if (el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el['trigger'] == 'replaces'
-                and trigger != 'replaces'):
-            await asyncio.sleep(1.5)
-            await el['msg'].delete()
-        if el['wiki'] == f'{lang}wiki' and el['rev_id'] == rev_id and el[
-            'trigger'] != 'replaces' and trigger == 'replaces':
-            await asyncio.sleep(1.5)
-            await msg.delete()
-            return
+    rev_id = msg.embeds[0].url.split('diff=')[1] if 'ilu=' not in msg.embeds[0].url else\
+        msg.embeds[0].url.split('ilu=')[1]
 
     # не откачена ли
     session = aiohttp.ClientSession(headers=USER_AGENT)
@@ -975,29 +1033,30 @@ async def on_message(msg):
             await msg.delete()
             return
         except Exception as e:
-            print(f'Error 47.0: {e}')
-    channel_new_id = 1212498198200062014 if lang == 'ru' else 1219273496371396681
+            logging.error(f'Error 47.0: {e}')
+    channel_new_id = CONFIG['IDS'][get_lang_number(lang)]
     channel_new = client.get_channel(channel_new_id)
     try:
         new_message = await channel_new.send(embed=msg.embeds[0],
-                                             view=get_view_buttons(disable=True))
-        STORAGE.append({'wiki': f'{lang}wiki', 'rev_id': rev_id, 'trigger': trigger, 'msg': new_message, 'timestamp':
-            datetime.datetime.now(datetime.UTC).timestamp()})
-
+                                             view=get_view_buttons(embed=msg.embeds[0],disable=True))
+        logging.debug(f'sleep error 1: {new_message.embeds[0].title}')
     except Exception as e:
-        print(f'Error 48.0: {e}')
+        logging.error(f'Error 48.0: {e}')
     else:
+        logging.debug(f'sleep error 2: {new_message.embeds[0].title}')
         try:
             await msg.delete()
         except Exception as e:
-            print(f'Error 49.0: {e}')
+            logging.error(f'Error 49.0: {e}')
         finally:
             try:
+                logging.debug(f'sleep error 3: {new_message.embeds[0].title}')
                 await asyncio.sleep(3)
                 await new_message.edit(embed=new_message.embeds[0],
-                                       view=get_view_buttons())
+                                       view=get_view_buttons(embed=new_message.embeds[0]))
+                logging.debug(f'sleep error 4: {new_message.embeds[0].title}')
             except Exception as e:
-                print(f'Error 50.0: {e}')
+                logging.error(f'Error 50.0: {e}')
 
 
 @client.event
@@ -1018,15 +1077,15 @@ async def on_ready():
         msg_rights = await client.get_channel(CONFIG['BOTCOMMANDS']).fetch_message(CONFIG['ROLLBACKERS'])
         ALLOWED_USERS = json.loads(msg_rights.content.replace('`', ''))
 
-        print('Просмотр пропущенных записей лога')
+        logging.info('Просмотр пропущенных записей лога')
         channel = client.get_channel(CONFIG['SOURCE'])
         messages = channel.history(limit=50, oldest_first=False)
         async for msg in messages:
             if len(msg.embeds) > 0:
                 await on_message(msg)
-        print('Бот запущен')
-    except Exception as e:
-        print(f'Error 51.0: {e}')
+        logging.info('Бот запущен')
+    except Exception as e:(
+        logging.error(f'Error 51.0: {e}'))
 
 
 @client.event
@@ -1036,7 +1095,6 @@ async def on_guild_join(guild):
         if guild.id not in CONFIG['SERVER']:
             await guild.leave()
     except Exception as e:
-        print(f'Error 52.0: {e}')
+        logging.error(f'Error 52.0: {e}')
 
-
-client.run(token=TOKEN, reconnect=True, log_level=logging.WARN)
+client.run(token=TOKEN, reconnect=True, log_handler=logging_handler)
