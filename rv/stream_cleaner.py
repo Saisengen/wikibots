@@ -5,7 +5,11 @@ import asyncio
 import logging
 import discord
 import aiohttp
+# import time
 from discord.ext import tasks
+
+logging_handler = logging.FileHandler(filename='logs/antclr.log', encoding='utf-8', mode='w')
+
 
 
 async def flagged_check(url: str, title: str, rev_id: int, session: aiohttp.ClientSession) -> bool | None:
@@ -38,6 +42,10 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
         r = await r.json()
     except Exception as e:
         print(f'revision_check 1: {e}')
+        return False
+    if 'query' not in r:
+        print(r)
+        print(data)
         return False
     if r_status == 404 or 'badrevids' in r['query'] or '-1' in r['query']['pages'] or 'missing' in r['query']['pages']:
         return True
@@ -79,7 +87,7 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
 
 if __name__ == '__main__':
     # ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
-    CONFIG = {'IDS': [1212498198200062014, 1219273496371396681], 'BOTS': [1225008116048072754],
+    CONFIG = {'IDS': [1212498198200062014, 1219273496371396681, 1342471984671625226], 'BOTS': [1225008116048072754],
               'TOKEN': os.environ['DISCORD_BOT_TOKEN']}
     USER_AGENT = {'User-Agent': 'D-V-C; iluvatar@tools.wmflabs.org; python3.11; requests'}
     Intents = discord.Intents.default()
@@ -88,10 +96,11 @@ if __name__ == '__main__':
     client = discord.Client(intents=Intents)
 
 
-    # Получение старых сообщений (задержка в минутах)
+    # Получение старых сообщений (задержка в секундах)
     @tasks.loop(seconds=60.0)
     async def get_messages() -> None:
-        """Функция запроса сообщений из лент."""
+        """Функция запроса сообщений из лент"""
+
         session = aiohttp.ClientSession(headers=USER_AGENT)
         for channel_id in CONFIG['IDS']:
             try:
@@ -104,7 +113,8 @@ if __name__ == '__main__':
                 async for msg in messages:
                     if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
                         lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
-                        rev_id = msg.embeds[0].url.replace(f'https://{lang}.wikipedia.org/w/index.php?diff=', '')
+                        rev_id = msg.embeds[0].url.split('diff=')[1] if 'ilu=' not in msg.embeds[0].url else (
+                            msg.embeds[0].url.split('ilu='))[1]
                         api_url = f'https://{lang}.wikipedia.org/w/api.php'
                         status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
                         if not status:
@@ -134,4 +144,4 @@ if __name__ == '__main__':
             print(f'on_ready 1: {e}')
 
 
-    client.run(token=CONFIG['TOKEN'], reconnect=True, log_level=logging.WARN)
+    client.run(token=CONFIG['TOKEN'], reconnect=True, log_handler=logging_handler)
