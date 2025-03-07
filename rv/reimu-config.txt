@@ -1,0 +1,7 @@
+0.875|0.978|0.96
+trusted-users:77.108.74.114
+tags:blank|replace|emoji|spam|спам|андал|ест|ASCI
+replaces:р[оау]с/укр|татар/башк
+deletions:оккуп|сепарат
+whitelist-text:сукач|робля
+whitelist-title:/Черновик|/Чернетка|Песочница
