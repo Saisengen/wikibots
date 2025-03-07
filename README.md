@@ -3,7 +3,7 @@ Wikipedia bots written by ruwiki user MBH.
 
 Bots in "incubator" folder was written by user Dmitry89 and edited by MBH after his retirement.
 
-Bots in "discord-py-bots" folder are written by user Iluvatar.
+All in "rv" folder are written by user Iluvatar.
 
 ## Adding a new project to a solutions file
 From your development environment (with dotnet 8 installed https://dotnet.microsoft.com/en-us/download/dotnet):
