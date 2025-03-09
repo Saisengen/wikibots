@@ -10,7 +10,7 @@ using System.Text;
 using Newtonsoft.Json;
 public enum type
 {
-    ores, lwa, lwm, replaces, rgx, tag
+    ores, lwa, lwm, replace, addition, tag, deletion
 }
 public class color
 {
@@ -67,7 +67,7 @@ class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id,
         all_ins, all_del, default_time = DateTime.UtcNow.AddMinutes(-5).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
-    static string[] creds;
+    static string[] settings;
     static Dictionary<string, HttpClient> site = new Dictionary<string, HttpClient>();
     static HttpClient client = new HttpClient();
     static double ores_value, lw_value, ores_limit = 1;
@@ -86,8 +86,8 @@ class Program
     static List<rgxpair> replaces = new List<rgxpair>();
     static bool new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, oldid, newid, pageid;
-    static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.rgx, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
-        { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replaces, new color(0, 255, 255) } };
+    static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
+        { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replace, new color(0, 255, 255) }, { type.deletion, new color(255, 255, 255) } };
     static string e(string input)
     {
         return Uri.EscapeUriString(input);
@@ -113,40 +113,24 @@ class Program
     }
     static void read_config()
     {
-        var settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
-        foreach (var row in settings)
-            if (!row.Contains(":") && row != "")
-            {
-                var limits = row.Split('|');
-                ores_limit = Convert.ToDouble(limits[0]);
-                liftwing[type.lwa].limit = Convert.ToDouble(limits[1]);
-                liftwing[type.lwm].limit = Convert.ToDouble(limits[2]);
-            }
-            else
-            {
-                var keyvalue = row.Split(':');
-                if (keyvalue[0] == "trusted-users")
-                    if (!trusted_users.Contains(keyvalue[1]))
-                        trusted_users.Add(keyvalue[1]);
-                if (keyvalue[0] == "tags")
-                    suspicious_tags_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
-                if (keyvalue[0] == "deletions")
-                    deletions_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
-                if (keyvalue[0] == "whitelist-text")
-                    whitelist_text_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
-                if (keyvalue[0] == "whitelist-title")
-                    whitelist_title_rgx = new Regex(keyvalue[1], RegexOptions.IgnoreCase);
-                if (keyvalue[0] == "replaces")
-                {
-                    replaces.Clear();
-                    var pairs_list = keyvalue[1].Split('|');
-                    foreach (var pair in pairs_list)
-                    {
-                        var components = pair.Split('/');
-                        replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
-                    }
-                }
-            }
+        settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
+        var limits = settings[5].Split(':')[1].Split('|');
+        ores_limit = Convert.ToDouble(limits[0]);
+        liftwing[type.lwa].limit = Convert.ToDouble(limits[1]);
+        liftwing[type.lwm].limit = Convert.ToDouble(limits[2]);
+        if (!trusted_users.Contains(settings[6].Split(':')[1]))
+            trusted_users.Add(settings[6].Split(':')[1]);
+        suspicious_tags_rgx = new Regex(settings[7].Split(':')[1], RegexOptions.IgnoreCase);
+        deletions_rgx = new Regex(settings[8].Split(':')[1], RegexOptions.IgnoreCase);
+        whitelist_text_rgx = new Regex(settings[9].Split(':')[1], RegexOptions.IgnoreCase);
+        whitelist_title_rgx = new Regex(settings[10].Split(':')[1], RegexOptions.IgnoreCase);
+        replaces.Clear();
+        var pairs_list = settings[11].Split(':')[1].Split('|');
+        foreach (var pair in pairs_list)
+        {
+            var components = pair.Split('/');
+            replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+        }
     }
     static bool tags_is_triggered(Recentchange edit)
     {
@@ -200,7 +184,7 @@ class Program
             foreach (var pattern in patterns[lang])
                 if (pattern.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.Match(text).Value))
                 {
-                    post_suspicious_edit(pattern.Match(text).Value, type.rgx);
+                    post_suspicious_edit(pattern.Match(text).Value, type.addition);
                     return true;
                 }
         }
@@ -214,7 +198,7 @@ class Program
     {
         if (deletions_rgx.IsMatch(all_del))
         {
-            post_suspicious_edit(deletions_rgx.Match(all_del).Value, type.rgx);
+            post_suspicious_edit(deletions_rgx.Match(all_del).Value, type.deletion);
             return true;
         }
         return false;
@@ -225,7 +209,7 @@ class Program
             if ((rgxpair.one.IsMatch(all_ins) && rgxpair.two.IsMatch(all_del) && !rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_del)) ||
             (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
             {
-                post_suspicious_edit("замена", type.replaces);
+                post_suspicious_edit("замена", type.replace);
                 return;
             }
     }
@@ -385,8 +369,8 @@ class Program
     }
     static void initialize_bot()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p2").ReadToEnd().Split('\n');
-        liftwing_token = creds[2].Split(':')[1]; swviewer_token = creds[3].Split(':')[1]; discord_token = creds[4].Split(':')[1]; authors_token = creds[5].Split(':')[1];
+        settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
+        liftwing_token = settings[1].Split(':')[1]; swviewer_token = settings[2].Split(':')[1]; discord_token = settings[3].Split(':')[1]; authors_token = settings[4].Split(':')[1];
 
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var swviewer_trusted_users = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
@@ -394,7 +378,7 @@ class Program
             trusted_users.Add(g);
         foreach (string lang in langs)
         {
-            site.Add(lang, Site(lang, creds[0].Split(':')[0], creds[0].Split(':')[1]));
+            site.Add(lang, Site(lang, settings[0].Split(':')[0], settings[0].Split(':')[1]));
             patterns.Add(lang, new List<Regex>());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
