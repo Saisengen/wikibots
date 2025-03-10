@@ -54,14 +54,8 @@
   emails: onfailure
 
 # files management--------------------------------------------------------------------------------------------------------------------
-- name: orphan-files
-  command: mono /data/project/mbh/bots/orphan-files.exe
-  image: tf-mono68
-  schedule: "55 23 * * *"
-  emails: onfailure
-
-- name: nolicensed-files
-  command: mono /data/project/mbh/bots/nolicensed_files.exe
+- name: orphan-and-unlicensed-files
+  command: mono /data/project/mbh/bots/orphan_and_unlicensed_files.exe
   image: tf-mono68
   schedule: "55 23 * * *"
   emails: onfailure
@@ -212,7 +206,7 @@
 - name: nullbot
   command: mono /data/project/mbh/d89bots/null-editor.exe
   image: tf-mono68
-  schedule: "58 3 * * *"
+  schedule: "12 0 * * *"
   emails: onfailure
 
 - name: minirec-summary
