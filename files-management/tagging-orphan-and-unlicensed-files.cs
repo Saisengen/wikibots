@@ -24,7 +24,7 @@ class Program
             return null;
         return client;
     }
-    static void Save(HttpClient site, string title, string text, string comment, bool empty)
+    static void Save(HttpClient site, string title, string text, string comment)
     {
         var doc = new XmlDocument();
         var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
@@ -40,13 +40,9 @@ class Program
         request.Add(new StringContent(token), "token");
         request.Add(new StringContent("xml"), "format");
         result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-        if (!empty)
-        {
-            if (result.ToString().Contains("uccess"))
-                Console.WriteLine(DateTime.Now.ToString() + " written " + title);
-            else
-                Console.WriteLine(result);
-        }
+        if (!result.ToString().Contains("uccess"))
+            Console.WriteLine(result.ToString());
+
     }
     static void Main()
     {
@@ -95,12 +91,9 @@ class Program
         }
 
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t%3AOrphaned-fairuse&einamespace=6&eilimit=max").Result)))
-        {
-            r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
                     validfiles.Add(r.GetAttribute("title"));
-        }
 
         nonfree_files.ExceptWith(validfiles);
         var pagerx = new Regex(@"\|\s*статья\s*=\s*([^|\n]*)\s*\|");
@@ -119,20 +112,18 @@ class Program
                     {
                         string using_page_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(page) + "?action=raw").Result;
                         if (!redirrx.IsMatch(using_page_text))
-                            Save(site, page, using_page_text + "\n", "", true);
+                            Save(site, page, using_page_text + "\n", "");
                         else
                         {
                             string redirect_target_page = redirrx.Match(using_page_text).Groups[1].Value;
                             string target_page_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(redirect_target_page) + "?action=raw").Result;
-                            Save(site, redirect_target_page, target_page_text + "\n", "", true);
+                            Save(site, redirect_target_page, target_page_text + "\n", "");
                         }
                     }
                     catch { continue; }
             }
             catch { }
         }
-        foreach (var file in nonfree_files)
-            site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(file) + "?action=purge");
         foreach (var file in nonfree_files)
         {
             apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&titles=" + Uri.EscapeDataString(file)).Result;
@@ -149,11 +140,33 @@ class Program
                     if (r.Name == "rev")
                         uploaddate = r.GetAttribute("timestamp").Substring(0, 10);
             if (DateTime.Now - DateTime.ParseExact(uploaddate, "yyyy-MM-dd", CultureInfo.InvariantCulture) > new TimeSpan(0, 1, 0, 0))
-                Save(site, file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла", false);
+                Save(site, file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла");
         }
 
         var dt = DateTime.Now;
         if (unused_files.Count != 0)
-            Save(site, "К:Файлы:Неиспользуемые несвободные от " + dt.Day + " " + monthname[dt.Month] + " " + dt.Year, "__NOGALLERY__\n[[К:Файлы:Неиспользуемые несвободные|" + dt.ToString("MM-dd") + "]]", "", false);
+            Save(site, "К:Файлы:Неиспользуемые несвободные от " + dt.Day + " " + monthname[dt.Month] + " " + dt.Year, "__NOGALLERY__\n[[К:Файлы:Неиспользуемые несвободные|" + dt.ToString("MM-dd") + "]]", "");
+
+        var autocatfiles = new HashSet<string>();
+        var legalfiles = new HashSet<string>();
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result)))
+            while (r.Read())
+                if (r.Name == "cm")
+                    autocatfiles.Add(r.GetAttribute("title"));
+
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t:No_license&einamespace=6&eilimit=max").Result)))
+            while (r.Read())
+                if (r.Name == "ei")
+                    legalfiles.Add(r.GetAttribute("title"));
+
+        autocatfiles.ExceptWith(legalfiles);
+        foreach (var file in autocatfiles)
+        {
+            string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(file) + "?action=raw").Result;
+            Save(site, file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии");
+        }
+
+        if (autocatfiles.Count != 0)
+            Save(site, "К:Файлы:Неясный лицензионный статус от " + dt.Day + " " + monthname[dt.Month] + " " + dt.Year, "[[К:Файлы:Неясный лицензионный статус|" + dt.ToString("MM-dd") + "]]", "");
     }
 }
