@@ -11,16 +11,16 @@
   schedule: "34 2 * * *"
   emails: onfailure
 
+- name: everyday-job
+  command: mono /data/project/mbh/bots/everyday_job.exe
+  image: tf-mono68
+  schedule: "55 23 * * *"
+  emails: onfailure
+
 - name: trans-ns-moves
   command: mono /data/project/mbh/bots/trans-ns-moves.exe
   image: tf-mono68
   schedule: "46 5 * * *"
-  emails: onfailure
-
-- name: outdated-tmplt-remove
-  command: mono /data/project/mbh/bots/currevents_remove.exe
-  image: tf-mono68
-  schedule: "21 5 * * *"
   emails: onfailure
 
 - name: zsf-archiving
@@ -53,23 +53,10 @@
   schedule: "58 3 * * *"
   emails: onfailure
 
-# files management--------------------------------------------------------------------------------------------------------------------
-- name: orphan-and-unlicensed-files
-  command: mono /data/project/mbh/bots/orphan_and_unlicensed_files.exe
-  image: tf-mono68
-  schedule: "55 23 * * *"
-  emails: onfailure
-
 - name: exclude-deleted-files
   command: mono /data/project/mbh/bots/exclude-deleted-files.exe
   image: tf-mono68
   schedule: "18 * * * *"
-  emails: onfailure
-
-- name: nonfree-files-in-nonmain-ns
-  command: mono /data/project/mbh/bots/nffiles_in_nmns.exe
-  image: tf-mono68
-  schedule: "48 0 * * *"
   emails: onfailure
 
 - name: commons-delinker
