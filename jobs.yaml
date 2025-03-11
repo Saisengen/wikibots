@@ -1,44 +1,21 @@
+# hourly
+- name: exclude-deleted-files
+  command: mono /data/project/mbh/bots/exclude-deleted-files.exe
+  image: tf-mono68
+  schedule: "18 * * * *"
+  emails: onfailure
+
+- name: commons-delinker
+  command: mono /data/project/mbh/bots/mbh-delinker.exe
+  image: tf-mono68
+  schedule: "28 * * * *"
+  emails: onfailure
+
 # daily
-- name: talk-broken-redirs-delete
-  command: mono /data/project/mbh/bots/talk-redirs-delete.exe
-  image: tf-mono68
-  schedule: "50 22 * * *"
-  emails: onfailure
-
-- name: unreviewed-pages
-  command: mono /data/project/mbh/bots/unreviewed-pages.exe
-  image: tf-mono68
-  schedule: "34 2 * * *"
-  emails: onfailure
-
 - name: everyday-job
   command: mono /data/project/mbh/bots/everyday_job.exe
   image: tf-mono68
   schedule: "55 23 * * *"
-  emails: onfailure
-
-- name: trans-ns-moves
-  command: mono /data/project/mbh/bots/trans-ns-moves.exe
-  image: tf-mono68
-  schedule: "46 5 * * *"
-  emails: onfailure
-
-- name: zsf-archiving
-  command: mono /data/project/mbh/bots/zsf-archiving.exe
-  image: tf-mono68
-  schedule: "58 0 * * *"
-  emails: onfailure
-
-- name: catmoves
-  command: mono /data/project/mbh/bots/catmoves.exe
-  image: tf-mono68
-  schedule: "57 0 * * *"
-  emails: onfailure
-
-- name: little-flags
-  command: mono /data/project/mbh/bots/little-flags.exe
-  image: tf-mono68
-  schedule: "12 0 * * *"
   emails: onfailure
 
 #- name: removeqid
@@ -53,19 +30,7 @@
   schedule: "58 3 * * *"
   emails: onfailure
 
-- name: exclude-deleted-files
-  command: mono /data/project/mbh/bots/exclude-deleted-files.exe
-  image: tf-mono68
-  schedule: "18 * * * *"
-  emails: onfailure
-
-- name: commons-delinker
-  command: mono /data/project/mbh/bots/mbh-delinker.exe
-  image: tf-mono68
-  schedule: "28 * * * *"
-  emails: onfailure
-
-# monthly----------------------------------------------------------------------------------------------------------------------------
+# monthly
 #- name: spam-tagging
 #  command: mono /data/project/mbh/bots/spam.exe
 #  image: tf-mono68
