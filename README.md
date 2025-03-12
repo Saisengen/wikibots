@@ -1,9 +1,7 @@
 # wikibots
 Wikipedia bots written by ruwiki user MBH.
 
-Bots in "incubator" folder was written by user Dmitry89 and edited by MBH after his retirement.
-
-All in "rv" folder are written by user Iluvatar.
+dm89bots was written by user Dmitry89 and edited by MBH after his retirement. Category Pathfinder was originally written by MBH and rewritten by Adamant.pwn (its interface is written by Serhio Magpie). All in "rv" folder are written by user Iluvatar.
 
 ## Adding a new project to a solutions file
 From your development environment (with dotnet 8 installed https://dotnet.microsoft.com/en-us/download/dotnet):
