@@ -41,9 +41,9 @@ public class Recentchange
     public int ns;
     public string title;    
     public int pageid;  
-    public int revid;
-    public int old_revid;   
-    public int rcid;    
+    public Int64 revid;
+    public Int64 old_revid;   
+    public Int64 rcid;    
     public string user;
     public int oldlen;
     public int newlen;
@@ -66,7 +66,7 @@ public class rgxpair
 public class langdata_element
 {
     public string last_checked_edit_time, notifying_page_name, domain;
-    public int last_checked_id;
+    public Int64 last_checked_id;
 }
 class Program
 {
@@ -86,13 +86,14 @@ class Program
         { "ru", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { "uk", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
         { "be", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "be.wikipedia" } },
-        { "wd", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "wikidata" } },
-        { "c", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "commons.wikimedia" } } };
+        { "c", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "commons.wikimedia" } },
+        { "d", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "wikidata" } } };
     static HashSet<string> suspicious_users = new HashSet<string>(), trusted_users = new HashSet<string>();
     static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
     static List<rgxpair> replaces = new List<rgxpair>();
     static bool new_timestamp_saved, new_id_saved;
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, oldid, newid, pageid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, pageid;
+    static Int64 newid, oldid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replace, new color(0, 255, 255) }, { type.deletion, new color(255, 255, 255) } };
     static void Main()
@@ -126,6 +127,8 @@ class Program
             patterns.Add(lang, new List<Regex>());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
+                if (lang.Length == 1 && (flag == "editor" || flag == "autoreview"))
+                    continue;
                 string apiout, cont = "", request = "https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
                 while (cont != null)
                 {
@@ -217,7 +220,7 @@ class Program
                 initialize_edit_data(edit);
                 if (!whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !lw_is_triggered(edit))
                 {
-                    read_diff_text();
+                    generate_all_ins_del();
                     if (!deletion_is_triggered() && !addition_is_triggered(all_ins))
                         check_replaces(edit);
                 }
@@ -265,6 +268,8 @@ class Program
     }
     static bool ores_is_triggered(Recentchange edit)
     {
+        if (lang == "d")
+            return false;
         ores_value = 0;
         try //даже при проверках на формат строки вылетает
         {
@@ -299,7 +304,7 @@ class Program
             }
         return false;
     }
-    static void read_diff_text()
+    static void generate_all_ins_del()
     {
         var alldiff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
         var ins_array = ins_rgx.Matches(alldiff);
@@ -355,8 +360,7 @@ class Program
     {
         Program.reason = reason;
         check_if_author_is_recidivist();
-        read_ins_del_diff();
-        construct_reason_and_diffs();
+        generate_visible_diff();
         post_edit_to_discord(type);
         if (langdata[lang].notifying_page_name != "")
             Save(lang, site[lang], langdata[lang].notifying_page_name, ".", "[[toollabs:rv/r.php/" + newid + "|[rollback] ]] [[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
@@ -385,11 +389,11 @@ class Program
         if (!reportedyet)
             Save("ru", site["ru"], "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
     }
-    static void read_ins_del_diff()
+    static void generate_visible_diff()
     {
         string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
-        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(site[lang].GetStringAsync(diff_request).Result, ""), ""), ""), ""), "").Replace("\\n", "\n")
-            .Replace("\\\"", "\"").Replace("&#160;", "(nb)").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
+        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), ""), ""), "")
+            .Replace("\\n", "\n").Replace("\\\"", "\"").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
         strings_with_changes = "";
         foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
@@ -401,9 +405,6 @@ class Program
                 if (endpos >= str.Length) endpos = str.Length - 1;
                 strings_with_changes += str.Substring(startpos, endpos - startpos + 1) + "<...>";
             }
-    }
-    static void construct_reason_and_diffs()
-    {
         string revs = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
         string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs;
