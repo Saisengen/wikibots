@@ -15,7 +15,13 @@
 - name: everyday-job
   command: mono /data/project/mbh/bots/everyday_job.exe
   image: tf-mono68
-  schedule: "55 23 * * *"
+  schedule: "05 23 * * *"
+  emails: onfailure
+
+- name: dm89-bots
+  command: mono /data/project/mbh/bots/dm89_bots.exe
+  image: tf-mono68
+  schedule: "48 0 * * *"
   emails: onfailure
 
 #- name: removeqid
@@ -122,49 +128,6 @@
   command: mono /data/project/mbh/bots/patstats.exe
   image: tf-mono68
   schedule: "38 1 1 * *"
-  emails: onfailure
-
-# incubator
-- name: checkbot
-  command: mono /data/project/mbh/d89bots/check-bot.exe
-  image: tf-mono68
-  schedule: "58 4 * * *"
-  emails: onfailure
-
-- name: image-bot
-  command: mono /data/project/mbh/d89bots/image-inc-bot.exe
-  image: tf-mono68
-  schedule: "58 9 * * *"
-  emails: onfailure
-
-- name: inc-bot
-  command: mono /data/project/mbh/d89bots/inc-bot.exe
-  image: tf-mono68
-  schedule: "58 8 * * *"
-  emails: onfailure
-
-- name: stat-bot
-  command: mono /data/project/mbh/d89bots/inc-stat-bot.exe
-  image: tf-mono68
-  schedule: "58 12 * * *"
-  emails: onfailure
-
-- name: remind-bot
-  command: mono /data/project/mbh/d89bots/remind-inc-bot.exe
-  image: tf-mono68
-  schedule: "58 5 * * *"
-  emails: onfailure
-
-- name: nullbot
-  command: mono /data/project/mbh/d89bots/null-editor.exe
-  image: tf-mono68
-  schedule: "12 0 * * *"
-  emails: onfailure
-
-- name: minirec-summary
-  command: mono /data/project/mbh/d89bots/mini-recenz-summary.exe
-  image: tf-mono68
-  schedule: "29 10 * * *"
   emails: onfailure
 
 # permanent
