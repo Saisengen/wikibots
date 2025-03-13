@@ -23,6 +23,8 @@ class Program
     static DateTime dtn;
     static string[] monthname, creds;
     static HashSet<string> highflags = new HashSet<string>();
+    static bool legit_link_found;
+    static string orphan_article;
     static string serialize(HashSet<string> list)
     {
         list.ExceptWith(highflags);
@@ -632,12 +634,9 @@ class Program
                     bool nonempty = false;
                     string title = r.GetAttribute("title");
                     using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + Uri.EscapeDataString(title)).Result)))
-                    {
-                        rr.WhitespaceHandling = WhitespaceHandling.None;
                         while (rr.Read())
                             if (rr.NodeType == XmlNodeType.Element && rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
                                 nonempty = true;
-                    }
                     if (nonempty)
                     {
                         var n = new catmoves_record { oldtitle = title, user = r.GetAttribute("user"), timestamp = r.GetAttribute("timestamp").Substring(0, 10), comment = r.GetAttribute("comment") };
@@ -694,12 +693,77 @@ class Program
         result += "\n|}";
         Save(site, "u:MBH/Удалённые категории со страницами", result, "");
     }
+    static void orphan_articles()
+    {
+        var nonlegit_link_pages = new List<string>();
+        foreach (string templatename in "Ш:Координационный список|Ш:Неоднозначность".Split('|'))
+        {
+            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eilimit=max&eititle=" + templatename;
+            while (cont != null)
+            {
+                apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + Uri.EscapeDataString(cont)).Result);
+                using (var r = new XmlTextReader(new StringReader(apiout)))
+                {
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
+                    while (r.Read())
+                        if (r.Name == "ei" && !nonlegit_link_pages.Contains(r.GetAttribute("title")))
+                            nonlegit_link_pages.Add(r.GetAttribute("title"));
+                }
+            }
+        }
+        string apiout1, cont1 = "", query1 = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eilimit=max&eititle=ш:изолированная статья";
+        while (cont1 != null)
+        {
+            apiout1 = (cont1 == "" ? site.GetStringAsync(query1).Result : site.GetStringAsync(query1 + "&eicontinue=" + Uri.EscapeDataString(cont1)).Result);
+            using (var r = new XmlTextReader(new StringReader(apiout1)))
+            {
+                r.Read(); r.Read(); r.Read(); cont1 = r.GetAttribute("eicontinue"); Console.WriteLine(cont1);
+                while (r.Read())
+                    if (r.Name == "ei")
+                    {
+                        orphan_article = r.GetAttribute("title");
+                        legit_link_found = false;
+                        using (var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=nonredirects" +
+                                "&bllimit=max&bltitle=" + Uri.EscapeUriString(orphan_article)).Result)))
+                            while (r2.Read())
+                                if (r2.Name == "bl" && r2.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r2.GetAttribute("title")))
+                                {
+                                    remove_template_from_non_orphan_page();
+                                    break;
+                                }
+                        if (!legit_link_found)
+                            using (var r3 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=redirects" +
+                                "&bllimit=max&bltitle=" + Uri.EscapeUriString(orphan_article)).Result)))
+                                while (r3.Read())
+                                    if (r3.Name == "bl" && !legit_link_found)
+                                    {
+                                        string linked_redirect = r3.GetAttribute("title");
+                                        using (var r4 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=redirects" +
+                                "&bllimit=max&bltitle=" + Uri.EscapeUriString(linked_redirect)).Result)))
+                                            while (r4.Read())
+                                                if (r4.Name == "bl" && r4.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r4.GetAttribute("title")))
+                                                {
+                                                    remove_template_from_non_orphan_page();
+                                                    break;
+                                                }
+                                    }
+                    }
+            }
+        }
+    }
+    static void remove_template_from_non_orphan_page()
+    {
+        string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(orphan_article) + "?action=raw").Result;
+        Save(site, orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
+        legit_link_found = true;
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = Site(creds[0], creds[1]);
         dtn = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
+        orphan_articles();
         orphan_nonfree_files();
         unlicensed_files();
         outdated_templates();
