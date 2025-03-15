@@ -5,12 +5,13 @@ import asyncio
 import logging
 import discord
 import aiohttp
+import re
 # import time
 from discord.ext import tasks
 
 logging_handler = logging.FileHandler(filename='logs/antclr.log', encoding='utf-8', mode='w')
 
-
+domain_regexp = re.compile(r'(\w+\.wikipedia\.org|wikidata\.org|commons\.wikimedia\.org)')
 
 async def flagged_check(url: str, title: str, rev_id: int, session: aiohttp.ClientSession) -> bool | None:
     """Проверка на наличие более новых проверенных ревизий."""
@@ -86,9 +87,10 @@ async def revision_check(url: str, rev_id: int, title: str, session: aiohttp.Cli
 
 
 if __name__ == '__main__':
-    # ID канала, ID эмодзи, ID целевого участника (бота), ID канала для команд.
-    CONFIG = {'IDS': [1212498198200062014, 1219273496371396681, 1342471984671625226], 'BOTS': [1225008116048072754],
-              'TOKEN': os.environ['DISCORD_BOT_TOKEN']}
+    # ID каналов и ID целевого участника (бота)
+    CONFIG = {'IDS':
+              [1212498198200062014, 1219273496371396681, 1342471984671625226, 1348216089825509450, 1348216377789382656],
+              'BOTS': [1225008116048072754], 'TOKEN': os.environ['DISCORD_BOT_TOKEN']}
     USER_AGENT = {'User-Agent': 'D-V-C; iluvatar@tools.wmflabs.org; python3.11; requests'}
     Intents = discord.Intents.default()
     Intents.members, Intents.message_content = True, True
@@ -112,10 +114,10 @@ if __name__ == '__main__':
                 messages = channel.history(limit=30, oldest_first=False)
                 async for msg in messages:
                     if msg.author.id in CONFIG['BOTS'] and len(msg.embeds) > 0:
-                        lang = 'ru' if 'ru.wikipedia.org' in msg.embeds[0].url else 'uk'
+                        domain = domain_regexp.search(msg.embeds[0].url).group()
                         rev_id = msg.embeds[0].url.split('diff=')[1] if 'ilu=' not in msg.embeds[0].url else (
                             msg.embeds[0].url.split('ilu='))[1]
-                        api_url = f'https://{lang}.wikipedia.org/w/api.php'
+                        api_url = f'https://{domain}/w/api.php'
                         status = await revision_check(api_url, rev_id, msg.embeds[0].title, session)
                         if not status:
                             status = await flagged_check(api_url, msg.embeds[0].title, rev_id, session)
