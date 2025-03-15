@@ -2,7 +2,6 @@
 
 import asyncio
 import os
-import subprocess
 import json
 import logging
 import time
@@ -26,7 +25,9 @@ BEARER_TOKEN = os.environ['BEARER_TOKEN']
 
 # Целевой сервер, ID каналов с потоками, ID бота, ID ботов-источников, ID канала с командами,
 # ID сообщения со списком откатывающих, ID канала с источником, список администраторов бота.
-CONFIG = {'SERVER': [1044474820089368666], 'IDS': [1212498198200062014, 1219273496371396681, 1342471984671625226],
+CONFIG = {'SERVER': [1044474820089368666],
+          'IDS': [1212498198200062014, 1219273496371396681, 1342471984671625226,
+                                       1348216089825509450, 1348216377789382656],
           'BOT': 1225008116048072754, 'SOURCE_BOTS': [1237362558046830662, 1299324425878900818],
           'BOTCOMMANDS': 1212507148982947901, 'ROLLBACKERS': 1237790591044292680, 'SOURCE': 1237345566950948867,
           'ADMINS': [352826965494988822, 512545053223419924, 223219998745821194]}
@@ -111,8 +112,9 @@ select_options_undo = {'1':  ['Нарушение АП',
                               '[[ВП:ПРОРОК|опис можливих подій, які ще не відбулися]]',
                               '[[Вікіпедыя:Чым не з’яўляецца Вікіпедыя#'
                               'Вікіпедыя — не кававая гушча|апісанне падзей, якія яшчэ не здарыліся]]'],
-                       '16': ['своя причина', '', '', ''],  # не менять название пункта без изменения в callback
-                       '17': ['Закрыть', '', '', '']  # не менять название пункта без изменения в callback
+                       '16': ['Троллинг', 'троллинг', 'тролінг', 'тролінг'],
+                       '17': ['своя причина', '', '', ''],  # не менять название пункта без изменения в callback
+                       '18': ['Закрыть', '', '', '']  # не менять название пункта без изменения в callback
                        }
 
 options_undo, options_rfd = [], []
@@ -148,9 +150,9 @@ undo_prefix = ['Бот: отмена правки [[Special:Contribs/$author|$au
 rfd_summary = ['Бот: Номинация на КБУ по запросу [[User:$actor|$actor]]',
                'Номінація на швидке вилучення за запитом [[User:$actor|$actor]]',
                'Бот: намінацыя на хуткае выдаленне па запыце [[User:$actor|$actor]]']
-rollback_summary= ['Бот: откат правок [[Special:Contribs/$2|$2]] по запросу [[User:$1|$1]]',
-                   'Бот: відкинуто редагування [[Special:Contribs/$2|$2]] за запитом [[User:$1|$1]]',
-                   'Бот: хуткі адкат правак [[Special:Contribs/$2|$2]] па запыце [[User:$1|$1]]']
+rollback_summary = ['Бот: откат правок [[Special:Contribs/$2|$2]] по запросу [[User:$1|$1]]',
+                    'Бот: відкинуто редагування [[Special:Contribs/$2|$2]] за запитом [[User:$1|$1]]',
+                    'Бот: хуткі адкат правак [[Special:Contribs/$2|$2]] па запыце [[User:$1|$1]]']
 
 class ReasonUndo(Modal, title='Причина'):
     """Строка ввода причины отмены."""
@@ -319,12 +321,26 @@ def get_lang(url: str) -> str:
         return 'ru'
     elif 'uk.wikipedia.org' in url:
         return 'uk'
-    else:
+    elif 'be.wikipedia.org' in url:
         return 'be'
+    elif 'wikidata.org' in url:
+        return 'wd'
+    elif 'commons.wikimedia.org' in url:
+        return 'c'
+
+
+def get_domain(lang: str) -> str:
+    """Получение домена языкового раздела из кода."""
+    if lang == 'wd':
+        return 'wikidata.org'
+    elif lang == 'c':
+        return 'commons.wikimedia.org'
+    else:
+        return lang + '.wikipedia.org'
 
 def get_lang_number(lang: str) -> int:
     """Получение индекса раздела."""
-    return {'ru': 0, 'uk': 1, 'be': 2}[lang]
+    return {'ru': 0, 'uk': 1, 'be': 2, 'wd': 3, 'c': 3}[lang]
 
 
 def get_trigger(embed: Embed) -> str:
@@ -357,12 +373,15 @@ def get_data(interaction: discord.Interaction):
 
 def get_view_buttons(embed: Embed = None, disable: bool = False) -> View:
     """Формирование набора компонентов."""
-    t = open(__file__, 'r').read()
+    if embed is not None and not 'wikipedia' in embed.url:
+        return View(timeout=None)
 
     revert_disabled = True if embed is not None and 'ilu=' not in embed.url else disable
-    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback", disabled=revert_disabled)
+    btn_rollback = Button(emoji='⏮️', style=discord.ButtonStyle.danger, custom_id="btn_rollback",
+                          disabled=revert_disabled)
     btn_rfd = Button(emoji='🗑️', style=discord.ButtonStyle.danger, custom_id="btn_rfd", disabled=disable)
-    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo", disabled=revert_disabled)
+    btn_undo = Button(emoji='↪️', style=discord.ButtonStyle.blurple, custom_id="btn_undo",
+                      disabled=revert_disabled)
     btn_good = Button(emoji='👍🏻', style=discord.ButtonStyle.green, custom_id="btn_good", disabled=disable)
     btn_bad = Button(emoji='💩', style=discord.ButtonStyle.green, custom_id="btn_bad", disabled=disable)
 
@@ -830,22 +849,22 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
     rev_id = diff_url.split('ilu=')[1]
     session = aiohttp.ClientSession(headers=USER_AGENT)
     try:
-        r = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, title, session)
+        r = await revision_check(f'https://{get_domain(lang)}/w/api.php', rev_id, title, session)
     except Exception as e:
         logging.error(f'Error 36.0: {e}')
         await session.close()
     else:
         if not r:
-            r = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', title, rev_id, session)
+            r = await flagged_check(f'https://{get_domain(lang)}/w/api.php', title, rev_id, session)
         if r:
             await session.close()
             return ['Такой страницы уже не существует, правки были откачены или страница отпатрулирована.',
-                    f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
+                    f'[{title}](<https://{get_domain(lang)}/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
     data = {'action': 'query', 'prop': 'revisions', 'rvslots': '*', 'rvprop': 'ids|timestamp', 'rvlimit': 500,
             'rvendid': rev_id, 'rvuser': get_name_from_embed(lang, embed.author.url), 'titles': title,
             'format': 'json', 'utf8': 1, 'uselang': 'ru'}
     try:
-        r = await session.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
+        r = await session.post(url=f'https://{get_domain(lang)}/w/api.php', data=data)
         r = await r.json()
     except Exception as e:
         logging.error(f'Error 37.0: {e}')
@@ -854,17 +873,17 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
         if '-1' in r['query']['pages']:
             await session.close()
             return ['Такой страницы уже не существует.',
-                    f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
+                    f'[{title}](<https://{get_domain(lang)}/wiki/{title.replace(" ", "_")}>) (ID: {rev_id})']
         page_id = str(list(r['query']["pages"].keys())[0])
         if 'revisions' in r['query']['pages'][page_id] and len(r['query']['pages'][page_id]['revisions']) > 0:
             rev_id = r['query']['pages'][page_id]['revisions'][0]['revid']
-            api_url = f'https://{lang}.wikipedia.org/w/api.php'
+            api_url = f'https://{get_domain(lang)}/w/api.php'
             headers = {'Authorization': f'Bearer {BEARER_TOKEN}', 'User-Agent': 'Reimu; iluvatar@tools.wmflabs.org'}
             session_with_auth = aiohttp.ClientSession(headers=headers)
 
             if action_type == 'rollback' and lang == 'be':  # в bewiki нет флага откатывающего
                 action_type = 'undo'
-                reason = f'{undo_prefix[2].replace("$actor", actor)} {select_options_undo["1"][3]}'
+                reason = rollback_summary[get_lang_number(lang)].replace('$1', actor).replace('$2', get_name_from_embed(lang, embed.author.url))
 
             if action_type == 'rollback':
                 rollback_comment = rollback_summary[get_lang_number(lang)].replace('$1', actor)
@@ -882,16 +901,16 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                             'user': get_name_from_embed(lang, embed.author.url), 'utf8': 1, 'watchlist': 'nochange',
                             'summary': rollback_comment, 'token': rollback_token, 'uselang': 'ru'}
                     try:
-                        r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
+                        r = await session_with_auth.post(url=f'https://{get_domain(lang)}/w/api.php', data=data)
                         r = await r.json()
                     except Exception as e:
                         logging.error(f'Error 39.0: {e}')
                     else:
                         return [r['error']['info'],
-                                f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
+                                f'[{title}](<https://{get_domain(lang)}/wiki/{title.replace(" ", "_")}>) '
                                 f'(ID: {rev_id})'] if 'error' in r else [
                             'Success',
-                            f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r["rollback"]["revid"]}>)']
+                            f'[{title}](<https://{get_domain(lang)}/w/index.php?diff={r["rollback"]["revid"]}>)']
                     finally:
                         await session.close()
                         await session_with_auth.close()
@@ -900,7 +919,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                         'rvstartid': rev_id, 'rvexcludeuser': get_name_from_embed(lang, embed.author.url),
                         'titles': title, 'format': 'json', 'utf8': 1, 'uselang': 'ru'}
                 try:
-                    r = await session.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
+                    r = await session.post(url=f'https://{get_domain(lang)}/w/api.php', data=data)
                     r = await r.json()
                     check_revs = len(r['query']['pages'][page_id]['revisions'])
                 except Exception as e:
@@ -910,7 +929,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                         await session_with_auth.close()
                         await session.close()
                         return ['Все версии принадлежат одному участнику', f'[{title}]'
-                                                                           f'(<https://{lang}.wikipedia.org/wiki/'
+                                                                           f'(<https://{get_domain(lang)}/wiki/'
                                                                            f'{title.replace(" ", "_")}>) (ID: '
                                                                            f'{rev_id})']
                     parent_id = r['query']['pages'][page_id]['revisions'][0]['revid']
@@ -931,7 +950,7 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                                 'undoafter': parent_id, 'watchlist': 'nochange', 'nocreate': 1, 'summary': reason,
                                 'token': edit_token, 'utf8': 1, 'uselang': 'ru'}
                         try:
-                            r = await session_with_auth.post(url=f'https://{lang}.wikipedia.org/w/api.php', data=data)
+                            r = await session_with_auth.post(url=f'https://{get_domain(lang)}/w/api.php', data=data)
                             r = await r.json()
                         except Exception as e:
                             logging.error(f'Error 42.0: {e}')
@@ -940,10 +959,10 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
                                     'revid' not in r['edit']):
                                 logging.debug(r)
                                 return  # debug
-                            return [r['error']['info'], f'[{title}](<https://{lang}'
-                                                        f'.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
+                            return [r['error']['info'], f'[{title}](<https://{get_domain(lang)}'
+                                                        f'/wiki/{title.replace(" ", "_")}>) '
                                                         f'(ID: {rev_id})'] if 'error' in r else \
-                                ['Success', f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff='
+                                ['Success', f'[{title}](<https://{get_domain(lang)}/w/index.php?diff='
                                             f'{r["edit"]["newrevid"]}>)', title]
                         finally:
                             await session.close()
@@ -956,14 +975,14 @@ async def do_rollback(embed, actor, action_type='rollback', reason=''):
 
 def get_name_from_embed(lang: str, link: str) -> str:
     """Получение имени пользователя из ссылки на вклад."""
-    return unquote(link.replace(f'https://{lang}.wikipedia.org/wiki/special:contribs/', ''))
+    return unquote(link.replace(f'https://{get_domain(lang)}/wiki/special:contribs/', ''))
 
 
 async def do_rfd(embed: Embed, rfd: str, summary: str) -> list[str]:
     """Номинация на быстрое удаление."""
     diff_url, title = embed.url, embed.title
     lang = get_lang(diff_url)
-    api_url = f'https://{lang}.wikipedia.org/w/api.php'
+    api_url = f'https://{get_domain(lang)}/w/api.php'
     headers = {'Authorization': f'Bearer {BEARER_TOKEN}', 'User-Agent': 'Reimu; iluvatar@tools.wmflabs.org'}
 
     session = aiohttp.ClientSession(headers=headers)
@@ -988,9 +1007,9 @@ async def do_rfd(embed: Embed, rfd: str, summary: str) -> list[str]:
             if 'error' not in r and 'edit' in r and 'newrevid' not in r['edit'] and 'revid' not in r['edit']:
                 logging.debug(r)
                 return []  # debug
-            return [r['error']['info'], f'[{title}](<https://{lang}.wikipedia.org/wiki/{title.replace(" ", "_")}>) '
+            return [r['error']['info'], f'[{title}](<https://{get_domain(lang)}/wiki/{title.replace(" ", "_")}>) '
                                         f'(ID: {title})'] if 'error' in r \
-                else ['Success', f'[{title}](<https://{lang}.wikipedia.org/w/index.php?diff={r["edit"]["newrevid"]}>)',
+                else ['Success', f'[{title}](<https://{get_domain(lang)}/w/index.php?diff={r["edit"]["newrevid"]}>)',
                       title]
     return []
 
@@ -1019,11 +1038,9 @@ async def on_message(msg):
 
     # не откачена ли
     session = aiohttp.ClientSession(headers=USER_AGENT)
-    is_reverted = await revision_check(f'https://{lang}.wikipedia.org/w/api.php', rev_id, msg.embeds[0].title,
-                                       session)
+    is_reverted = await revision_check(f'https://{get_domain(lang)}/w/api.php', rev_id, msg.embeds[0].title, session)
     if not is_reverted:
-        is_reverted = await flagged_check(f'https://{lang}.wikipedia.org/w/api.php', msg.embeds[0].title, rev_id,
-                                          session)
+        is_reverted = await flagged_check(f'https://{get_domain(lang)}/w/api.php', msg.embeds[0].title, rev_id, session)
     await session.close()
     if is_reverted:
         try:
