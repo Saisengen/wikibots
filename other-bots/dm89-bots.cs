@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
@@ -11,11 +13,46 @@ class MyBot : Bot
 {
     static string[] creds;
     static Site site;
+    static HttpClient Site1;
+    static HttpClient Site(string login, string password)
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        client.DefaultRequestHeaders.Add("User-Agent", login);
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        var doc = new XmlDocument();
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        if (!result.IsSuccessStatusCode)
+            return null;
+        return client;
+    }
+    static void Save(HttpClient site, string title, string text, string comment)
+    {
+        var doc = new XmlDocument();
+        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        if (!result.IsSuccessStatusCode)
+            return;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action");
+        request.Add(new StringContent(title), "title");
+        request.Add(new StringContent(text), "text");
+        request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token");
+        request.Add(new StringContent("xml"), "format");
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+        if (!result.ToString().Contains("uccess"))
+            Console.WriteLine(result.ToString());
+    }
     static void stat_bot()
     {
         DateTime utcNow = DateTime.UtcNow;
-        Page pn = new Page(site, "Участник:IncubatorBot/TalkStat/" + utcNow.ToString("yyyyMM"));
-        Page inc = new Page(site, "Участник:IncubatorBot/IncubatorStat/" + utcNow.ToString("yyyyMM"));
+        Page pn = new Page(site, "Участник:IncubatorBot/TalkStat");
+        Page inc = new Page(site, "Участник:IncubatorBot/IncubatorStat");
         Page incmem = new Page(site, "Проект:Инкубатор/Участники");
         Page vos = new Page(site, "Википедия:К восстановлению");
         vos.Load();
@@ -23,9 +60,9 @@ class MyBot : Bot
         inc.Load();
         incmem.Load();
         if (!pn.Exists())
-            pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n<noinclude>|}</noinclude>";
+            pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n|}";
         if (!inc.Exists())
-            inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n<noinclude>|}</noinclude>";
+            inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n|}";
 
         string[] cats = {"Википедия:Статьи для срочного улучшения","Статьи на улучшении более года","Статьи на улучшении более полугода","Статьи на улучшении более 90 дней","Статьи на улучшении более 30 дней",
         "Статьи на улучшении менее 30 дней","Википедия:Незакрытые обсуждения статей для улучшения","Википедия:Кандидаты на удаление","Википедия:Незакрытые обсуждения удаления страниц",
@@ -75,11 +112,11 @@ class MyBot : Bot
 
         string stat = "|- align=\"right\"\n| {{subst:#time: j.m.Y}} \n|" + n[0] + "||" + n[1] + "||" + n[2] + "||" + n[3] + "||" + n[4] + "||" + n[5] + "||" + n[6] + "\n|" + n[7] + "||" + n[8] + "\n|" +
             n[9] + "||" + n[10] + "\n|" + n[11] + "||" + n[12] + "\n|" + n[13] + "||" + n[14] + "\n|" + vos_p + "||" + n[15] + "\n";
-        pn.text = pn.text.Insert(pn.text.LastIndexOf("<noinclude>|}</noinclude>"), stat);
+        pn.text = pn.text.Insert(pn.text.LastIndexOf("|}"), stat);
         pn.Save("обновление статистики", true);
 
         string incstat = "|- align=\"right\"\n| {{subst:#time: j.m.Y}} \n|" + n[16] + "||" + n[17] + "\n|" + n[18] + "\n|" + n[19] + "||" + n[20] + "||" + n[21] + "\n|" + incmen + "\n";
-        inc.text = inc.text.Insert(inc.text.IndexOf("<noinclude>|}</noinclude>"), incstat);
+        inc.text = inc.text.Insert(inc.text.IndexOf("|}"), incstat);
         inc.Save("обновление статистики", true);
     }
     static void inc_check_bot()
@@ -435,15 +472,6 @@ class MyBot : Bot
                 }
             }
         }
-    }
-    static void null_editor()
-    {
-        foreach (string cat in "Википедия:Статьи с неактуальным шаблоном Не переведено|Статьи со ссылками на отсутствующие файлы".Split('|'))
-            foreach (Page n in new MyBot().GetCategoryMembersAll(site, cat))
-            {
-                n.Load();
-                n.Save(n.text + '\n');
-            }
     }
     static void remind_bot()
     {
@@ -1155,26 +1183,16 @@ class MyBot : Bot
                     allpages.Add(new Page(site, rdr.GetAttribute("title")));
         return allpages;
     }
-    public PageList GetCategoryMembersAll(Site site, string cat)
-    {
-        PageList allpages = new PageList(site);
-        XmlTextReader rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:" + HttpUtility.UrlEncode(cat) + "&format=xml")));
-        while (rdr.Read())
-            if (rdr.NodeType == XmlNodeType.Element)
-                if (rdr.Name == "cm")
-                    allpages.Add(new Page(site, rdr.GetAttribute("title")));
-        return allpages;
-    }
     public static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+        //Site1 = Site(creds[0], creds[1]);
         inc_check_bot();
         img_inc_bot();
         main_inc_bot();
-        stat_bot();
-        null_editor();
         remind_bot();
         mini_recenz();
+        stat_bot();
     }
 }
