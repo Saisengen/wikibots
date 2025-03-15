@@ -213,20 +213,17 @@ class Program
         Program.lang = lang;
         new_timestamp_saved = false; new_id_saved = false;
         var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2&rcend=" +
-            langdata[lang].last_checked_edit_time + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new&rclimit=max").Result);
+            langdata[lang].last_checked_edit_time + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
         foreach (var edit in edits.query.recentchanges)
-            if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user))
-            {
-                initialize_edit_data(edit);
-                if (!whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !lw_is_triggered(edit))
+            if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !author_has_many_edits(edit) && !whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) &&
+                !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit))
                 {
                     generate_all_ins_del();
                     if (!deletion_is_triggered() && !addition_is_triggered(all_ins))
                         check_replaces(edit);
                 }
-            }
     }
-    static void initialize_edit_data(Recentchange edit)
+    static bool author_has_many_edits(Recentchange edit)
     {
         user = edit.user;
         title = edit.title.Replace('_', ' ');
@@ -235,7 +232,6 @@ class Program
         comment = edit.comment;
         diff_size = edit.newlen - edit.oldlen;
         pageid = edit.pageid;
-
         try
         {
             editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
@@ -243,8 +239,10 @@ class Program
         }
         catch { editcount = 0; }
         if (editcount > 1000)
+        {
             trusted_users.Add(user);
-
+            return true;
+        }
         if (!new_timestamp_saved)
         {
             langdata[lang].last_checked_edit_time = edit.timestamp.ToString("yyyy-MM-ddTHH:mm:ss.000Z");
@@ -255,6 +253,7 @@ class Program
             langdata[lang].last_checked_id = newid;
             new_id_saved = true;
         }
+        return false;
     }
     static bool tags_is_triggered(Recentchange edit)
     {
