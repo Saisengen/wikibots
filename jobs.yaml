@@ -1,14 +1,7 @@
-# hourly
 - name: exclude-deleted-files
   command: mono /data/project/mbh/bots/exclude-deleted-files.exe
   image: tf-mono68
   schedule: "18 * * * *"
-  emails: onfailure
-
-- name: commons-delinker
-  command: mono /data/project/mbh/bots/mbh-delinker.exe
-  image: tf-mono68
-  schedule: "28 * * * *"
   emails: onfailure
 
 # daily
@@ -44,48 +37,6 @@
 #  emails: onfailure
 #  mem: 4Gi
 
-- name: apat-for-filemovers
-  command: mono /data/project/mbh/bots/apat-for-filemovers.exe
-  image: tf-mono68
-  schedule: "38 2 1 * *"
-  emails: onfailure
-
-- name: popular-scripts
-  command: mono /data/project/mbh/bots/popular_userscripts.exe
-  image: tf-mono68
-  schedule: "45 0 1 * *"
-  emails: onfailure
-
-- name: likes
-  command: mono /data/project/mbh/bots/thanksgivers.exe
-  image: tf-mono68
-  schedule: "48 1 1 * *"
-  emails: onfailure
-
-- name: trans-ns-redirs
-  command: mono /data/project/mbh/bots/incorrect_redirects.exe
-  image: tf-mono68
-  schedule: "14 3 1 * *"
-  emails: onfailure
-
-- name: page-watchers
-  command: mono /data/project/mbh/bots/page-watchers.exe
-  image: tf-mono68
-  schedule: "23 1 1 * *"
-  emails: onfailure
-
-- name: wd-wo-ruwiki
-  command: mono /data/project/mbh/bots/best_wd_items_wo_ruwiki.exe
-  image: tf-mono68
-  schedule: "14 2 1 * *"
-  emails: onfailure
-
-- name: pageview-peaks
-  command: mono /data/project/mbh/bots/pageview_peaks.exe
-  image: tf-mono68
-  schedule: "51 6 1 * *"
-  emails: onfailure
-
 #- name: extlinks-counter
 #  command: mono /data/project/mbh/bots/extlinks_count.exe
 #  image: tf-mono68
@@ -93,41 +44,10 @@
 #  emails: onfailure
 #  mem: 16Gi
 
-# user activity stats--------------------------------------------------------------------------------------------------------------------
-- name: user-activity-stats
-  command: mono /data/project/mbh/bots/user-activity-stats.exe
+- name: monthly-job
+  command: mono /data/project/mbh/bots/monthly_job.exe
   image: tf-mono68
   schedule: "21 0 * * *"
-  emails: onfailure
-
-- name: page-creators
-  command: mono /data/project/mbh/bots/page_creators.exe
-  image: tf-mono68
-  schedule: "0 2 10 * *"
-  emails: onfailure
-
-- name: summary-stats
-  command: mono /data/project/mbh/bots/summary_stats.exe
-  image: tf-mono68
-  schedule: "16 8 1 * *"
-  emails: onfailure
-
-- name: adminstats
-  command: mono /data/project/mbh/bots/adminstats.exe
-  image: tf-mono68
-  schedule: "33 2 1 * *"
-  emails: onfailure
-
-- name: botstats
-  command: mono /data/project/mbh/bots/botstats.exe
-  image: tf-mono68
-  schedule: "12 1 1 * *"
-  emails: onfailure
-
-- name: pats-awarding
-  command: mono /data/project/mbh/bots/patstats.exe
-  image: tf-mono68
-  schedule: "38 1 1 * *"
   emails: onfailure
 
 # permanent
