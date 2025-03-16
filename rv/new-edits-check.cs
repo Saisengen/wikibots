@@ -8,6 +8,7 @@ using System.Threading;
 using System.Xml;
 using System.Text;
 using Newtonsoft.Json;
+using System.Linq;
 public enum type
 {
     ores, lwa, lwm, replace, addition, tag, deletion
@@ -68,6 +69,11 @@ public class langdata_element
     public string last_checked_edit_time, notifying_page_name, domain;
     public Int64 last_checked_id;
 }
+public class pattern_info
+{
+    public Regex regex;
+    public bool only_content, not_uk;
+}
 class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, lang, first_another_author_edit_id,
@@ -89,9 +95,8 @@ class Program
         { "c", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "commons.wikimedia" } },
         { "d", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "wikidata" } } };
     static HashSet<string> suspicious_users = new HashSet<string>(), trusted_users = new HashSet<string>();
-    static Dictionary<string, List<Regex>> patterns = new Dictionary<string, List<Regex>>();
+    static List<pattern_info> patterns = new List<pattern_info>();
     static List<rgxpair> replaces = new List<rgxpair>();
-    static bool new_timestamp_saved, new_id_saved;
     static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, pageid;
     static Int64 newid, oldid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
@@ -124,7 +129,6 @@ class Program
         foreach (string lang in langdata.Keys)
         {
             site.Add(lang, Site(lang, settings[0].Split(':')[0], settings[0].Split(':')[1]));
-            patterns.Add(lang, new List<Regex>());
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
                 if (lang.Length == 1 && (flag == "editor" || flag == "autoreview"))
@@ -191,29 +195,24 @@ class Program
     }
     static void update_patterns()
     {
-        foreach (string lang in langdata.Keys)
-        {
-            patterns[lang].Clear();
-            foreach (string patterns_file_name in new string[] { "patterns-common", "patterns-" + lang })
-                try
-                {
-                    var pattern_source = new StreamReader(patterns_file_name + ".txt").ReadToEnd().Split('\n');
-                    bool ignorecase = false;
-                    foreach (var pattern in pattern_source)
-                        if (pattern == "--------")
-                            ignorecase = true;
-                        else if (pattern != "")
-                            patterns[lang].Add(ignorecase ? new Regex(pattern, RegexOptions.IgnoreCase) : new Regex(pattern));
-                }
-                catch { continue; }
-        }
+        patterns.Clear();
+        var patterns_list = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
+        foreach (var pattern in patterns_list)
+            if (pattern.Contains('靈'))
+            {
+                string pattern_body = pattern.Split('靈')[0];
+                string flags = pattern.Split('靈')[1];
+                bool ignorecase = flags[0] == '1';
+                bool not_uk = flags[1] == '1';
+                bool only_content = flags[2] == '1';
+                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk } );
+            }
     }
     static void check(string lang)
     {
         Program.lang = lang;
-        new_timestamp_saved = false; new_id_saved = false;
-        var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2&rcend=" +
-            langdata[lang].last_checked_edit_time + "&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
+        var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2" +
+            "&rcstart=" + langdata[lang].last_checked_edit_time + "&rcdir=newer&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
         foreach (var edit in edits.query.recentchanges)
             if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !author_has_many_edits(edit) && !whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) &&
                 !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit))
@@ -243,16 +242,8 @@ class Program
             trusted_users.Add(user);
             return true;
         }
-        if (!new_timestamp_saved)
-        {
-            langdata[lang].last_checked_edit_time = edit.timestamp.ToString("yyyy-MM-ddTHH:mm:ss.000Z");
-            new_timestamp_saved = true;
-        }
-        if (!new_id_saved)
-        {
-            langdata[lang].last_checked_id = newid;
-            new_id_saved = true;
-        }
+        langdata[lang].last_checked_edit_time = edit.timestamp.ToString("yyyy-MM-ddTHH:mm:ss.000Z");
+        langdata[lang].last_checked_id = newid;
         return false;
     }
     static bool tags_is_triggered(Recentchange edit)
@@ -319,10 +310,12 @@ class Program
     {
         try
         {
-            foreach (var pattern in patterns[lang])
-                if (pattern.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.Match(text).Value))
+            foreach (var pattern in patterns)
+                if (pattern.not_uk && lang == "uk")
+                    continue;
+                else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value))
                 {
-                    post_suspicious_edit(pattern.Match(text).Value, type.addition);
+                    post_suspicious_edit(pattern.regex.Match(text).Value, type.addition);
                     return true;
                 }
         }
