@@ -20,7 +20,8 @@ class creators_record
 }
 class redir
 {
-    public string src_title, dest_title, src_ns, dest_ns;
+    public string src_title, dest_title;
+    public int src_ns, dest_ns;
     public override string ToString()
     {
         return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title;
@@ -666,7 +667,7 @@ class Program
                         if (rdr.Name == "r")
                         {
                             idset += '|' + rdr.GetAttribute("fromid");
-                            temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = rdr.GetAttribute("ns") });
+                            temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = Convert.ToInt16(rdr.GetAttribute("ns")) });
                         }
                 }
                 if (idset.Length != 0)
@@ -679,9 +680,11 @@ class Program
                         if (rdr.Name == "page")
                         {
                             var id = rdr.GetAttribute("pageid");
-                            if (temp[id].dest_ns != rdr.GetAttribute("ns") || temp[id].dest_ns == "6" || temp[id].dest_ns == "14")
-                                if (!(sameuser(rdr.GetAttribute("title"), temp[id].dest_title) && ((temp[id].dest_ns == "3" && rdr.GetAttribute("ns") == "2") || (temp[id].dest_ns == "2" && rdr.GetAttribute("ns") == "3"))))//если не редиректы между ЛС и СО одного участника
-                                    redirs.Add(id, new redir() { src_ns = rdr.GetAttribute("ns"), src_title = rdr.GetAttribute("title"), dest_ns = temp[id].dest_ns, dest_title = temp[id].dest_title });
+                            int src_ns = Convert.ToInt16(rdr.GetAttribute("ns"));
+                            if (temp[id].dest_ns != src_ns || temp[id].dest_ns == 6 || temp[id].dest_ns == 14)
+                                if (!(sameuser(rdr.GetAttribute("title"), temp[id].dest_title) && ((temp[id].dest_ns == 3 && src_ns == 2) || (temp[id].dest_ns == 2 && src_ns == 3))) && 
+                                    !(src_ns == 4 && temp[id].dest_ns == 104))//если не редиректы между ЛС и СО одного участника и не ВП -> Проект
+                                    redirs.Add(id, new redir() { src_ns = src_ns, src_title = rdr.GetAttribute("title"), dest_ns = temp[id].dest_ns, dest_title = temp[id].dest_title });
                         }
                 }
             }
@@ -690,12 +693,11 @@ class Program
         var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
         foreach (var r in redirs)
         {
-            string sort_src_title = r.Value.src_ns == "0" ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
-            string sort_dest_title = r.Value.dest_ns == "0" ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
+            string sort_src_title = r.Value.src_ns == 0 ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
+            string sort_dest_title = r.Value.dest_ns == 0 ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
             result += "\n|-\n|data-sort-value=\"" + r.Value.src_ns + "-" + sort_src_title + "\"|[[:" + r.Value.src_title + "]]||data-sort-value=\"" + r.Value.dest_ns + "-" + sort_dest_title + "\"|[[:" + r.Value.dest_title + "]]";
         }
-        result += "\n|}";
-        Save(site, "ru", "u:MBH/incorrect redirects", result, "");
+        Save(site, "ru", "u:MBH/incorrect redirects", result + "\n|}", "");
     }
 
     static HashSet<string> invoking_pages = new HashSet<string>(), script_users = new HashSet<string>();
@@ -894,7 +896,6 @@ class Program
             { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
         var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
-        int status_update_freq = 100000;
         var creds = new StreamReader("p").ReadToEnd().Split('\n');
         foreach (var lang in new string[] { "ru", "kk" })
         {
@@ -928,10 +929,8 @@ class Program
                             disambs.Add(r.GetAttribute("pageid"));
                 }
             }
-            int c;
             foreach (int ns in new int[] { 0, 6, 10, 14 })
             {
-                c = 0;
                 cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
                 while (cont != null)
                 {
@@ -944,20 +943,12 @@ class Program
                             if (r.Name == "p")
                             {
                                 string pageid = r.GetAttribute("pageid");
-                                if (++c % status_update_freq == 0)
-                                    Console.WriteLine(ns + " " + c + " " + DateTime.Now);
                                 string user = "";
-                                try
-                                {
-                                    using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid).Result)))
-                                        while (rr.Read())
-                                            if (rr.Name == "rev")
-                                                user = rr.GetAttribute("user");
-                                }
-                                catch
-                                {
-                                    continue;
-                                }
+                                command = new MySqlCommand("select actor_name from revision join actor on rev_actor=actor_id where rev_page=" + pageid + " order by rev_timestamp asc limit 1;", connect);
+                                rdr = command.ExecuteReader();
+                                while (rdr.Read())
+                                    user = rdr.GetString("actor_name");
+                                rdr.Close();
                                 if (user == null || user == "")
                                     continue;
                                 if (!users.ContainsKey(user))
@@ -978,7 +969,6 @@ class Program
                     }
                 }
             }
-            c = 0;
             cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=redirects&apnamespace=0";
             while (cont != null)
             {
@@ -991,21 +981,13 @@ class Program
                         if (r.Name == "p")
                         {
                             string pageid = r.GetAttribute("pageid");
-                            if (++c % status_update_freq == 0)
-                                Console.WriteLine("0r " + c + " " + DateTime.Now);
                             string user = "";
-                            try
-                            {
-                                using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=user&rvlimit=1&rvdir=newer&pageids=" + pageid).Result)))
-                                    while (rr.Read())
-                                        if (rr.Name == "rev")
-                                            user = rr.GetAttribute("user");
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                            if (user == null)
+                            command = new MySqlCommand("select actor_name from revision join actor on rev_actor=actor_id where rev_page=" + pageid + " order by rev_timestamp asc limit 1;", connect);
+                            rdr = command.ExecuteReader();
+                            while (rdr.Read())
+                                user = rdr.GetString("actor_name");
+                            rdr.Close();
+                            if (user == null || user == "")
                                 continue;
                             if (!users.ContainsKey(user))
                                 users.Add(user, new creators_record());
@@ -1370,7 +1352,7 @@ class Program
         likes_stats();
         summary_stats();
         popular_wd_items_without_ru();
-        pageview_peaks();
         page_creators();
+        pageview_peaks();
     }
 }
