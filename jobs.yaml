@@ -1,7 +1,7 @@
 - name: exclude-deleted-files
   command: mono /data/project/mbh/bots/exclude-deleted-files.exe
   image: tf-mono68
-  schedule: "18 * * * *"
+  schedule: "3 * * * *"
   emails: onfailure
 
 # daily
@@ -28,21 +28,6 @@
   image: tf-mono68
   schedule: "58 3 * * *"
   emails: onfailure
-
-# monthly
-#- name: spam-tagging
-#  command: mono /data/project/mbh/bots/spam.exe
-#  image: tf-mono68
-#  schedule: "34 10 3 * *"
-#  emails: onfailure
-#  mem: 4Gi
-
-#- name: extlinks-counter
-#  command: mono /data/project/mbh/bots/extlinks_count.exe
-#  image: tf-mono68
-#  schedule: "14 3 1 * *"
-#  emails: onfailure
-#  mem: 16Gi
 
 - name: monthly-job
   command: mono /data/project/mbh/bots/monthly_job.exe
