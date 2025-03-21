@@ -84,10 +84,10 @@ class Program
     static double ores_value, lw_value, ores_limit = 1;
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
         "multilingual", limit = 1 } } };
-    static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), div_rgx = new Regex(@"</?div[^>]*>"),ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"),
-        ins_rgx = new Regex(@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
+    static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"), ins_rgx = new Regex
+        (@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), a_rgx = new Regex(@"</?a[^>]*>"), span_rgx = new Regex(@"</?span[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
+        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
     static Dictionary<string, langdata_element> langdata = new Dictionary<string, langdata_element>() {
         { "ru", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { "uk", new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
@@ -97,7 +97,7 @@ class Program
     static HashSet<string> suspicious_users = new HashSet<string>(), trusted_users = new HashSet<string>();
     static List<pattern_info> patterns = new List<pattern_info>();
     static List<rgxpair> replaces = new List<rgxpair>();
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, pageid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, pageid, ns;
     static Int64 newid, oldid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replace, new color(0, 255, 255) }, { type.deletion, new color(255, 255, 255) } };
@@ -198,15 +198,30 @@ class Program
         patterns.Clear();
         var patterns_list = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
         foreach (var pattern in patterns_list)
-            if (pattern.Contains('靈'))
-            {
-                string pattern_body = pattern.Split('靈')[0];
-                string flags = pattern.Split('靈')[1];
-                bool ignorecase = flags[0] == '1';
-                bool not_uk = flags[1] == '1';
-                bool only_content = flags[2] == '1';
-                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk } );
-            }
+            if (pattern == "")
+                continue;
+            else switch (pattern.Split('/').Length)
+                {
+                    case 1:
+                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false });
+                        break;
+                    case 2:
+                        {
+                            {
+                                string pattern_body = pattern.Split('/')[0];
+                                string flags = pattern.Split('/')[1];
+                                bool ignorecase = flags[0] == '0';
+                                bool not_uk = flags[1] == '1';
+                                bool only_content = flags[2] == '1';
+                                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk });
+                            }
+                            break;
+                        }
+                    default:
+                        Console.WriteLine("Паттерн " + pattern + " содержит более одного знака /");
+                        continue;
+                }
+                
     }
     static void check(string lang)
     {
@@ -231,6 +246,7 @@ class Program
         comment = edit.comment;
         diff_size = edit.newlen - edit.oldlen;
         pageid = edit.pageid;
+        ns = edit.ns;
         try
         {
             editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
@@ -311,7 +327,7 @@ class Program
         try
         {
             foreach (var pattern in patterns)
-                if (pattern.not_uk && lang == "uk")
+                if ((pattern.not_uk && lang == "uk") || (pattern.only_content && (ns % 2 == 1 || ns == 4 || ns == 100 || ns == 104 || ns == 106)))
                     continue;
                 else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value))
                 {
@@ -384,7 +400,7 @@ class Program
     static void generate_visible_diff()
     {
         string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
-        diff_text = empty_ins_rgx.Replace(empty_del_rgx.Replace(div_rgx.Replace(a_rgx.Replace(span_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), ""), ""), "")
+        diff_text = trash_tags_rgx.Replace(empty_del_rgx.Replace(empty_ins_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), "")
             .Replace("\\n", "\n").Replace("\\\"", "\"").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
         strings_with_changes = "";
         foreach (string str in diff_text.Split('\n'))
