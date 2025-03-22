@@ -4,7 +4,6 @@
   schedule: "3 * * * *"
   emails: onfailure
 
-# daily
 - name: everyday-job
   command: mono /data/project/mbh/bots/everyday_job.exe
   image: tf-mono68
@@ -17,12 +16,6 @@
   schedule: "48 0 * * *"
   emails: onfailure
 
-#- name: removeqid
-#  command: mono /data/project/mbh/bots/removeqid.exe
-#  image: tf-mono68
-#  schedule: "29 0 * * *"
-#  emails: onfailure
-
 - name: sparql-sync
   command: /data/project/mbh/sparqlsync
   image: tf-mono68
@@ -32,10 +25,9 @@
 - name: monthly-job
   command: mono /data/project/mbh/bots/monthly_job.exe
   image: tf-mono68
-  schedule: "21 0 * * *"
+  schedule: "41 0 1 * *"
   emails: onfailure
 
-# permanent
 - name: file-renaming
   command: mono /data/project/mbh/bots/file-renaming.exe
   image: tf-mono68
