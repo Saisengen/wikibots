@@ -14,10 +14,6 @@ class most_edits_record
     public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index;
     public bool globalbot;
 }
-class creators_record
-{
-    public int art, redir, disamb, templ, cat, file;
-}
 class redir
 {
     public string src_title, dest_title;
@@ -896,12 +892,10 @@ class Program
             { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
         var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
-        var creds = new StreamReader("p").ReadToEnd().Split('\n');
-        foreach (var lang in new string[] { "ru", "kk" })
+        foreach (var lang in new string[] { "kk"/*, "ru"*/ })
         {
-            var disambs = new HashSet<string>();
-            var users = new Dictionary<string, creators_record>();
-            var bestusers = new Dictionary<string, creators_record>();
+            var pages = new Dictionary<string, string>();
+            Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(), bestusers = new Dictionary<string, Dictionary<string, int>>();
             var bots = new HashSet<string>();
             var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
@@ -926,10 +920,10 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
                     while (r.Read())
                         if (r.Name == "cm")
-                            disambs.Add(r.GetAttribute("pageid"));
+                            pages.Add(r.GetAttribute("pageid"), "d");
                 }
             }
-            foreach (int ns in new int[] { 0, 6, 10, 14 })
+            foreach (var ns in new string[] { "0", "6", "10", "14" })
             {
                 cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
                 while (cont != null)
@@ -943,28 +937,10 @@ class Program
                             if (r.Name == "p")
                             {
                                 string pageid = r.GetAttribute("pageid");
-                                string user = "";
-                                command = new MySqlCommand("select actor_name from revision join actor on rev_actor=actor_id where rev_page=" + pageid + " order by rev_timestamp asc limit 1;", connect);
-                                rdr = command.ExecuteReader();
-                                while (rdr.Read())
-                                    user = rdr.GetString("actor_name");
-                                rdr.Close();
-                                if (user == null || user == "")
-                                    continue;
-                                if (!users.ContainsKey(user))
-                                    users.Add(user, new creators_record());
-                                if (ns == 0)
-                                {
-                                    if (disambs.Contains(pageid))
-                                        users[user].disamb++;
-                                    else
-                                        users[user].art++;
-                                }
-                                else if (ns == 10)
-                                    users[user].templ++;
-                                else if (ns == 14)
-                                    users[user].cat++;
-                                else users[user].file++;
+                                if (ns != "0")
+                                    pages.Add(pageid, ns);
+                                else if (!pages.ContainsKey(pageid))
+                                    pages.Add(pageid, "0");
                             }
                     }
                 }
@@ -979,34 +955,52 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
                     while (r.Read())
                         if (r.Name == "p")
-                        {
-                            string pageid = r.GetAttribute("pageid");
-                            string user = "";
-                            command = new MySqlCommand("select actor_name from revision join actor on rev_actor=actor_id where rev_page=" + pageid + " order by rev_timestamp asc limit 1;", connect);
-                            rdr = command.ExecuteReader();
-                            while (rdr.Read())
-                                user = rdr.GetString("actor_name");
-                            rdr.Close();
-                            if (user == null || user == "")
-                                continue;
-                            if (!users.ContainsKey(user))
-                                users.Add(user, new creators_record());
-                            users[user].redir++;
-                        }
+                            pages.Add(r.GetAttribute("pageid"), "r");
                 }
             }
+
+            var requeststrings = new HashSet<string>();
+            string idset = ""; int c = 0;
+            foreach (var p in pages)
+            {
+                idset += "," + p.Key;
+                if (++c % 10 == 0)
+                {
+                    requeststrings.Add(idset.Substring(1));
+                    idset = "";
+                }
+            }
+            if (idset != "")
+                requeststrings.Add(idset.Substring(1));
+
+            foreach (var q in requeststrings)
+            {
+                command = new MySqlCommand("SELECT r.rev_page, a.actor_name FROM revision r JOIN actor a ON r.rev_actor = a.actor_id JOIN (SELECT rev_page, MIN(rev_timestamp) AS first_timestamp FROM " +
+                    "revision WHERE rev_page IN (" + q + ") GROUP BY rev_page) first_revisions ON r.rev_page = first_revisions.rev_page AND r.rev_timestamp = first_revisions.first_timestamp;", connect);
+                rdr = command.ExecuteReader();
+                while (rdr.Read())
+                {
+                    string user = rdr.GetString("actor_name");
+                    string page = rdr.GetString("rev_page");
+                    if (!users.ContainsKey(user))
+                        users.Add(user, new Dictionary<string, int>() { { "0", 0 }, { "6", 0 }, { "10", 0 }, { "14", 0 }, { "r", 0 }, { "d", 0 }});
+                    users[user][pages[page]]++;
+                }
+                rdr.Close();
+            }
+            
             foreach (var u in users)
-                if (u.Value.art + u.Value.redir + u.Value.disamb + u.Value.cat + u.Value.file + u.Value.templ >= limit[lang])
+                if (u.Value["0"] + u.Value["6"] + u.Value["10"] + u.Value["14"] + u.Value["r"] + u.Value["d"] >= limit[lang])
                     bestusers.Add(u.Key, u.Value);
             string result = headers[lang];
             int index = 0;
-            foreach (var u in bestusers.OrderByDescending(u => u.Value.art))
+            foreach (var u in bestusers.OrderByDescending(u => u.Value["0"]))
             {
                 bool bot = bots.Contains(u.Key);
                 string color = (bot ? "style=\"background-color:#ddf\"" : "");
                 string number = (bot ? "" : (++index).ToString());
-                result += "\n|-" + color + "\n|" + number + "||{{u|" + (u.Key.Contains('=') ? "1=" + u.Key : u.Key) + "}}||" + u.Value.art + "||" + u.Value.redir + "||" + u.Value.disamb + "||" +
-                    u.Value.templ + "||" + u.Value.cat + "||" + u.Value.file;
+                result += "\n|-" + color + "\n|" + number + "||{{u|" + (u.Key.Contains('=') ? "1=" + u.Key : u.Key) + "}}||" + u.Value["0"] + "||" + u.Value["r"] + "||" + u.Value["d"] + "||" +
+                    u.Value["10"] + "||" + u.Value["14"] + "||" + u.Value["6"];
             }
             Save(site, "ru", lang, resultpage[lang], result + "\n|}" + footers[lang]);
         }
@@ -1345,14 +1339,14 @@ class Program
         incorrect_redirects();
         apat_for_filemovers();
         popular_userscripts();
-        pats_awarding();
         most_edits();
         most_watched_pages();
         adminstats();
         likes_stats();
         summary_stats();
         popular_wd_items_without_ru();
-        page_creators();
+        pats_awarding();
         pageview_peaks();
+        page_creators();
     }
 }
