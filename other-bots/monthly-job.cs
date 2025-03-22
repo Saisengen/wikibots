@@ -892,7 +892,7 @@ class Program
             { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
         var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
-        foreach (var lang in new string[] { "kk"/*, "ru"*/ })
+        foreach (var lang in new string[] { "kk", "ru" })
         {
             var pages = new Dictionary<string, string>();
             Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(), bestusers = new Dictionary<string, Dictionary<string, int>>();
@@ -900,8 +900,7 @@ class Program
             var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
             MySqlCommand command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
-            MySqlDataReader rdr;
-            rdr = command.ExecuteReader();
+            MySqlDataReader rdr = command.ExecuteReader();
             while (rdr.Read())
             {
                 string bot = rdr.GetString("title");
@@ -964,7 +963,7 @@ class Program
             foreach (var p in pages)
             {
                 idset += "," + p.Key;
-                if (++c % 10 == 0)
+                if (++c % 100 == 0)
                 {
                     requeststrings.Add(idset.Substring(1));
                     idset = "";
@@ -973,14 +972,15 @@ class Program
             if (idset != "")
                 requeststrings.Add(idset.Substring(1));
 
+            c = 0;
             foreach (var q in requeststrings)
             {
-                command = new MySqlCommand("SELECT r.rev_page, a.actor_name FROM revision r JOIN actor a ON r.rev_actor = a.actor_id JOIN (SELECT rev_page, MIN(rev_timestamp) AS first_timestamp FROM " +
-                    "revision WHERE rev_page IN (" + q + ") GROUP BY rev_page) first_revisions ON r.rev_page = first_revisions.rev_page AND r.rev_timestamp = first_revisions.first_timestamp;", connect);
+                command = new MySqlCommand("SELECT r.rev_page, cast(a.actor_name as char) user FROM revision r JOIN actor a ON r.rev_actor = a.actor_id JOIN (SELECT rev_page, MIN(rev_timestamp) AS " +
+                    "first_timestamp FROM " + "revision WHERE rev_page IN (" + q + ") GROUP BY rev_page) frevs ON r.rev_page = frevs.rev_page AND r.rev_timestamp = frevs.first_timestamp;", connect);
                 rdr = command.ExecuteReader();
                 while (rdr.Read())
                 {
-                    string user = rdr.GetString("actor_name");
+                    string user = rdr.GetString("user");
                     string page = rdr.GetString("rev_page");
                     if (!users.ContainsKey(user))
                         users.Add(user, new Dictionary<string, int>() { { "0", 0 }, { "6", 0 }, { "10", 0 }, { "14", 0 }, { "r", 0 }, { "d", 0 }});
@@ -988,21 +988,21 @@ class Program
                 }
                 rdr.Close();
             }
-            
+
             foreach (var u in users)
                 if (u.Value["0"] + u.Value["6"] + u.Value["10"] + u.Value["14"] + u.Value["r"] + u.Value["d"] >= limit[lang])
                     bestusers.Add(u.Key, u.Value);
             string result = headers[lang];
-            int index = 0;
+            c = 0;
             foreach (var u in bestusers.OrderByDescending(u => u.Value["0"]))
             {
                 bool bot = bots.Contains(u.Key);
                 string color = (bot ? "style=\"background-color:#ddf\"" : "");
-                string number = (bot ? "" : (++index).ToString());
+                string number = (bot ? "" : (++c).ToString());
                 result += "\n|-" + color + "\n|" + number + "||{{u|" + (u.Key.Contains('=') ? "1=" + u.Key : u.Key) + "}}||" + u.Value["0"] + "||" + u.Value["r"] + "||" + u.Value["d"] + "||" +
                     u.Value["10"] + "||" + u.Value["14"] + "||" + u.Value["6"];
             }
-            Save(site, "ru", lang, resultpage[lang], result + "\n|}" + footers[lang]);
+            Save(site, lang, resultpage[lang], result + "\n|}" + footers[lang], "");
         }
     }
     static void apat_for_filemovers()
@@ -1230,7 +1230,6 @@ class Program
         }
         Save(site, "ru", "ВП:К созданию/Статьи с наибольшим числом интервик без русской", result + "\n|}{{Проект:Словники/Шаблон:Списки недостающих статей}}[[Категория:Википедия:Статьи без русских интервик]]", "");
     }
-    static Dictionary<string, string> datespan = new Dictionary<string, string>() { { "month", "{{#expr:31+{{CURRENTDAY}}}}" }, { "year", "{{#expr:365+({{CURRENTWEEK}}-1)*7+{{CURRENTDOW}}}}" } };
     static Dictionary<string, string> tableheader = new Dictionary<string, string>() { { "ru", "Статья!!Пик!!Медиана!!Дата пика" }, { "uk", "Стаття!!Пік!!Медіана!!Дата піку" },
         { "be", "Артыкул!!Пік!!Медыяна!!Дата піка" } };
     static Dictionary<string, string> enddate = new Dictionary<string, string>() { { "01", "31" }, { "02", "28" }, { "03", "31" }, { "04", "30" }, { "05", "31" }, { "06", "30" }, { "07", "31" },
