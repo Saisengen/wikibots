@@ -77,6 +77,7 @@ public class pattern_info
 {
     public Regex regex;
     public bool only_content, not_uk;
+    public int stringnumber;
 }
 class Program
 {
@@ -92,7 +93,7 @@ class Program
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"), ins_rgx = new Regex
         (@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
+        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
     static Dictionary<lang, langdata_element> langdata = new Dictionary<lang, langdata_element>() {
         { global::lang.ru, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { global::lang.uk, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
@@ -202,7 +203,9 @@ class Program
     {
         patterns.Clear();
         var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n');
+        int c = 0;
         foreach (var pattern in patterns_list)
+        {
             if (pattern == "")
                 continue;
             else if (pattern.Contains('☯'))
@@ -212,11 +215,12 @@ class Program
                 bool ignorecase = flags[0] == '0';
                 bool not_uk = flags[1] == '1';
                 bool only_content = flags[2] == '1';
-                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk });
+                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = c });
             }
             else
-                patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false });
-                
+                patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = c });
+            c++;
+        }   
     }
     static void check(lang lang)
     {
@@ -260,8 +264,8 @@ class Program
     static bool tags_is_triggered(Recentchange edit)
     {
         foreach (string edit_tag in edit.tags)
-            if (suspicious_tags_rgx.IsMatch(edit_tag) && !(suspicious_tags_rgx.Match(edit_tag).Value.Contains("replace") && lang == lang.d) &&
-                !(suspicious_tags_rgx.Match(edit_tag).Value.Contains("blank") && lang == lang.c))
+            if (suspicious_tags_rgx.IsMatch(edit_tag) && !((suspicious_tags_rgx.Match(edit_tag).Value.Contains("replace") || suspicious_tags_rgx.Match(edit_tag).Value.Contains("blank")) &&
+                (lang == lang.d || lang == lang.c)))
             {
                 post_suspicious_edit(edit_tag, type.tag);
                 return true;
@@ -321,6 +325,7 @@ class Program
     }
     static bool addition_is_triggered(string text)
     {
+        //return false;
         if (text == null)
             return false;
         foreach (var pattern in patterns)
@@ -328,7 +333,7 @@ class Program
                 continue;
             else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value))
             {
-                post_suspicious_edit(pattern.regex.Match(text).Value, type.addition);
+                post_suspicious_edit(pattern.regex.Match(text).Value + ", pattern " + pattern.stringnumber, type.addition);
                 return true;
             }
         return false;
