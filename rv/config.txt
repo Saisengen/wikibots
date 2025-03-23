@@ -1,0 +1,12 @@
+Рейму Хакурей@bot:<password>
+liftwing:<token>
+swviewer:<token>
+discord-edits:<token>
+discord-authors:<token>
+limits:0.875|0.978|0.96
+trusted-users:77.108.74.114|95.67.122.31
+tags:mw-replace|mw-removed-redirect|mw-blank|mw-recreated|emoji|удален|т[еэ]ст|test|верхней|бацько|needcheck|spam|abuse|unmodified|ASCII|(^|[^n])OTRS|увага|можлив|чужої|інкубатор|сумесь раскладак$|editor removing sitelink|vandalism|phone-number|Qid|latin|ethnicity|url[^2]|mistake|deprecated property|blocked|license|information|short caption|policy|nonsense|ticket
+deletions:оккуп|сепарат
+whitelist-text:рандомнаястрокарандомнаястрока
+whitelist-title:/Черновик|/Чернетка|Песочница|Сообщения об ошибках
+replaces:р[оау]с/укр|татар/башк
