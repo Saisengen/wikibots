@@ -124,7 +124,7 @@ class Program
     }
     static void initialize_bot()
     {
-        settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
+        settings = new StreamReader("./reimu/config.txt").ReadToEnd().Split('\n');
         liftwing_token = settings[1].Split(':')[1]; swviewer_token = settings[2].Split(':')[1]; discord_token = settings[3].Split(':')[1]; authors_token = settings[4].Split(':')[1];
 
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
@@ -179,7 +179,7 @@ class Program
     }
     static void read_config()
     {
-        settings = new StreamReader("reimu-config.txt").ReadToEnd().Split('\n');
+        settings = new StreamReader("./reimu/config.txt").ReadToEnd().Split('\n');
         var limits = settings[5].Split(':')[1].Split('|');
         ores_limit = Convert.ToDouble(limits[0]);
         liftwing[type.lwa].limit = Convert.ToDouble(limits[1]);
@@ -201,31 +201,21 @@ class Program
     static void update_patterns()
     {
         patterns.Clear();
-        var patterns_list = new StreamReader("patterns.txt").ReadToEnd().Split('\n');
+        var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n');
         foreach (var pattern in patterns_list)
             if (pattern == "")
                 continue;
-            else switch (pattern.Split('/').Length)
-                {
-                    case 1:
-                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false });
-                        break;
-                    case 2:
-                        {
-                            {
-                                string pattern_body = pattern.Split('/')[0];
-                                string flags = pattern.Split('/')[1];
-                                bool ignorecase = flags[0] == '0';
-                                bool not_uk = flags[1] == '1';
-                                bool only_content = flags[2] == '1';
-                                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk });
-                            }
-                            break;
-                        }
-                    default:
-                        Console.WriteLine("Паттерн " + pattern + " содержит более одного знака /");
-                        continue;
-                }
+            else if (pattern.Contains('☯'))
+            {
+                string pattern_body = pattern.Split('☯')[0];
+                string flags = pattern.Split('☯')[1];
+                bool ignorecase = flags[0] == '0';
+                bool not_uk = flags[1] == '1';
+                bool only_content = flags[2] == '1';
+                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk });
+            }
+            else
+                patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false });
                 
     }
     static void check(lang lang)
@@ -270,7 +260,8 @@ class Program
     static bool tags_is_triggered(Recentchange edit)
     {
         foreach (string edit_tag in edit.tags)
-            if (suspicious_tags_rgx.IsMatch(edit_tag) /*&& !(suspicious_tags_rgx.Match(edit_tag).Value.Contains("replace") && lang == lang.d)*/)
+            if (suspicious_tags_rgx.IsMatch(edit_tag) && !(suspicious_tags_rgx.Match(edit_tag).Value.Contains("replace") && lang == lang.d) &&
+                !(suspicious_tags_rgx.Match(edit_tag).Value.Contains("blank") && lang == lang.c))
             {
                 post_suspicious_edit(edit_tag, type.tag);
                 return true;
@@ -317,7 +308,8 @@ class Program
     }
     static void generate_all_ins_del()
     {
-        var alldiff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline").Result;
+        var alldiff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff" +
+            "&difftype=inline&uselang=ru").Result;
         var ins_array = ins_rgx.Matches(alldiff);
         all_ins = "";
         foreach (var elem in ins_array)
