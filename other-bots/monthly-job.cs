@@ -881,11 +881,15 @@ class Program
                 }
             }
     }
+    static Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>();
+    static MySqlCommand command;
+    static MySqlDataReader rdr;
+    static MySqlConnection connect;
     static void page_creators()
     {
         var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "kk", new string[] { "Arystanbek", "Нұрлан_Рахымжанов" } } };
         var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Участники по числу созданных страниц" }, { "kk", "Уикипедия:Бет бастауы бойынша қатысушылар" } };
-        var disambigcategory = new Dictionary<string, string>() { { "ru", "Категория:Страницы значений по алфавиту" }, { "kk", "Санат:Алфавит бойынша айрық беттер" } };
+        var disambigcategory = new Dictionary<string, string>() { { "ru", "Страницы значений по алфавиту" }, { "kk", "Алфавит бойынша айрық беттер" } };
         var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{Самые активные участники}}{{shortcut|ВП:УПЧС}}<center>Бот, генерирующий таблицу, работает так: берёт " +
                 "все страницы основного пространства, включая редиректы, и для каждой смотрит имя первого правщика. Таким образом бот не засчитывает создание удалённых статей и статей, авторство в " +
                 "которых скрыто. Обновлено " + now.ToString("d.M.yyyy") + ".\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Статьи!!Редиректы!!Дизамбиги!!Шаблоны!!Категории!!Файлы" },
@@ -894,13 +898,13 @@ class Program
         var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
         foreach (var lang in new string[] { "kk", "ru" })
         {
-            var pages = new Dictionary<string, string>();
-            Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(), bestusers = new Dictionary<string, Dictionary<string, int>>();
-            var bots = new HashSet<string>();
-            var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
+            users.Clear();
+            Dictionary<string, Dictionary<string, int>> bestusers = new Dictionary<string, Dictionary<string, int>>();
+            HashSet<string> bots = new HashSet<string>(), disambs = new HashSet<string>();
+            connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
             connect.Open();
-            MySqlCommand command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
-            MySqlDataReader rdr = command.ExecuteReader();
+            command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
+            rdr = command.ExecuteReader();
             while (rdr.Read())
             {
                 string bot = rdr.GetString("title");
@@ -909,7 +913,7 @@ class Program
             }
             rdr.Close();
             var site = Site(lang, creds[0], creds[1]);
-            string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
+            string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=category:" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
             while (cont != null)
             {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result);
@@ -919,7 +923,7 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
                     while (r.Read())
                         if (r.Name == "cm")
-                            pages.Add(r.GetAttribute("pageid"), "d");
+                            disambs.Add(r.GetAttribute("pageid"));
                 }
             }
             foreach (var ns in new string[] { "0", "6", "10", "14" })
@@ -935,11 +939,13 @@ class Program
                         while (r.Read())
                             if (r.Name == "p")
                             {
-                                string pageid = r.GetAttribute("pageid");
+                                string id = r.GetAttribute("pageid");
                                 if (ns != "0")
-                                    pages.Add(pageid, ns);
-                                else if (!pages.ContainsKey(pageid))
-                                    pages.Add(pageid, "0");
+                                    get_page_author(id, ns);
+                                else if (disambs.Contains(id))
+                                    get_page_author(id, "d");
+                                else
+                                    get_page_author(id, "0");
                             }
                     }
                 }
@@ -954,46 +960,14 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
                     while (r.Read())
                         if (r.Name == "p")
-                            pages.Add(r.GetAttribute("pageid"), "r");
+                            get_page_author(r.GetAttribute("pageid"), "r");
                 }
             }
-
-            var requeststrings = new HashSet<string>();
-            string idset = ""; int c = 0;
-            foreach (var p in pages)
-            {
-                idset += "," + p.Key;
-                if (++c % 100 == 0)
-                {
-                    requeststrings.Add(idset.Substring(1));
-                    idset = "";
-                }
-            }
-            if (idset != "")
-                requeststrings.Add(idset.Substring(1));
-
-            c = 0;
-            foreach (var q in requeststrings)
-            {
-                command = new MySqlCommand("SELECT r.rev_page, cast(a.actor_name as char) user FROM revision r JOIN actor a ON r.rev_actor = a.actor_id JOIN (SELECT rev_page, MIN(rev_timestamp) AS " +
-                    "first_timestamp FROM " + "revision WHERE rev_page IN (" + q + ") GROUP BY rev_page) frevs ON r.rev_page = frevs.rev_page AND r.rev_timestamp = frevs.first_timestamp;", connect);
-                rdr = command.ExecuteReader();
-                while (rdr.Read())
-                {
-                    string user = rdr.GetString("user");
-                    string page = rdr.GetString("rev_page");
-                    if (!users.ContainsKey(user))
-                        users.Add(user, new Dictionary<string, int>() { { "0", 0 }, { "6", 0 }, { "10", 0 }, { "14", 0 }, { "r", 0 }, { "d", 0 }});
-                    users[user][pages[page]]++;
-                }
-                rdr.Close();
-            }
-
             foreach (var u in users)
                 if (u.Value["0"] + u.Value["6"] + u.Value["10"] + u.Value["14"] + u.Value["r"] + u.Value["d"] >= limit[lang])
                     bestusers.Add(u.Key, u.Value);
             string result = headers[lang];
-            c = 0;
+            int c = 0;
             foreach (var u in bestusers.OrderByDescending(u => u.Value["0"]))
             {
                 bool bot = bots.Contains(u.Key);
@@ -1004,6 +978,19 @@ class Program
             }
             Save(site, lang, resultpage[lang], result + "\n|}" + footers[lang], "");
         }
+    }
+    static void get_page_author(string id, string ns)
+    {
+        command = new MySqlCommand("SELECT cast(actor_name as char) user FROM revision JOIN actor ON rev_actor = actor_id where rev_page=" + id + " order by rev_timestamp asc limit 1;", connect);
+        rdr = command.ExecuteReader();
+        while (rdr.Read())
+        {
+            string user = rdr.GetString("user");
+            if (!users.ContainsKey(user))
+                users.Add(user, new Dictionary<string, int>() { { "0", 0 }, { "6", 0 }, { "10", 0 }, { "14", 0 }, { "r", 0 }, { "d", 0 } });
+            users[user][ns]++;
+        }
+        rdr.Close();
     }
     static void apat_for_filemovers()
     {
@@ -1269,7 +1256,6 @@ class Program
         foreach (string lang in new HashSet<string>() { "uk", "be", "ru" })
         {
             var results = new Dictionary<string, pageviews_result>();
-            var creds = new StreamReader("p").ReadToEnd().Split('\n');
             var site = Site(lang, creds[0], creds[1]);
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
             while (cont != null)
@@ -1336,7 +1322,6 @@ class Program
         prepositional[1] = "январе"; prepositional[2] = "феврале"; prepositional[3] = "марте"; prepositional[4] = "апреле"; prepositional[5] = "мае"; prepositional[6] = "июне";
         prepositional[7] = "июле"; prepositional[8] = "августе"; prepositional[9] = "сентябре"; prepositional[10] = "октябре"; prepositional[11] = "ноябре"; prepositional[12] = "декабре";
         incorrect_redirects();
-        apat_for_filemovers();
         popular_userscripts();
         most_edits();
         most_watched_pages();
@@ -1344,8 +1329,9 @@ class Program
         likes_stats();
         summary_stats();
         popular_wd_items_without_ru();
+        page_creators();
+        apat_for_filemovers();
         pats_awarding();
         pageview_peaks();
-        page_creators();
     }
 }
