@@ -93,7 +93,8 @@ class Program
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"), ins_rgx = new Regex
         (@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx;
+        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx, talk_ns_rgx = 
+        new Regex("2|4|100|104|106");
     static Dictionary<lang, langdata_element> langdata = new Dictionary<lang, langdata_element>() {
         { global::lang.ru, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { global::lang.uk, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
@@ -329,11 +330,11 @@ class Program
         if (text == null)
             return false;
         foreach (var pattern in patterns)
-            if ((pattern.not_uk && lang == lang.uk) || (pattern.only_content && (ns % 2 == 1 || ns == 4 || ns == 100 || ns == 104 || ns == 106)))
+            if ((pattern.not_uk && lang == lang.uk) || (pattern.only_content && (ns % 2 == 1 || talk_ns_rgx.IsMatch(ns.ToString()))))
                 continue;
             else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value))
             {
-                post_suspicious_edit(pattern.regex.Match(text).Value + ", pattern " + pattern.stringnumber, type.addition);
+                post_suspicious_edit(pattern.regex.Match(text).Value + ", line" + pattern.stringnumber, type.addition);
                 return true;
             }
         return false;
