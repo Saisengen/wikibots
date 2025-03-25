@@ -209,17 +209,21 @@ class Program
         {
             if (pattern == "")
                 continue;
-            else if (pattern.Contains('☯'))
-            {
-                string pattern_body = pattern.Split('☯')[0];
-                string flags = pattern.Split('☯')[1];
-                bool ignorecase = flags[0] == '0';
-                bool not_uk = flags[1] == '1';
-                bool only_content = flags[2] == '1';
-                patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = c });
-            }
-            else
-                patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = c });
+            else try
+                {
+                    if (pattern.Contains('☯'))
+                    {
+                        string pattern_body = pattern.Split('☯')[0];
+                        string flags = pattern.Split('☯')[1];
+                        bool ignorecase = flags[0] == '0';
+                        bool not_uk = flags[1] == '1';
+                        bool only_content = flags[2] == '1';
+                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = c });
+                    }
+                    else
+                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = c });
+                }
+                catch { }
             c++;
         }   
     }
@@ -316,13 +320,14 @@ class Program
         var alldiff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff" +
             "&difftype=inline&uselang=ru").Result;
         var ins_array = ins_rgx.Matches(alldiff);
-        all_ins = "";
-        foreach (var elem in ins_array)
-            all_ins += elem;
         var del_array = del_rgx.Matches(alldiff);
-        all_del = "";
+        all_ins = ""; all_del = "";
+        foreach (var elem in ins_array)
+            all_ins += "\n" + elem;
         foreach (var elem in del_array)
-            all_del += elem;
+            all_del += "\n" + elem;
+        all_ins = all_ins.Substring(1);
+        all_del = all_del.Substring(1);
     }
     static bool addition_is_triggered(string text)
     {
