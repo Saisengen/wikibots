@@ -26,10 +26,10 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         ru = Site("ru.wikipedia", creds[0], creds[1]);
         commons = Site("commons.wikimedia", creds[0], creds[1]);
-        univ_query = "https://{domain}.org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|comment&leaction=delete/delete&lestart=" + dtn.ToString("yyyy-MM-ddTHH:mm:ss") + "&leend=" +
+        univ_query = "https://{domain}.org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|comment&leaction=delete/delete&leend=" +
             dtn.AddHours(-2).ToString("yyyy-MM-ddTHH:mm:ss") + "&lenamespace=6&lelimit=max";
-        run_commons();
         run_ru();
+        run_commons();
     }
     static HttpClient Site(string wiki, string login, string password)
     {
@@ -114,7 +114,6 @@ class Program
                 while (r.Read())
                     if (r.Name == "page" && r.GetAttribute("_idx")[0] != '-')
                         deletedfiles.Remove(r.GetAttribute("title"));
-
             using (var r = new XmlTextReader(new StringReader(ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(df)).Result)))
             {
                 bool file_is_used = true;
@@ -131,7 +130,14 @@ class Program
                     {
                         int ns = Convert.ToInt16(r.GetAttribute("ns"));
                         if (ns % 2 == 0 && ns != 4 && ns != 104 && ns != 106)
-                            delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename.Replace("Файл:", "File:")], page = r.GetAttribute("title") }, iscommons);
+                            try
+                            {
+                                delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename.Replace("Файл:", "File:")], page = r.GetAttribute("title") }, iscommons);
+                            }
+                            catch
+                            {
+                                try { delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename], page = r.GetAttribute("title") }, iscommons); }  catch { }
+                            }                            
                     }
                 }
             }
@@ -165,15 +171,14 @@ class Program
         var replacedfiles = new Dictionary<string, logrecord>();
         var usages_for_deletion = new HashSet<pair>();
         var replacingpairs = new HashSet<pair>();
-        string apiout, cont = "", query = univ_query.Replace("{domain}", "ru.wikipedia");
-        var filerx = new Regex(@"\[\[(:?c:|:?commons:|)(File|Файл):([^\]]*)\]\]", RegexOptions.IgnoreCase);
-        var kburx = new Regex("КБУ#Ф[178]", RegexOptions.IgnoreCase);
-        var f8rx = new Regex("КБУ#Ф8", RegexOptions.IgnoreCase);
+        string cont = "", query = univ_query.Replace("{domain}", "ru.wikipedia");
+        var file_is_replaced_rgx = new Regex("КБУ#Ф[178]|икисклад|ommons", RegexOptions.IgnoreCase);
+        var inner_link_to_replacement_file = new Regex(@"\[\[(:?c:|:?commons:|)(File|Файл):([^\]]*)\]\]", RegexOptions.IgnoreCase);
+        var commons_importer_link = new Regex(@"commons.wikimedia.org/wiki/File:([^ ])", RegexOptions.IgnoreCase);
 
         while (cont != null)
         {
-            apiout = (cont == "" ? ru.GetStringAsync(query).Result : ru.GetStringAsync(query + "&lecontinue=" + cont).Result);
-            using (var r = new XmlTextReader(new StringReader(apiout)))
+            using (var r = new XmlTextReader(new StringReader(cont == "" ? ru.GetStringAsync(query).Result : ru.GetStringAsync(query + "&lecontinue=" + cont).Result)))
             {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue");
@@ -182,9 +187,8 @@ class Program
                     {
                         string comm = r.GetAttribute("comment") ?? "";
                         string filename = r.GetAttribute("title");
-                        if (f8rx.IsMatch(comm) && !filerx.IsMatch(comm))
-                            continue;
-                        if (kburx.IsMatch(comm) && filerx.IsMatch(comm) && filerx.Match(comm).Groups[3].Value != filename && !replacedfiles.ContainsKey(filename))
+                        if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value != filename.Substring(5)) ||
+                            (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
                             replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
                         else if (!deletedfiles.ContainsKey(filename))
                             deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
@@ -197,10 +201,8 @@ class Program
             using (var r = new XmlTextReader(new StringReader(commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + Uri.EscapeDataString(rf)).Result)))
                 while (r.Read())
                     if (r.Name == "page" && r.GetAttribute("_idx")[0] != '-')
-                        replacedfiles.Remove(r.GetAttribute("title").Substring(5));
-            
-            apiout = ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(rf)).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout)))
+                        replacedfiles.Remove(r.GetAttribute("title"));
+            using (var r = new XmlTextReader(new StringReader(ru.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + Uri.EscapeDataString(rf)).Result)))
             {
                 bool isexist = true;
                 string filename = "";
@@ -216,7 +218,15 @@ class Program
                     {
                         var page = r.GetAttribute("title");
                         string initial_text = ru.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(page) + "?action=raw").Result;
-                        string newname = filerx.Match(replacedfiles[rf].comment).Groups[3].Value;
+                        string newname;
+                        try
+                        {
+                            newname = inner_link_to_replacement_file.Match(replacedfiles[rf].comment).Groups[3].Value;
+                        }
+                        catch
+                        {
+                            newname = commons_importer_link.Match(replacedfiles[rf].comment).Groups[1].Value;
+                        }
                         string rgxtext = filename.Substring(5).Replace(" ", "[ _]");
                         rgxtext = "(" + rgxtext + "|" + Uri.EscapeDataString(filename.Substring(5)) + ")";
                         var rgx = new Regex(rgxtext, RegexOptions.IgnoreCase);
