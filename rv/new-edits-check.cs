@@ -67,6 +67,7 @@ public class rchanges
 public class rgxpair
 {
     public Regex one, two;
+    public string replacement;
 }
 public class langdata_element
 {
@@ -82,7 +83,7 @@ public class pattern_info
 class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, first_another_author_edit_id,
-        all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-5).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
+        all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
     static string[] settings;
     static lang lang;
     static Dictionary<lang, HttpClient> site = new Dictionary<lang, HttpClient>();
@@ -94,7 +95,7 @@ class Program
         (@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
         (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx, talk_ns_rgx = 
-        new Regex("2|4|100|104|106");
+        new Regex("2|4|100|104|106"), wd_label_rgx = new Regex("<label language=\"([^\"]*)\" value=\"([^\"]*)\"");
     static Dictionary<lang, langdata_element> langdata = new Dictionary<lang, langdata_element>() {
         { global::lang.ru, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { global::lang.uk, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
@@ -146,7 +147,6 @@ class Program
                     apiout = (cont == "" ? site[lang].GetStringAsync(request).Result : site[lang].GetStringAsync(request + "&aufrom=" + e(cont)).Result);
                     using (var r = new XmlTextReader(new StringReader(apiout)))
                     {
-                        r.WhitespaceHandling = WhitespaceHandling.None;
                         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("aufrom");
                         while (r.Read())
                             if (r.Name == "u")
@@ -197,7 +197,7 @@ class Program
         foreach (var pair in pairs_list)
         {
             var components = pair.Split('/');
-            replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase) });
+            replaces.Add(new rgxpair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase), replacement = pair });
         }
     }
     static void update_patterns()
@@ -233,24 +233,26 @@ class Program
         var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2" +
             "&rcstart=" + langdata[lang].last_checked_edit_time + "&rcdir=newer&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
         foreach (var edit in edits.query.recentchanges)
-            if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !author_has_many_edits(edit) && !whitelist_title_rgx.IsMatch(edit.title) && !ores_is_triggered(edit) &&
-                !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit))
+            if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !read_edit_data_and_exclude_some_cases(edit) && !whitelist_title_rgx.IsMatch(edit.title) &&
+                !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit))
                 {
                     generate_all_ins_del();
                     if (!deletion_is_triggered() && !addition_is_triggered(all_ins))
                         check_replaces(edit);
                 }
     }
-    static bool author_has_many_edits(Recentchange edit)
+    static bool read_edit_data_and_exclude_some_cases(Recentchange edit)
     {
         user = edit.user;
         title = edit.title.Replace('_', ' ');
+        ns = edit.ns;
+        if (ns == 2 && title.Contains('/') && title.Substring(0, title.IndexOf('/')) == user)
+            return true;
         newid = edit.revid;
         oldid = edit.old_revid;
         comment = edit.comment;
         diff_size = edit.newlen - edit.oldlen;
         pageid = edit.pageid;
-        ns = edit.ns;
         try
         {
             editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
@@ -326,8 +328,10 @@ class Program
             all_ins += "\n" + elem;
         foreach (var elem in del_array)
             all_del += "\n" + elem;
-        all_ins = all_ins.Substring(1);
-        all_del = all_del.Substring(1);
+        if (all_ins != "")
+            all_ins = all_ins.Substring(1);
+        if (all_del != "")
+            all_del = all_del.Substring(1);
     }
     static bool addition_is_triggered(string text)
     {
@@ -359,7 +363,7 @@ class Program
             if ((rgxpair.one.IsMatch(all_ins) && rgxpair.two.IsMatch(all_del) && !rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_del)) ||
             (rgxpair.one.IsMatch(all_del) && rgxpair.two.IsMatch(all_ins) && !rgxpair.one.IsMatch(all_ins) && !rgxpair.two.IsMatch(all_del)))
             {
-                post_suspicious_edit("замена", type.replace);
+                post_suspicious_edit(rgxpair.replacement, type.replace);
                 return;
             }
     }
@@ -402,7 +406,7 @@ class Program
     }
     static void generate_visible_diff()
     {
-        string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline";
+        string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline&uselang=ru";
         diff_text = trash_tags_rgx.Replace(empty_del_rgx.Replace(empty_ins_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), "")
             .Replace("\\n", "\n").Replace("\\\"", "\"").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
         strings_with_changes = "";
@@ -435,6 +439,21 @@ class Program
             first_another_author_edit_id = revid_rgx.Match(revs1).Groups[1].Value;
         else
             single_author = true;
+
+        if (lang == lang.d)
+        {
+            var labels = site[lang].GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + title + "&format=xml&props=labels").Result;
+            string ru_lbl = "", en_lbl = "";
+            foreach (Match lang in wd_label_rgx.Matches(labels))
+                if (lang.Groups[1].Value == "ru")
+                    ru_lbl = lang.Groups[2].Value;
+                else if (lang.Groups[1].Value == "en")
+                    en_lbl = lang.Groups[2].Value;
+            if (ru_lbl != "")
+                title = ru_lbl;
+            else if (en_lbl != "")
+                title = en_lbl;
+        }
 
         var json = new discordjson()
         {
