@@ -196,11 +196,14 @@ class Program
                             while (rr.Read())
                                 if (rr.Name == "page" && rr.GetAttribute("_idx")[0] != '-')
                                     same_name_on_commons_exist = true;
-                        if (!same_name_on_commons_exist && file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
+                        if (!same_name_on_commons_exist)
+                        {
+                            if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
                             filename.Substring(5)) || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
-                            replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
-                        else if (!deletedfiles.ContainsKey(filename))
-                            deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
+                                replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
+                            else if (!deletedfiles.ContainsKey(filename))
+                                deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
+                        }
                     }
             }
         }
