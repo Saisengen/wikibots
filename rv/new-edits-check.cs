@@ -440,6 +440,7 @@ class Program
         else
             single_author = true;
 
+        string visible_wd_title = title;
         if (lang == lang.d)
         {
             var labels = site[lang].GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + title + "&format=xml&props=labels").Result;
@@ -450,17 +451,17 @@ class Program
                 else if (lang.Groups[1].Value == "en")
                     en_lbl = lang.Groups[2].Value;
             if (ru_lbl != "")
-                title = ru_lbl;
+                visible_wd_title = ru_lbl;
             else if (en_lbl != "")
-                title = en_lbl;
+                visible_wd_title = en_lbl;
         }
 
         var json = new discordjson()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = title, url = "https://" + langdata[lang].domain + ".org/w/index.php?" + (single_author ? "diff=" + newid :
-            "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + ", [hist](<https://" + langdata[lang].domain + ".org/wiki/special:history/" + e(title) +
-            ">), " + "[curr](<https://" + langdata[lang].domain + ".org/wiki/" + e(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name =
-            editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + langdata[lang].domain + ".org/wiki/special:contribs/" + e(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = visible_wd_title, url = "https://" + langdata[lang].domain + ".org/w/index.php?" + (single_author ? "diff=" +
+            newid : "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + ", [hist](<https://" + langdata[lang].domain + ".org/wiki/special:history/" + e(title) +
+            ">), " + "[curr](<https://" + langdata[lang].domain + ".org/wiki/" + e(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){
+                name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + langdata[lang].domain + ".org/wiki/special:contribs/" + e(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
