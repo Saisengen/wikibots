@@ -82,7 +82,7 @@ public class pattern_info
 }
 class Program
 {
-    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, first_another_author_edit_id,
+    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, edit_id_of_first_another_author,
         all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.000Z");
     static string[] settings;
     static lang lang;
@@ -259,7 +259,7 @@ class Program
                 "&ususers=" + e(user)).Result).Groups[1].Value);
         }
         catch { editcount = 0; }
-        if (editcount > 1000)
+        if (editcount > 500)
         {
             trusted_users.Add(user);
             return true;
@@ -436,7 +436,7 @@ class Program
         bool single_author = false;
         string revs1 = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
         if (revid_rgx.IsMatch(revs1))
-            first_another_author_edit_id = revid_rgx.Match(revs1).Groups[1].Value;
+            edit_id_of_first_another_author = revid_rgx.Match(revs1).Groups[1].Value;
         else
             single_author = true;
 
@@ -456,12 +456,14 @@ class Program
                 visible_wd_title = en_lbl;
         }
 
+        string curr_link = single_author ? "" : ", [curr](<https://" + langdata[lang].domain + ".org/wiki/" + e(title) + ">)";
+        string main_link = single_author ? "https://" + langdata[lang].domain + ".org/wiki/" + e(title) : "https://" + langdata[lang].domain + ".org/w/index.php?oldid=" + edit_id_of_first_another_author +
+            "&diff=curr&ilu=" + newid;
         var json = new discordjson()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = visible_wd_title, url = "https://" + langdata[lang].domain + ".org/w/index.php?" + (single_author ? "diff=" +
-            newid : "oldid=" + first_another_author_edit_id + "&diff=curr&ilu=" + newid), description = reason + ", [hist](<https://" + langdata[lang].domain + ".org/wiki/special:history/" + e(title) +
-            ">), " + "[curr](<https://" + langdata[lang].domain + ".org/wiki/" + e(title) + ">)", fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){
-                name = editcount == 0 ? user : user + ", " + editcount + " edits", url = "https://" + langdata[lang].domain + ".org/wiki/special:contribs/" + e(user) } } }
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = visible_wd_title, url = main_link, description = reason + ", [hist](<https://" + langdata[lang].domain +
+            ".org/wiki/special:history/" + e(title) + ">)" + curr_link, fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = editcount == 0 ?
+            user : user + ", " + editcount + " edits", url = "https://" + langdata[lang].domain + ".org/wiki/special:contribs/" + e(user) } } }
         };
         var res = client.PostAsync("https://discord.com/api/webhooks/" + discord_token, new StringContent(JsonConvert.SerializeObject(json), Encoding.UTF8, "application/json")).Result;
         if (res.StatusCode != HttpStatusCode.NoContent)
