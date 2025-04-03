@@ -58,6 +58,30 @@ class Program
     static string[] creds, monthname = new string[13], prepositional = new string[13];
     static HttpClient site = new HttpClient();
     static DateTime now = DateTime.Now;
+    static void Main()
+    {
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        site = Site("ru", creds[0], creds[1]);
+        monthname[1] = "январь"; monthname[2] = "февраль"; monthname[3] = "март"; monthname[4] = "апрель"; monthname[5] = "май"; monthname[6] = "июнь";
+        monthname[7] = "июль"; monthname[8] = "август"; monthname[9] = "сентябрь"; monthname[10] = "октябрь"; monthname[11] = "ноябрь"; monthname[12] = "декабрь";
+        prepositional[1] = "январе"; prepositional[2] = "феврале"; prepositional[3] = "марте"; prepositional[4] = "апреле"; prepositional[5] = "мае"; prepositional[6] = "июне";
+        prepositional[7] = "июле"; prepositional[8] = "августе"; prepositional[9] = "сентябре"; prepositional[10] = "октябре"; prepositional[11] = "ноябре"; prepositional[12] = "декабре";
+        popular_userscripts();
+        most_edits();
+        most_watched_pages();
+        adminstats();
+        likes_stats();
+        summary_stats();
+        popular_wd_items_without_ru();
+        page_creators();
+        if (now.Day == 1)
+        {
+            apat_for_filemovers();
+            pats_awarding();
+        }
+        pageview_peaks();
+        incorrect_redirects();
+    }
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -695,7 +719,6 @@ class Program
         }
         Save(site, "ru", "u:MBH/incorrect redirects", result + "\n|}", "");
     }
-
     static HashSet<string> invoking_pages = new HashSet<string>(), script_users = new HashSet<string>();
     static Dictionary<string, bool> users_activity = new Dictionary<string, bool>();
     static Dictionary<string, script_usages> scripts = new Dictionary<string, script_usages>();
@@ -988,7 +1011,7 @@ class Program
             rdr.Close();
             connect.Close();
         }
-        catch (Exception e) { Console.WriteLine(e.ToString()); }
+        catch { }
     }
     static void apat_for_filemovers()
     {
@@ -1306,26 +1329,5 @@ class Program
             }
             Save(site, lang, outputpage[lang][mode], result + "\n|}", "");
         }
-    }
-    static void Main()
-    {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        site = Site("ru", creds[0], creds[1]);
-        monthname[1] = "январь"; monthname[2] = "февраль"; monthname[3] = "март"; monthname[4] = "апрель"; monthname[5] = "май"; monthname[6] = "июнь";
-        monthname[7] = "июль"; monthname[8] = "август"; monthname[9] = "сентябрь"; monthname[10] = "октябрь"; monthname[11] = "ноябрь"; monthname[12] = "декабрь";
-        prepositional[1] = "январе"; prepositional[2] = "феврале"; prepositional[3] = "марте"; prepositional[4] = "апреле"; prepositional[5] = "мае"; prepositional[6] = "июне";
-        prepositional[7] = "июле"; prepositional[8] = "августе"; prepositional[9] = "сентябре"; prepositional[10] = "октябре"; prepositional[11] = "ноябре"; prepositional[12] = "декабре";
-        incorrect_redirects();
-        popular_userscripts();
-        most_edits();
-        most_watched_pages();
-        adminstats();
-        likes_stats();
-        summary_stats();
-        popular_wd_items_without_ru();
-        page_creators();
-        pageview_peaks();
-        apat_for_filemovers();
-        pats_awarding();
     }
 }
