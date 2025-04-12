@@ -192,18 +192,17 @@ class Program
                         string comm = r.GetAttribute("comment") ?? "";
                         string filename = r.GetAttribute("title");
                         bool same_name_on_commons_exist = false;
-                        using (var rr = new XmlTextReader(new StringReader(commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(filename)).Result)))
+                        using (var rr = new XmlTextReader(new StringReader(commons.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=file:" +
+                            e(filename.Substring(5))).Result)))
                             while (rr.Read())
                                 if (rr.Name == "page" && rr.GetAttribute("_idx")[0] != '-')
                                     same_name_on_commons_exist = true;
                         if (!same_name_on_commons_exist)
-                        {
                             if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
                             filename.Substring(5)) || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
                                 replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
                             else if (!deletedfiles.ContainsKey(filename))
                                 deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
-                        }
                     }
             }
         }
