@@ -1,6 +1,9 @@
+using System.Collections.Generic;
+using System.IO;
+using System;
 using System.Web;
 using MySql.Data.MySqlClient;
-
+using System.Linq;
 class Program
 {
     static void sendresponse(string response, string user, string wiki)
@@ -62,7 +65,7 @@ class Program
         response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
 
         foreach (var t in thankers.OrderByDescending(t => t.Value))
-            response += "<tr><td><a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user +" </td><td>" + t.Value + "</td></tr>\n";
+            response += "<tr><td><a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a> <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + t.Key + "&page=" + Uri.EscapeDataString(user) + "\">🡲</a>" + user + " </td><td>" + t.Value + "</td></tr>\n";
 
         sendresponse(response + "</table>", user, wiki);
     }
