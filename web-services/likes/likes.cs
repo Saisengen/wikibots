@@ -60,7 +60,7 @@ class Program
         string response = "<table border=\"1\" cellspacing=\"0\">";
 
         foreach (var t in thanked.OrderByDescending(t => t.Value))
-            response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> <a href=\"https://tools.wmflabs.org/mbh/likes.cgi?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
+            response += "<tr><td>" + user + " <a href=\"https://" + wiki + ".org/w/index.php?title=special:log&type=thanks&user=" + Uri.EscapeDataString(user) + "&page=" + t.Key + "\">🡲</a> <a href=\"https://mbh.toolforge.org/cgi-bin/likes?user=" + Uri.EscapeDataString(t.Key) + "&wiki=" + wiki + "\">" + t.Key + "</a></td><td>" + t.Value + "</td></tr>\n";
 
         response += "</table></td><td valign=\"top\"><table border=\"1\" cellspacing=\"0\">";
 
