@@ -59,16 +59,14 @@ class MyBot : Bot
         pn.Load();
         inc.Load();
         incmem.Load();
-        if (!pn.Exists())
-            pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n|}";
-        if (!inc.Exists())
-            inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n|}";
+        pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n|}";
+        inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n|}";
 
         string[] cats = {"Википедия:Статьи для срочного улучшения","Статьи на улучшении более года","Статьи на улучшении более полугода","Статьи на улучшении более 90 дней","Статьи на улучшении более 30 дней",
         "Статьи на улучшении менее 30 дней","Википедия:Незакрытые обсуждения статей для улучшения","Википедия:Кандидаты на удаление","Википедия:Незакрытые обсуждения удаления страниц",
         "Википедия:Статьи для переименования","Википедия:Незакрытые обсуждения переименования страниц","Википедия:Кандидаты на объединение","Википедия:Незакрытые обсуждения объединения страниц",
-        "Википедия:Статьи для разделения","Википедия:Незакрытые обсуждения разделения страниц","Википедия:Незакрытые обсуждения восстановления страниц","Проект:Инкубатор:Все статьи",
-        "Проект:Инкубатор:Статьи на мини-рецензировании","Википедия:Стабы в Инкубаторе","Проект:Инкубатор:Запросы на проверку","Проект:Инкубатор:Запросы о помощи","Проект:Инкубатор:К удалению"};
+        "Википедия:Статьи для разделения","Википедия:Незакрытые обсуждения разделения страниц","Википедия:Незакрытые обсуждения восстановления страниц","Инкубатор:Все статьи",
+        "Инкубатор:Статьи на мини-рецензировании","Википедия:Стабы в Инкубаторе","Проект:Инкубатор:Запросы на проверку","Проект:Инкубатор:Запросы о помощи","Проект:Инкубатор:К удалению"};
         string[] n = new string[cats.Length];
         for (int i = 0; i < cats.Length; i++)
         {
@@ -229,8 +227,8 @@ class MyBot : Bot
         PageList pl = new PageList(site);
         PageList pm = new PageList(site);
         PageList ph = new PageList(site);
-        pl.FillFromCategory("Проект:Инкубатор:Все статьи");
-        pm.FillFromCategory("Проект:Инкубатор:Статьи на мини-рецензировании");
+        pl.FillFromCategory("Инкубатор:Все статьи");
+        pm.FillFromCategory("Инкубатор:Статьи на мини-рецензировании");
         for (int i = 0; i < cats.Length; i++)
             ph.FillFromCategory(cats[i]);
         string[,] imgs = new string[5000, 10];
@@ -480,9 +478,9 @@ class MyBot : Bot
         MyBot bot = new MyBot();
         all.FillFromAllPages("", 102, true, 5000);
         var exceptions = "Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ".Split('|');
-        var candidats = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Кандидаты на мини-рецензирование");
-        var forgotten = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Брошенные статьи");
-        var reviewing = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Статьи на мини-рецензировании");
+        var candidats = bot.GetCategoryMembers102(site, "Инкубатор:Кандидаты на мини-рецензирование");
+        var forgotten = bot.GetCategoryMembers102(site, "Инкубатор:Брошенные статьи");
+        var reviewing = bot.GetCategoryMembers102(site, "Инкубатор:Статьи на мини-рецензировании");
         string[,] pages = new string[5000, 5];
         int pn = 0;
         foreach (Page n in all)
@@ -555,7 +553,7 @@ class MyBot : Bot
         Page kuP = new Page(site, "Википедия:К удалению/" + nn.Day + " " + mon[nn.Month - 1] + " " + nn.Year);
         int max = 0;
         string nom = "";
-        cand_list = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Статьи на мини-рецензировании");// предварительный пробег на предмет номинации к удалению старейших стабов
+        cand_list = bot.GetCategoryMembers102(site, "Инкубатор:Статьи на мини-рецензировании");// предварительный пробег на предмет номинации к удалению старейших стабов
         string[,] forKU = new string[cand_list.Count(), 2];
         int kunum = 0;
         // смотрим дату последней правки
@@ -687,7 +685,7 @@ class MyBot : Bot
                 kuP.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
             }
         }
-        cand_list = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Статьи на мини-рецензировании");
+        cand_list = bot.GetCategoryMembers102(site, "Инкубатор:Статьи на мини-рецензировании");
         string[] regtitle = new string[] { "== ", @"\[\[", ".*?", @"\]\]", " ==" };
         MatchCollection titles = new Regex(string.Concat(regtitle), RegexOptions.IgnoreCase).Matches(mrpage.text);
         string[] datestring = new string[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
@@ -853,7 +851,7 @@ class MyBot : Bot
         Regex logdate = new Regex(@"\d{4}-\d{1,2}-\d{1,2}", RegexOptions.Singleline);
         Regex loglink = new Regex(Regex.Escape("|") + @".*?Инкубатор.*?" + Regex.Escape("|"), RegexOptions.Singleline);
         PageList candidats = new PageList(site);
-        candidats.FillFromCategory("Проект:Инкубатор:Кандидаты на мини-рецензирование");
+        candidats.FillFromCategory("Инкубатор:Кандидаты на мини-рецензирование");
         foreach (Match m in logs.Matches(log))
         {
             string datelog = logdate.Matches(m.ToString())[0].ToString();
@@ -905,7 +903,7 @@ class MyBot : Bot
         Regex logdate = new Regex(@"\d{4}-\d{1,2}-\d{1,2}", RegexOptions.Singleline);
         Regex loglink = new Regex(Regex.Escape("|") + @".*?Инкубатор.*?" + Regex.Escape("|"), RegexOptions.Singleline);
         PageList candidats = new PageList(site);
-        candidats.FillFromCategory("Проект:Инкубатор:Кандидаты на мини-рецензирование");
+        candidats.FillFromCategory("Инкубатор:Кандидаты на мини-рецензирование");
         foreach (Match m in logs.Matches(log))
         {
             string datelog = logdate.Matches(m.ToString())[0].ToString();
@@ -928,7 +926,7 @@ class MyBot : Bot
     public void mrec(Site site, string[,] pages)
     {
         MyBot bot = new MyBot();
-        var forgotten = bot.GetCategoryMembers102(site, "Проект:Инкубатор:Брошенные статьи");
+        var forgotten = bot.GetCategoryMembers102(site, "Инкубатор:Брошенные статьи");
         Page rp = new Page(site, "Проект:Инкубатор/Мини-рецензирование");
         PageList pact = new PageList(site);
         PageList prez = new PageList(site);
@@ -1186,8 +1184,8 @@ class MyBot : Bot
     public static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
-        //Site1 = Site(creds[0], creds[1]);
+        //site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
+        Site1 = Site(creds[0], creds[1]);
         inc_check_bot();
         img_inc_bot();
         main_inc_bot();
