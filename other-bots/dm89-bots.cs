@@ -123,10 +123,10 @@ class MyBot : Bot
         Page p = new Page(site, "Проект:Инкубатор/Запросы помощи и проверки");
         string talkdate, pagedate;
         Regex set_parser = new Regex(@".*?" + Regex.Escape("|"), RegexOptions.Singleline);
-        var cats = "Проект:Инкубатор:Запросы на проверку|Проект:Инкубатор:Запросы о помощи".Split('|');
+        var cats = "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|');
         int count = cats.Length;
         var dt = new string[count];
-        var nbcats = "Проект:Инкубатор:Статьи nb0|Проект:Инкубатор:Статьи nb1|Проект:Инкубатор:Статьи nb2".Split('|');
+        var nbcats = "Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2".Split('|');
         var nbcolors = "FFE0E0|DDFFDD|FFFFCC".Split('|');
         var shtitles = "Пров|Пом".Split('|');
         for (int j = 0; j < count; j++)
@@ -134,9 +134,9 @@ class MyBot : Bot
         int[,] num = new int[count, 2];
         for (int j = 0; j < count; j++)
             num[j, 0] = num[j, 1] = 0;
-        string[] nb = new string[set_parser.Matches("Проект:Инкубатор:Статьи nb0|Проект:Инкубатор:Статьи nb1|Проект:Инкубатор:Статьи nb2").Count];
+        string[] nb = new string[set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count];
         PageList nblist;
-        for (int j = 0; j < set_parser.Matches("Проект:Инкубатор:Статьи nb0|Проект:Инкубатор:Статьи nb1|Проект:Инкубатор:Статьи nb2").Count; j++)
+        for (int j = 0; j < set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count; j++)
         {
             nb[j] = "|";
             nblist = bot.GetCategoryMembers102(site, nbcats[j]);
@@ -180,7 +180,7 @@ class MyBot : Bot
                 string bgcolor = "";
                 if (talk.Exists() == true)
                 {
-                    for (int j = 0; j < set_parser.Matches("Проект:Инкубатор:Статьи nb0|Проект:Инкубатор:Статьи nb1|Проект:Инкубатор:Статьи nb2").Count; j++)
+                    for (int j = 0; j < set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count; j++)
                     {
                         if (nb[j].IndexOf(talk.title) != -1)
                             bgcolor = j.ToString();
@@ -221,7 +221,7 @@ class MyBot : Bot
     static void img_inc_bot()
     {
         Site commons = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
-        var cats = "Проект:Инкубатор:Запросы на проверку|Проект:Инкубатор:Запросы о помощи".Split('|');
+        var cats = "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|');
         Page p = new Page(site, "Проект:Инкубатор/Изображения");
         p.Load();
         PageList pl = new PageList(site);
@@ -365,24 +365,11 @@ class MyBot : Bot
     }
     static void main_inc_bot()
     {
-        Page p = new Page(site, "Википедия:Проект:Инкубатор/Статьи");
         PageList pl = new PageList(site);
         MyBot bot = new MyBot();
         string[] pages = new string[5000];
         int q = 0;
-        XmlTextReader rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apprefix=Проект:Инкубатор/Статьи&apnamespace=4&apfilterredir=nonredirects&aplimit=max&format=xml")));
-        while (rdr.Read())
-            if (rdr.NodeType == XmlNodeType.Element)
-                if (rdr.Name == "p")
-                {
-                    string abc = rdr.GetAttribute("title");
-                    if (abc != "Википедия:Проект:Инкубатор/Статьи Инкубатора" && abc != "Википедия:Проект:Инкубатор/Статьи/")
-                    {
-                        pages[q] = abc;
-                        q++;
-                    }
-                }
-        rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml")));
+        var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml")));
         while (rdr.Read())
             if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "p")
             {
@@ -403,7 +390,6 @@ class MyBot : Bot
                 Page n = new Page(site, pages[z]);
                 bool e_inc, e_cat;
                 e_inc = e_cat = false;
-                string com = "";
                 n.Load();
                 string dbt = "";
                 string red = "";
@@ -411,7 +397,7 @@ class MyBot : Bot
                 {
                     if (n.text.IndexOf("Инкубатор, Статья перенесена в ОП") == -1)
                     {
-                        Regex r = new Regex(Regex.Escape("#") + "(REDIRECT|перенаправление) " + Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline);
+                        Regex r = new Regex(Regex.Escape("#") + "(REDIRECT|перенаправление) " + Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
                         Regex db = new Regex(Regex.Escape("{{") + "db-.*?" + Regex.Escape("}}"), RegexOptions.Singleline);
                         for (int qw = 0; qw < r.Matches(n.text).Count; qw++)
                             red = r.Matches(n.text)[qw].ToString();
@@ -420,12 +406,7 @@ class MyBot : Bot
                         string ttt = n.text;
                         while (ttt.IndexOf("\n") != -1)
                             ttt = ttt.Replace("\n", "");
-                        if (n.text.Length - red.Length - dbt.Length > 2 && n.text.IndexOf("{{В инкубаторе") == -1 && n.text.IndexOf("{{в инкубаторе") == -1)
-                        {
-                            n.text = "{{В инкубаторе}}\n" + n.text;
-                            e_inc = true;
-                        }
-                        else if (n.text.Length == 0)
+                        if (n.text.Length == 0 || (n.text.Length - red.Length - dbt.Length > 2 && n.text.IndexOf("{{В инкубаторе") == -1 && n.text.IndexOf("{{в инкубаторе") == -1))
                         {
                             n.text = "{{В инкубаторе}}\n" + n.text;
                             e_inc = true;
@@ -437,36 +418,23 @@ class MyBot : Bot
                     {
                         red = m.ToString();
                         while (temp.IndexOf(red) != -1)
-                        {
                             temp = temp.Replace(red, "");
-                        }
                     }
-                    Regex cats = new Regex(Regex.Escape("[[") + "(Category|Категория).*?" + Regex.Escape("]]"), RegexOptions.Singleline);
+                    Regex cats = new Regex(Regex.Escape("[[") + "(Category|Категория|К).*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
                     foreach (Match m in cats.Matches(temp))
                     {
                         string replacer = m.ToString().Replace("[[", "[[:");
                         n.text = n.text.Replace(m.ToString(), replacer);
                         e_cat = true;
                     }
-                    Regex index = new Regex(Regex.Escape("__") + "(INDEX|ИНДЕКС)" + Regex.Escape("__"), RegexOptions.Singleline);
+                    Regex index = new Regex(Regex.Escape("__") + "(INDEX|ИНДЕКС)" + Regex.Escape("__"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
                     foreach (Match m in index.Matches(temp))
                     {
                         n.text = n.text.Replace(m.ToString(), "");
                         e_cat = true;
                     }
-                    if (e_inc)
-                    {
-                        if (e_cat)
-                            com = "добавлен {{В инкубаторе}}, [[User:IncubatorBot/Скрытие категорий и интервик|скрытие категорий]]";
-                        else
-                            com = "добавлен {{В инкубаторе}}";
-                        n.Save(com, true);
-                    }
-                    else if (e_cat)
-                    {
-                        com = "[[User:IncubatorBot/Скрытие категорий и интервик|скрытие категорий]]";
-                        n.Save(com, true);
-                    }
+                    if (e_inc || e_cat)
+                        n.Save("добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были", true);
                 }
             }
         }
@@ -573,7 +541,7 @@ class MyBot : Bot
         // теперь надо проверить наличие ВУС и прочих исключений
         PageList vus = new PageList();
         PageList kucat = new PageList();
-        vus.FillAllFromCategory("Проект:Инкубатор:Статьи на доработке");
+        vus.FillAllFromCategory("Инкубатор:Статьи на доработке");
         kucat.FillAllFromCategory("Википедия:Кандидаты на удаление");
         for (int ku = 0; ku < kunum; ku++)
         {
@@ -887,7 +855,7 @@ class MyBot : Bot
                 if (Convert.ToInt32(pages[i, 1]) > 70) // если создано более 70 дней назад, обрабатываем
                 {
                     PageList fromKU = new PageList(site); // перенести из цикла
-                    fromKU.FillFromCategory("Проект:Инкубатор:Статьи на доработке");
+                    fromKU.FillFromCategory("Инкубатор:Статьи на доработке");
                     if (fromKU.Contains(n) != true) // если не с ВП:КУ
                     {
                         if (log.IndexOf(n.title) == -1) // если нет в логах
@@ -940,7 +908,7 @@ class MyBot : Bot
         d16 = ""; // "== * --- Более 16 правок --- == \n\n";
         rp.Load();
         PageList fromKU = new PageList(site);
-        fromKU.FillFromCategory("Проект:Инкубатор:Статьи на доработке");
+        fromKU.FillFromCategory("Инкубатор:Статьи на доработке");
         for (int i = 0; i < 5000; i++)
         {
             if (!String.IsNullOrEmpty(pages[i, 0]))
