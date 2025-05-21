@@ -8,6 +8,7 @@ using System.Threading;
 using System.Web;
 using System.Xml;
 using DotNetWikiBot;
+using System.Linq;
 
 class MyBot : Bot
 {
@@ -52,28 +53,26 @@ class MyBot : Bot
     {
         DateTime utcNow = DateTime.UtcNow;
         Page pn = new Page(site, "Участник:IncubatorBot/TalkStat");
-        Page inc = new Page(site, "Участник:IncubatorBot/IncubatorStat");
-        Page incmem = new Page(site, "Проект:Инкубатор/Участники");
         Page vos = new Page(site, "Википедия:К восстановлению");
         vos.Load();
-        pn.Load();
-        inc.Load();
-        incmem.Load();
-        pn.text = "{{subst:User:IncubatorBot/TalkStat/cap}}\n|}";
-        inc.text = "{{subst:User:IncubatorBot/IncubatorStat/cap}}\n|}";
+        string result = "<center>\n{|class=standard\n!rowspan=2|Дата\n!colspan=7|[[Википедия:К улучшению|КУЛ]]\n!colspan=2|[[Википедия:К удалению|КУ]]\n!colspan=2|[[Википедия:К переименованию|КПМ]]\n!colspan=2|" +
+            "[[Википедия:К объединению|КОБ]]\n!colspan=2|[[Википедия:К разделению|КРАЗД]]\n!colspan=2|[[Википедия:К восстановлению|ВУС]]\n!colspan=4|Инкубатор\n|-align=right\n!Всего!!>365!!>180!!>90!!>30!!" +
+            "<30!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|" +
+            "незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n![https://ru.wikipedia.org/w/index.php?title=Служебная:AllPages&namespace=102 Всего]!![[Проект:Инкубатор/Мини-рецензирование|" +
+            "Реценз]]\n![[:Категория:Инкубатор:Запросы на проверку|Проверить]]!![[:Категория:Инкубатор:Запросы о помощи|Помочь]]\n";
 
-        string[] cats = {"Википедия:Статьи для срочного улучшения","Статьи на улучшении более года","Статьи на улучшении более полугода","Статьи на улучшении более 90 дней","Статьи на улучшении более 30 дней",
-        "Статьи на улучшении менее 30 дней","Википедия:Незакрытые обсуждения статей для улучшения","Википедия:Кандидаты на удаление","Википедия:Незакрытые обсуждения удаления страниц",
-        "Википедия:Статьи для переименования","Википедия:Незакрытые обсуждения переименования страниц","Википедия:Кандидаты на объединение","Википедия:Незакрытые обсуждения объединения страниц",
-        "Википедия:Статьи для разделения","Википедия:Незакрытые обсуждения разделения страниц","Википедия:Незакрытые обсуждения восстановления страниц","Инкубатор:Все статьи","Инкубатор:Запросы о помощи",
-        "Инкубатор:Статьи на мини-рецензировании","Википедия:Стабы в Инкубаторе","Инкубатор:Запросы на проверку"};
-        string[] n = new string[cats.Length];
-        for (int i = 0; i < cats.Length; i++)
+        var cats = new Dictionary<string, string>() { {"Википедия:Статьи для срочного улучшения","0" },{ "Википедия:Незакрытые обсуждения переименования страниц","0" },{ "Википедия:Статьи на улучшении " +
+                "более года", "0" },{ "Википедия:Незакрытые обсуждения статей для улучшения", "0" },{ "Википедия:Статьи на улучшении более полугода", "0" },{ "Википедия:Статьи на улучшении более 90 дней",
+                "0" },{ "Википедия:Статьи на улучшении более 30 дней", "0" },{ "Википедия:Статьи на улучшении менее 30 дней", "0" },{ "Википедия:Кандидаты на удаление", "0" },{ "Википедия:Незакрытые " +
+                "обсуждения удаления страниц", "0" },{ "Википедия:Статьи для переименования", "0" },{ "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц",
+                "0" },{ "Википедия:Статьи для разделения", "0" },{ "Инкубатор:Запросы на проверку", "0" },{ "Википедия:Незакрытые обсуждения разделения страниц", "0" },{ "Википедия:Незакрытые обсуждения " +
+                "восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы о помощи", "0" },{ "Инкубатор:Статьи на мини-рецензировании", "0" }};
+        foreach (var cat in cats.Keys.ToList())
         {
-            var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=categoryinfo&titles=К:" + HttpUtility.UrlEncode(cats[i]) + "&format=xml")));
+            var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=categoryinfo&titles=К:" + HttpUtility.UrlEncode(cat) + "&format=xml")));
             while (rdr.Read())
                 if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
-                    n[i] = rdr.GetAttribute("pages");
+                    cats[cat] = rdr.GetAttribute("pages");
         }
 
         int vos_p = 0;
@@ -88,34 +87,15 @@ class MyBot : Bot
             if (vos.text.IndexOf("* [[:" + p.title) != -1)
                 vos_p++;
         }
-        int aa = 0;
-        int bb = 0;
-        int incmen = -3;
-        for (int i = 1; i < 100; i++)
-        {
-            if (incmem.text.IndexOf("* [[", aa + 10) != -1)
-            {
-                incmen++;
-                aa = incmem.text.IndexOf("* [[", aa + 10);
-                incmem.text.Remove(aa, 5);
-            }
 
-            if (incmem.text.IndexOf("* {{", bb + 10) != -1)
-            {
-                incmen++;
-                bb = incmem.text.IndexOf("* {{", bb + 10);
-                incmem.text.Remove(bb, 5);
-            }
-        }
-
-        string stat = "|- align=\"right\"\n| {{subst:#time: j.m.Y}} \n|" + n[0] + "||" + n[1] + "||" + n[2] + "||" + n[3] + "||" + n[4] + "||" + n[5] + "||" + n[6] + "\n|" + n[7] + "||" + n[8] + "\n|" +
-            n[9] + "||" + n[10] + "\n|" + n[11] + "||" + n[12] + "\n|" + n[13] + "||" + n[14] + "\n|" + vos_p + "||" + n[15] + "\n";
-        pn.text = pn.text.Insert(pn.text.LastIndexOf("|}"), stat);
-        pn.Save("обновление статистики", true);
-
-        string incstat = "|- align=\"right\"\n| {{subst:#time: j.m.Y}} \n|" + n[16] + "||" + n[17] + "\n|" + n[18] + "\n|" + n[19] + "||" + n[20] + "||" + n[21] + "\n|" + incmen + "\n";
-        inc.text = inc.text.Insert(inc.text.IndexOf("|}"), incstat);
-        inc.Save("обновление статистики", true);
+        result += "|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Статьи на улучшении более года"] + "||" + cats["Википедия:Статьи на улучшении " +
+            "более полугода"] + "||" + cats["Википедия:Статьи на улучшении более 90 дней"] + "||" + cats["Википедия:Статьи на улучшении более 30 дней"] + "||" + cats["Википедия:Статьи на улучшении менее " +
+            "30 дней"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления " +
+            "страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + 
+            "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] + "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + 
+            vos_p + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats["Инкубатор:Статьи на мини-рецензировании"] + "||" + 
+            cats["Инкубатор:Запросы на проверку"] + "||" + cats["Инкубатор:Запросы о помощи"] + "\n|}";
+        pn.Save(result);
     }
     static void inc_check_bot()
     {
@@ -126,24 +106,12 @@ class MyBot : Bot
         var cats = "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|');
         int count = cats.Length;
         var dt = new string[count];
-        var nbcats = "Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2".Split('|');
-        var nbcolors = "FFE0E0|DDFFDD|FFFFCC".Split('|');
         var shtitles = "Пров|Пом".Split('|');
         for (int j = 0; j < count; j++)
             dt[j] = "\n{{User:IncubatorBot/ЗПП|start|" + (j + 1).ToString() + "}}\n{{User:IncubatorBot/ЗПП|th}}\n";
         int[,] num = new int[count, 2];
         for (int j = 0; j < count; j++)
             num[j, 0] = num[j, 1] = 0;
-        string[] nb = new string[set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count];
-        PageList nblist;
-        for (int j = 0; j < set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count; j++)
-        {
-            nb[j] = "|";
-            nblist = bot.GetCategoryMembers102(site, nbcats[j]);
-            foreach (Page pp in nblist)
-                nb[j] = nb[j] + pp.title + "|";
-            nblist.Clear();
-        }
         PageList pl = new PageList(site);
         for (int i = 0; i < count; i++)
         {
@@ -180,11 +148,6 @@ class MyBot : Bot
                 string bgcolor = "";
                 if (talk.Exists() == true)
                 {
-                    for (int j = 0; j < set_parser.Matches("Инкубатор:Статьи nb0|Инкубатор:Статьи nb1|Инкубатор:Статьи nb2").Count; j++)
-                    {
-                        if (nb[j].IndexOf(talk.title) != -1)
-                            bgcolor = j.ToString();
-                    }
                     DateTime dtalk = talk.timestamp;
                     talkdate = dtalk.ToString("yyyy-MM-dd HH:mm");
                     pagedate = dpage.ToString("yyyy-MM-dd HH:mm");
@@ -285,10 +248,7 @@ class MyBot : Bot
                                 }
                             }
                     }
-                    catch
-                    {
-                        continue;
-                    }
+                    catch { continue; }
                 }
             }
         }
@@ -367,76 +327,43 @@ class MyBot : Bot
     {
         PageList pl = new PageList(site);
         MyBot bot = new MyBot();
-        string[] pages = new string[5000];
-        int q = 0;
+        var pages = new HashSet<string>();
+        var exceptions = new Regex("Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ");
         var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml")));
         while (rdr.Read())
-            if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "p")
-            {
-                pages[q] = rdr.GetAttribute("title");
-                q++;
-            }
-        var exceptions = "Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ".Split('|');
-        for (int z = 0; z < q; z++)
+            if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "p" && !exceptions.IsMatch(rdr.GetAttribute("title")))
+                pages.Add(rdr.GetAttribute("title"));
+        foreach (var page in pages)
         {
-            string tttt = "";
-            bool except = false;  // start of module for exception some pages
-            tttt = pages[z];
-            for (int ik = 0; ik < exceptions.Length; ik++)
-                if (tttt == exceptions[ik])
-                    except = true;
-            if (!except) // end of exceptions
+            Page p = new Page(site, page);
+            p.Load();
+            string dbt = "", red = "", temp = p.text, newtext = p.text; ;
+            if (p.text.IndexOf("Инкубатор, Статья перенесена в ОП") == -1)
             {
-                Page n = new Page(site, pages[z]);
-                bool e_inc, e_cat;
-                e_inc = e_cat = false;
-                n.Load();
-                string dbt = "";
-                string red = "";
-                if (n.text.IndexOf("nobots") == -1)
-                {
-                    if (n.text.IndexOf("Инкубатор, Статья перенесена в ОП") == -1)
-                    {
-                        Regex r = new Regex(Regex.Escape("#") + "(REDIRECT|перенаправление) " + Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                        Regex db = new Regex(Regex.Escape("{{") + "db-.*?" + Regex.Escape("}}"), RegexOptions.Singleline);
-                        for (int qw = 0; qw < r.Matches(n.text).Count; qw++)
-                            red = r.Matches(n.text)[qw].ToString();
-                        for (int qw = 0; qw < db.Matches(n.text).Count; qw++)
-                            dbt = db.Matches(n.text)[qw].ToString();
-                        string ttt = n.text;
-                        while (ttt.IndexOf("\n") != -1)
-                            ttt = ttt.Replace("\n", "");
-                        if (n.text.Length == 0 || (n.text.Length - red.Length - dbt.Length > 2 && n.text.IndexOf("{{В инкубаторе") == -1 && n.text.IndexOf("{{в инкубаторе") == -1))
-                        {
-                            n.text = "{{В инкубаторе}}\n" + n.text;
-                            e_inc = true;
-                        }
-                    }
-                    string temp = n.text;
-                    Regex comment = new Regex(Regex.Escape("<!--") + ".*?" + Regex.Escape("-->"), RegexOptions.Singleline);
-                    foreach (Match m in comment.Matches(temp))
-                    {
-                        red = m.ToString();
-                        while (temp.IndexOf(red) != -1)
-                            temp = temp.Replace(red, "");
-                    }
-                    Regex cats = new Regex(Regex.Escape("[[") + "(Category|Категория|К).*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                    foreach (Match m in cats.Matches(temp))
-                    {
-                        string replacer = m.ToString().Replace("[[", "[[:");
-                        n.text = n.text.Replace(m.ToString(), replacer);
-                        e_cat = true;
-                    }
-                    Regex index = new Regex(Regex.Escape("__") + "(INDEX|ИНДЕКС)" + Regex.Escape("__"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                    foreach (Match m in index.Matches(temp))
-                    {
-                        n.text = n.text.Replace(m.ToString(), "");
-                        e_cat = true;
-                    }
-                    if (e_inc || e_cat)
-                        n.Save("добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были", true);
-                }
+                Regex r = new Regex(Regex.Escape("#") + "(REDIRECT|перенаправление) " + Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                Regex db = new Regex(Regex.Escape("{{") + "db-.*?" + Regex.Escape("}}"), RegexOptions.Singleline);
+                for (int qw = 0; qw < r.Matches(p.text).Count; qw++)
+                    red = r.Matches(p.text)[qw].ToString();
+                for (int qw = 0; qw < db.Matches(p.text).Count; qw++)
+                    dbt = db.Matches(p.text)[qw].ToString();
+                string ttt = p.text;
+                while (ttt.IndexOf("\n") != -1)
+                    ttt = ttt.Replace("\n", "");
+                if (p.text.Length == 0 || (p.text.Length - red.Length - dbt.Length > 2 && p.text.IndexOf("{{В инкубаторе") == -1 && p.text.IndexOf("{{в инкубаторе") == -1))
+                    newtext = "{{В инкубаторе}}\n" + p.text;
             }
+            Regex comment = new Regex("<!--.*?-->", RegexOptions.Singleline);
+            foreach (Match m in comment.Matches(temp))
+                while (temp.IndexOf(m.ToString()) != -1)
+                    temp = temp.Replace(m.ToString(), "");
+            Regex cats = new Regex(@"\[\[(Category|Категория|К).*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            foreach (Match m in cats.Matches(temp))
+                newtext = newtext.Replace(m.ToString(), m.ToString().Replace("[[", "[[:"));
+            Regex index = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+            foreach (Match m in index.Matches(temp))
+                newtext = newtext.Replace(m.ToString(), "");
+            if (newtext != p.text)
+                p.Save(newtext, "добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были", true);
         }
     }
     static void remind_bot()
@@ -931,17 +858,15 @@ class MyBot : Bot
             pact.Add(n); // сохраняем в список, для проставления шаблонов
             prez.Add(n); // сохраняем в отдельный список упоминание
                          // веб-запрос, из которого парсим дату и автора первой и последней правок, общее кол-во правок и кол-во авторов
-            string pageURL = site.apiPath + "?action=query&prop=info|revisions&titles=" + HttpUtility.UrlEncode(tit) + "&rvlimit=100&rvprop=flags|timestamp|user&format=xml";
-            string html = site.GetWebPage(pageURL);
             ne = 0;
-            XmlTextReader reader = new XmlTextReader(new StringReader(html));
+            XmlTextReader reader = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=info|revisions&titles=" + HttpUtility.UrlEncode(tit) +
+                "&rvlimit=100&rvprop=flags|timestamp|user&format=xml")));
             while (reader.Read())
-            {
                 if (reader.NodeType == XmlNodeType.Element)
                 {
                     if (reader.Name == "page")
                         length = reader.GetAttribute("length");
-                    if (reader.Name == "rev")
+                    else if (reader.Name == "rev")
                     { // заносим в массив все правки в странице
                         users[ne, 0] = reader.GetAttribute("user");
                         users[ne, 1] = reader.GetAttribute("timestamp");
@@ -952,7 +877,6 @@ class MyBot : Bot
                         ne++;
                     }
                 }
-            }
             // определяем уникальных юзеров
             nu = 1;
             unusers[0] = users[0, 0];
@@ -1013,31 +937,24 @@ class MyBot : Bot
                 pagetext = pagetext.Replace(rep, " \n");
             }
             while (c4.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < c3.Matches(pagetext).Count; qw++)
                 {
                     rep = c3.Matches(pagetext)[qw].ToString();
                     pagetext = pagetext.Replace(rep, "");
                 }
-            }
             while (f1.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < f1.Matches(pagetext).Count; qw++)
                 {
                     rep = f1.Matches(pagetext)[qw].ToString();
                     pagetext = pagetext.Replace(rep, "");
                 }
-            }
             while (f2.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < f2.Matches(pagetext).Count; qw++)
                 {
                     rep = f2.Matches(pagetext)[qw].ToString();
                     pagetext = pagetext.Replace(rep, "");
                 }
-            }
             while (c5.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < c5.Matches(pagetext).Count; qw++)
                 {
                     rep = c5.Matches(pagetext)[qw].ToString();
@@ -1046,23 +963,18 @@ class MyBot : Bot
                     rep2 = rep.Substring(st, rep.Length - 2 - st);
                     pagetext = pagetext.Replace(rep, rep2);
                 }
-            }
             while (c6.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < c6.Matches(pagetext).Count; qw++)
                 {
                     rep = c6.Matches(pagetext)[qw].ToString();
                     pagetext = pagetext.Replace(rep, "");
                 }
-            }
             while (c7.IsMatch(pagetext, 0))
-            {
                 for (int qw = 0; qw < c7.Matches(pagetext).Count; qw++)
                 {
                     rep = c7.Matches(pagetext)[qw].ToString();
                     pagetext = pagetext.Replace(rep, "");
                 }
-            }
             pagetext = pagetext.Replace("<ref>", "").Replace("</ref>", "").Replace("<!--", "").Replace("-->", "").Replace("\'", "").Replace("*", " ").Replace("#", " ").Replace("  ", " ").Replace("  ", " ");
             for (int q1 = 0; q1 < 20; q1++)
                 pagetext = pagetext.Replace("\n\n", "\n");
@@ -1071,19 +983,7 @@ class MyBot : Bot
                 textextract = pagetext.Substring(0, 300) + " <...>";
             else
                 textextract = pagetext.Substring(0);
-            int ns = n.GetNamespace();
-            string otitle = "";
-            switch (ns)
-            {
-                case 4:
-                    otitle = "Обсуждение Википедии";
-                    break;
-                case 102:
-                default:
-                    otitle = "Обсуждение Инкубатора";
-                    break;
-            }
-            string titlefortalk = otitle + n.title.Substring(9);
+            string titlefortalk = "Обсуждение Инкубатора" + n.title.Substring(9);
             string titleforhist = n.title.Replace(" ", "_").Replace("\"", "%22").Replace("&", "%26").Replace("!", "&#33");
             // теперь в зависимости от кол-ва правок раскидываем информацию о статье по 3ем переменным, которые потом составят страницу мини-рецензирования...
             if (rp.text.IndexOf("== [[" + n.title + "]] ==") == -1)
