@@ -1,186 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Http;
-using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
 using System.Xml;
 using DotNetWikiBot;
-using System.Linq;
 
 class MyBot : Bot
 {
     static string[] creds;
     static Site site;
-    static HttpClient Site1;
-    static HttpClient Site(string login, string password)
-    {
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        client.DefaultRequestHeaders.Add("User-Agent", login);
-        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        var doc = new XmlDocument();
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        return client;
-    }
-    static void Save(HttpClient site, string title, string text, string comment)
-    {
-        var doc = new XmlDocument();
-        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
-        if (!result.IsSuccessStatusCode)
-            return;
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        var request = new MultipartFormDataContent();
-        request.Add(new StringContent("edit"), "action");
-        request.Add(new StringContent(title), "title");
-        request.Add(new StringContent(text), "text");
-        request.Add(new StringContent(comment), "summary");
-        request.Add(new StringContent(token), "token");
-        request.Add(new StringContent("xml"), "format");
-        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-        if (!result.ToString().Contains("uccess"))
-            Console.WriteLine(result.ToString());
-    }
-    static void stat_bot()
-    {
-        DateTime utcNow = DateTime.UtcNow;
-        Page pn = new Page(site, "Участник:IncubatorBot/TalkStat");
-        Page vos = new Page(site, "Википедия:К восстановлению");
-        vos.Load();
-        string result = "<center>\n{|class=standard\n!rowspan=2|Дата\n!colspan=7|[[Википедия:К улучшению|КУЛ]]\n!colspan=2|[[Википедия:К удалению|КУ]]\n!colspan=2|[[Википедия:К переименованию|КПМ]]\n!colspan=2|" +
-            "[[Википедия:К объединению|КОБ]]\n!colspan=2|[[Википедия:К разделению|КРАЗД]]\n!colspan=2|[[Википедия:К восстановлению|ВУС]]\n!colspan=4|Инкубатор\n|-align=right\n!Всего!!>365!!>180!!>90!!>30!!" +
-            "<30!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|" +
-            "незакрытых дней|0}}\n!Страниц!!{{abbr|НЗД|незакрытых дней|0}}\n![https://ru.wikipedia.org/w/index.php?title=Служебная:AllPages&namespace=102 Всего]!![[Проект:Инкубатор/Мини-рецензирование|" +
-            "Реценз]]\n![[:Категория:Инкубатор:Запросы на проверку|Проверить]]!![[:Категория:Инкубатор:Запросы о помощи|Помочь]]\n";
-
-        var cats = new Dictionary<string, string>() { {"Википедия:Статьи для срочного улучшения","0" },{ "Википедия:Незакрытые обсуждения переименования страниц","0" },{ "Википедия:Статьи на улучшении " +
-                "более года", "0" },{ "Википедия:Незакрытые обсуждения статей для улучшения", "0" },{ "Википедия:Статьи на улучшении более полугода", "0" },{ "Википедия:Статьи на улучшении более 90 дней",
-                "0" },{ "Википедия:Статьи на улучшении более 30 дней", "0" },{ "Википедия:Статьи на улучшении менее 30 дней", "0" },{ "Википедия:Кандидаты на удаление", "0" },{ "Википедия:Незакрытые " +
-                "обсуждения удаления страниц", "0" },{ "Википедия:Статьи для переименования", "0" },{ "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц",
-                "0" },{ "Википедия:Статьи для разделения", "0" },{ "Инкубатор:Запросы на проверку", "0" },{ "Википедия:Незакрытые обсуждения разделения страниц", "0" },{ "Википедия:Незакрытые обсуждения " +
-                "восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы о помощи", "0" },{ "Инкубатор:Статьи на мини-рецензировании", "0" }};
-        foreach (var cat in cats.Keys.ToList())
-        {
-            var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=categoryinfo&titles=К:" + HttpUtility.UrlEncode(cat) + "&format=xml")));
-            while (rdr.Read())
-                if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
-                    cats[cat] = rdr.GetAttribute("pages");
-        }
-
-        int vos_p = 0;
-        var vos_page = new PageList(site);
-        vos_page.FillFromPageLinks("Википедия:К восстановлению");
-        foreach (Page p in vos_page)
-        {
-            if (vos.text.IndexOf("* [[" + p.title) != -1)
-                vos_p++;
-            if (vos.text.IndexOf("* " + p.title) != -1)
-                vos_p++;
-            if (vos.text.IndexOf("* [[:" + p.title) != -1)
-                vos_p++;
-        }
-
-        result += "|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Статьи на улучшении более года"] + "||" + cats["Википедия:Статьи на улучшении " +
-            "более полугода"] + "||" + cats["Википедия:Статьи на улучшении более 90 дней"] + "||" + cats["Википедия:Статьи на улучшении более 30 дней"] + "||" + cats["Википедия:Статьи на улучшении менее " +
-            "30 дней"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления " +
-            "страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + 
-            "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] + "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + 
-            vos_p + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats["Инкубатор:Статьи на мини-рецензировании"] + "||" + 
-            cats["Инкубатор:Запросы на проверку"] + "||" + cats["Инкубатор:Запросы о помощи"] + "\n|}";
-        pn.Save(result);
-    }
-    static void inc_check_bot()
-    {
-        MyBot bot = new MyBot();
-        Page p = new Page(site, "Проект:Инкубатор/Запросы помощи и проверки");
-        string talkdate, pagedate;
-        Regex set_parser = new Regex(@".*?" + Regex.Escape("|"), RegexOptions.Singleline);
-        var cats = "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|');
-        int count = cats.Length;
-        var dt = new string[count];
-        var shtitles = "Пров|Пом".Split('|');
-        for (int j = 0; j < count; j++)
-            dt[j] = "\n{{User:IncubatorBot/ЗПП|start|" + (j + 1).ToString() + "}}\n{{User:IncubatorBot/ЗПП|th}}\n";
-        int[,] num = new int[count, 2];
-        for (int j = 0; j < count; j++)
-            num[j, 0] = num[j, 1] = 0;
-        PageList pl = new PageList(site);
-        for (int i = 0; i < count; i++)
-        {
-            pl.FillFromCategory(cats[i]);
-            foreach (Page m in pl)
-            {
-                m.Load();
-                int ns = m.GetNamespace(); // make a shortcut title fot output [[fullname|shortcut]]
-                string t1 = m.title;
-                string t2 = "";
-                string otitle = "";
-                switch (ns)
-                {
-                    case 102:
-                        t2 = t1.Remove(0, 10);
-                        otitle = t1.Remove(0, 9);
-                        otitle = "Обсуждение Инкубатора" + otitle;
-                        break;
-                    case 103:
-                        t1 = t1.Replace("Обсуждение Инкубатора", "Инкубатор");
-                        t2 = t1.Remove(0, 10);
-                        otitle = t1.Remove(0, 9);
-                        otitle = "Обсуждение Инкубатора" + otitle;
-                        break;
-                    default:
-                        continue;
-                }
-                Page n = new Page(site, t1);
-                Page talk = new Page(site, otitle);
-                n.LoadWithMetadata();
-                talk.LoadWithMetadata();
-                DateTime dpage = n.timestamp;
-                pagedate = dpage.ToString("yyyy-MM-dd HH:mm");
-                string bgcolor = "";
-                if (talk.Exists() == true)
-                {
-                    DateTime dtalk = talk.timestamp;
-                    talkdate = dtalk.ToString("yyyy-MM-dd HH:mm");
-                    pagedate = dpage.ToString("yyyy-MM-dd HH:mm");
-                    num[i, 0]++;
-                    dt[i] = dt[i] + "{{User:IncubatorBot/ЗПП|td|bg=" + bgcolor + "|page=" + n.title + "|sp=" + t2 + "|talkpage=" + talk.title + "|u1=" + n.lastUser + "|t1=" + pagedate + "|u2=" + talk.lastUser + "|t2=" + talkdate + "}}\n";
-                }
-                else
-                {
-                    num[i, 1]++;// counter of pages without talkpages
-                    dt[i] = dt[i] + "{{User:IncubatorBot/ЗПП|td|page=" + n.title + "|sp=" + t2 + "|talkpage=" + talk.title + "|u1=" + n.lastUser + "|t1=" + pagedate + "}}\n";
-                }
-            }
-            pl.Clear();
-        }
-        string final = "";
-        for (int j = 0; j < count; j++)
-        {
-            final = final + dt[j] + "{{User:IncubatorBot/ЗПП|end}}";
-        }
-        p.Load();
-        if (p.text.IndexOf(final) == -1)
-        {
-            p.text = "{{Проект:Инкубатор/Запросы помощи и проверки/Doc|~~~~}}" + final;
-            string comment = "";
-            for (int j = 0; j < set_parser.Matches("Пров|Пом").Count; j++)
-                comment = comment + shtitles[j] + "/";
-            comment = comment.Remove(comment.Length - 1) + " = ";
-            for (int j = 0; j < set_parser.Matches("Пров|Пом").Count; j++)
-                comment = comment + num[j, 0] + ":" + num[j, 1] + " / ";
-            comment = comment.Remove(comment.Length - 3);
-            p.Save(comment, true);
-        }
-    }
     static void img_inc_bot()
     {
         Site commons = new Site("https://commons.wikimedia.org", creds[0], creds[1]);
@@ -325,8 +155,6 @@ class MyBot : Bot
     }
     static void main_inc_bot()
     {
-        PageList pl = new PageList(site);
-        MyBot bot = new MyBot();
         var pages = new HashSet<string>();
         var exceptions = new Regex("Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ");
         var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml")));
@@ -1053,12 +881,9 @@ class MyBot : Bot
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
-        //Site1 = Site(creds[0], creds[1]);
-        inc_check_bot();
         img_inc_bot();
         main_inc_bot();
         remind_bot();
         mini_recenz();
-        stat_bot();
     }
 }
