@@ -153,47 +153,6 @@ class MyBot : Bot
         p.text = p.text + "|}";
         p.Save("обновление списка", true);
     }
-    static void main_inc_bot()
-    {
-        var pages = new HashSet<string>();
-        var exceptions = new Regex("Инкубатор:Песочница|Инкубатор:Песочница/Пишите ниже|Инкубатор:Тест бота|Инкубатор:ПЕСОК|Инкубатор:ТЕСТ");
-        var rdr = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml")));
-        while (rdr.Read())
-            if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "p" && !exceptions.IsMatch(rdr.GetAttribute("title")))
-                pages.Add(rdr.GetAttribute("title"));
-        foreach (var page in pages)
-        {
-            Page p = new Page(site, page);
-            p.Load();
-            string dbt = "", red = "", temp = p.text, newtext = p.text; ;
-            if (p.text.IndexOf("Инкубатор, Статья перенесена в ОП") == -1)
-            {
-                Regex r = new Regex(Regex.Escape("#") + "(REDIRECT|перенаправление) " + Regex.Escape("[[") + ".*?" + Regex.Escape("]]"), RegexOptions.Singleline | RegexOptions.IgnoreCase);
-                Regex db = new Regex(Regex.Escape("{{") + "db-.*?" + Regex.Escape("}}"), RegexOptions.Singleline);
-                for (int qw = 0; qw < r.Matches(p.text).Count; qw++)
-                    red = r.Matches(p.text)[qw].ToString();
-                for (int qw = 0; qw < db.Matches(p.text).Count; qw++)
-                    dbt = db.Matches(p.text)[qw].ToString();
-                string ttt = p.text;
-                while (ttt.IndexOf("\n") != -1)
-                    ttt = ttt.Replace("\n", "");
-                if (p.text.Length == 0 || (p.text.Length - red.Length - dbt.Length > 2 && p.text.IndexOf("{{В инкубаторе") == -1 && p.text.IndexOf("{{в инкубаторе") == -1))
-                    newtext = "{{В инкубаторе}}\n" + p.text;
-            }
-            Regex comment = new Regex("<!--.*?-->", RegexOptions.Singleline);
-            foreach (Match m in comment.Matches(temp))
-                while (temp.IndexOf(m.ToString()) != -1)
-                    temp = temp.Replace(m.ToString(), "");
-            Regex cats = new Regex(@"\[\[(Category|Категория|К).*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-            foreach (Match m in cats.Matches(temp))
-                newtext = newtext.Replace(m.ToString(), m.ToString().Replace("[[", "[[:"));
-            Regex index = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.Singleline | RegexOptions.IgnoreCase);
-            foreach (Match m in index.Matches(temp))
-                newtext = newtext.Replace(m.ToString(), "");
-            if (newtext != p.text)
-                p.Save(newtext, "добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были", true);
-        }
-    }
     static void remind_bot()
     {
         PageList all = new PageList(site);
@@ -882,7 +841,6 @@ class MyBot : Bot
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
         img_inc_bot();
-        main_inc_bot();
         remind_bot();
         mini_recenz();
     }
