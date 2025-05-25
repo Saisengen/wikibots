@@ -63,7 +63,6 @@ class Program
         result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
         if (!result.ToString().Contains("uccess"))
             Console.WriteLine(result.ToString());
-
     }
     static void nonfree_files_in_nonmain_ns()
     {
@@ -753,9 +752,61 @@ class Program
     }
     static void remove_template_from_non_orphan_page()
     {
-        string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(orphan_article) + "?action=raw").Result;
-        Save(site, orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
-        legit_link_found = true;
+        try
+        {
+            string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(orphan_article) + "?action=raw").Result;
+            Save(site, orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
+            legit_link_found = true;
+        }
+        catch { }
+    }
+    static void stat_bot()
+    {        
+        var cats = new Dictionary<string, string>() { {"Википедия:Статьи для срочного улучшения","0" },{ "Википедия:Незакрытые обсуждения переименования страниц","0" },{ "Википедия:Статьи на улучшении " +
+                "более года", "0" },{ "Википедия:Незакрытые обсуждения статей для улучшения", "0" },{ "Википедия:Статьи на улучшении более полугода", "0" },{ "Википедия:Статьи на улучшении более 90 дней",
+                "0" },{ "Википедия:Статьи на улучшении более 30 дней", "0" },{ "Википедия:Статьи на улучшении менее 30 дней", "0" },{ "Википедия:Кандидаты на удаление", "0" },{ "Википедия:Незакрытые " +
+                "обсуждения удаления страниц", "0" },{ "Википедия:Статьи для переименования", "0" },{ "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц",
+                "0" },{ "Википедия:Статьи для разделения", "0" },{ "Инкубатор:Запросы на проверку", "0" },{ "Википедия:Незакрытые обсуждения разделения страниц", "0" },{ "Википедия:Незакрытые обсуждения " +
+                "восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы о помощи", "0" },{ "Инкубатор:Статьи на мини-рецензировании", "0" }};
+        foreach (var cat in cats.Keys.ToList())
+        {
+            var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + Uri.EscapeUriString(cat) + "&format=xml").Result));
+            while (rdr.Read())
+                if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
+                    cats[cat] = rdr.GetAttribute("pages");
+        }
+
+        string vus_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/Википедия:К восстановлению?action=raw").Result;
+        var non_summaried_vus = new Regex(@"[^>]\[\[([^\]]*)\]\][^<]");
+
+        string stat_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/Участник:MBH/Завалы?action=raw").Result;
+        string result = "\n|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Статьи на улучшении более года"] + "||" + cats["Википедия:Статьи на улучшении " +
+            "более полугода"] + "||" + cats["Википедия:Статьи на улучшении более 90 дней"] + "||" + cats["Википедия:Статьи на улучшении более 30 дней"] + "||" + cats["Википедия:Статьи на улучшении менее " +
+            "30 дней"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления " +
+            "страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] +
+            "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] + "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" +
+            non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats["Инкубатор:Статьи на " +
+            "мини-рецензировании"] + "||" + cats["Инкубатор:Запросы на проверку"] + "||" + cats["Инкубатор:Запросы о помощи"] + "\n|}";
+        Save(site, "Участник:MBH/Завалы", stat_text + result, "");
+    }
+    static void inc_check_bot()
+    {
+        string result = "{{/Doc}}";
+        string comment = "";
+        foreach (var cat in "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|'))
+        {
+            result += "\n==[[:К:" + cat + "|]]==\n{|class=\"standard sortable\"\n!Статья!!Размер!!Посл. правщик!!Посл. правка";
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:" + cat).Result)))
+                while (r.Read())
+                    if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10"))
+                    {
+                        string title = r.GetAttribute("title");
+                        result += "\n{{/строка|" + title + "}}";
+                        comment += "[[" + title + "]], ";
+                    }
+            result += "\n|}";
+        }
+        Save(site, "Проект:Инкубатор/Запросы помощи и проверки", result, comment.Substring(0, comment.Length - 2));
     }
     static void Main()
     {
@@ -763,17 +814,19 @@ class Program
         site = Site(creds[0], creds[1]);
         dtn = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        orphan_articles();
-        orphan_nonfree_files();
-        unlicensed_files();
-        outdated_templates();
-        nonfree_files_in_nonmain_ns();
-        redirs_deletion();
-        unreviewed_in_nonmain_ns();
-        user_activity_stats_template();
-        trans_namespace_moves();
-        zsf_archiving();
-        little_flags();
-        catmoves();
+        try { inc_check_bot(); } catch(Exception e) { Console.WriteLine(e.ToString()); }
+        try { stat_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
     }
 }
