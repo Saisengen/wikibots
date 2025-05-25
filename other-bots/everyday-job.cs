@@ -789,7 +789,7 @@ class Program
             "мини-рецензировании"] + "||" + cats["Инкубатор:Запросы на проверку"] + "||" + cats["Инкубатор:Запросы о помощи"] + "\n|}";
         Save(site, "Участник:MBH/Завалы", stat_text + result, "");
     }
-    static void inc_check_bot()
+    static void inc_check_help_requests()
     {
         string result = "{{/Doc}}";
         string comment = "";
@@ -808,14 +808,36 @@ class Program
         }
         Save(site, "Проект:Инкубатор/Запросы помощи и проверки", result, comment.Substring(0, comment.Length - 2));
     }
+    static void main_inc_bot()
+    {
+        var pages = new HashSet<string>();
+        var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml").Result));
+        while (rdr.Read())
+            if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница")
+            {
+                string pagename = rdr.GetAttribute("title");
+                string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(pagename) + "?action=raw").Result;
+                Regex except_rgx = new Regex(@"#(REDIRECT|перенаправление) \[\[|\{\{db-|\{\{в инкубаторе", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                if (pagetext.IndexOf("нкубатор, Статья перенесена в ОП") == -1 && !except_rgx.IsMatch(pagetext))
+                    pagetext = "{{В инкубаторе}}\n" + pagetext;
+                Regex cats = new Regex(@"\[\[(Category|Категория|К).*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                foreach (Match m in cats.Matches(pagetext))
+                    pagetext = pagetext.Replace(m.ToString(), m.ToString().Replace("[[", "[[:"));
+                Regex index = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+                foreach (Match m in index.Matches(pagetext))
+                    pagetext = pagetext.Replace(m.ToString(), "");
+                Save(site, pagename, pagetext, "добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были");
+            }
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = Site(creds[0], creds[1]);
         dtn = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        try { inc_check_bot(); } catch(Exception e) { Console.WriteLine(e.ToString()); }
+        try { inc_check_help_requests(); } catch(Exception e) { Console.WriteLine(e.ToString()); }
         try { stat_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
