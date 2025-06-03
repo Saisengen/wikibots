@@ -9,6 +9,31 @@ using System.Globalization;
 using System.Linq;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
+public class Image
+{
+    public int ns;
+    public string title;
+}
+public class Limits
+{
+    public int allpages, images;
+}
+public class Page
+{
+    public int pageid, ns;
+    public string title;
+    public List<Image> images;
+}
+public class Query
+{
+    public List<Page> pages;
+}
+public class Root
+{
+    public bool batchcomplete;
+    public Limits limits;
+    public Query query;
+}
 class tnm_record
 {
     public string oldtitle, oldns, newtitle, user, date, comment;
@@ -824,130 +849,310 @@ class Program
                 Save(site, pagename, pagetext, "добавлен {{В инкубаторе}}, если не было, и [[User:IncubatorBot/Скрытие категорий и интервик|скрыты категории]], если были");
             }
     }
-    //static void img_inc_bot()
+    static void img_inc_bot()
+    {
+        string result = "<gallery mode=packed heights=75px>";
+        Root inc_images_json = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=images&generator=allpages&formatversion=2&imlimit=max&gapnamespace=102&gapfilterredir=nonredirects&gaplimit=max").Result);
+        foreach (Page page in inc_images_json.query.pages)
+        {
+            string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(page.title) + "?action=raw").Result;
+            foreach (var img in page.images)
+            {
+                var rgx = new Regex(Regex.Escape(img.title).Replace("\\ ", "[ _]"), RegexOptions.IgnoreCase);
+                if (rgx.IsMatch(pagetext))
+                    result += "\n" + img.title + "|[[" + page.title + "|" + page.title.Substring(10) + "]]";
+            }
+        }
+        Save(site, "u:MBH/Черновик", result + "\n</gallery>", "");
+    }
+    //static void mini_recenz()
     //{
-    //    string[,] imgs = new string[5000, 9];
-    //    int m = 0;
-    //    using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:Инкубатор:Все статьи").Result)))
-    //        while (r.Read())
-    //            if (r.Name == "cm" && r.GetAttribute("ns") == "102")
-    //            {
-    //                string title = r.GetAttribute("title");
-    //                current_page.Load();
-    //                List<string> str = current_page.GetImages();
-    //                string im = "";
-    //                int i;
-    //                if (str.Count > 0)
+    //    MyBot bot = new MyBot();
+    //    Page mrpage = new Page(site, "Проект:Инкубатор/Мини-рецензирование");
+    //    mrpage.Load();
+    //    int num = 0;
+    //    PageList cand_list;
+    //    DateTime nn = DateTime.Now;
+    //    string[] mon = { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
+    //    Page today_afd_page = new Page(site, "Википедия:К удалению/" + nn.Day + " " + mon[nn.Month - 1] + " " + nn.Year);
+    //    int max = 0;
+    //    string nom = "";
+    //    cand_list = bot.GetCategoryMembers102(site, "Инкубатор:Статьи на мини-рецензировании");// предварительный пробег на предмет номинации к удалению старейших стабов
+    //    string[,] forKU = new string[cand_list.Count(), 2];
+    //    int kunum = 0;
+    //    // смотрим дату последней правки
+    //    foreach (Page p in cand_list)
+    //    {
+    //        p.Load();
+    //        long seconds_from_last_edit = (long)(DateTime.Now - p.timestamp).TotalSeconds;
+    //        forKU[kunum, 0] = p.title;
+    //        forKU[kunum, 1] = seconds_from_last_edit.ToString();
+    //        kunum++;
+    //    }
+    //    for (int row1 = 0; row1 < forKU.GetLength(0); row1++)
+    //        for (int row2 = row1 + 1; row2 < forKU.GetLength(0); row2++)
+    //            if (Convert.ToInt32(forKU[row1, 1]) < Convert.ToInt32(forKU[row2, 1]))
+    //                for (int i = 0; i < forKU.GetLength(1); i++)
+    //                    (forKU[row2, i], forKU[row1, i]) = (forKU[row1, i], forKU[row2, i]);
+    //    // теперь надо проверить наличие ВУС и прочих исключений
+    //    PageList vus = new PageList();
+    //    PageList kucat = new PageList();
+    //    vus.FillAllFromCategory("Инкубатор:Статьи на доработке");
+    //    kucat.FillAllFromCategory("Википедия:Кандидаты на удаление");
+    //    for (int ku = 0; ku < kunum; ku++)
+    //    {
+    //        bool work = true;
+    //        if (Convert.ToInt64(forKU[ku, 1]) > (4 * 24 * 3600)) // если больше X дней (в секундах), то работаем дальше...
+    //        {
+    //            if (!vus.Contains(forKU[ku, 0]) && !kucat.Contains(forKU[ku, 0])) // если нет в категории ВУС-Доработки и К удалению, продолжаем...
+    //            {   // проверяем "ссылки сюда"
+    //                string apiout = site.GetWebPage(string.Concat(site.apiPath + "?action=query&titles=" + HttpUtility.UrlEncode(forKU[ku, 0]) + "&generator=linkshere&glhprop=title&glhnamespace=4&glhlimit=500&format=xml"));
+    //                if (apiout.IndexOf("Википедия:К восстановлению") != -1 | apiout.IndexOf("Википедия:К_восстановлению") != -1) // если есть ссылки с ВУС на статью, то уточняем актуальность
     //                {
-    //                    for (i = 0; i < str.Count; i++)
+    //                    PageList actvus = new PageList();
+    //                    actvus.FillAllFromCategory("Википедия:Незакрытые обсуждения восстановления страниц");
+    //                    foreach (Page b in actvus)
+    //                        if (apiout.IndexOf(b.title) != -1) // если хотя бы одна ссыдка является актуальным обсуждением
+    //                            work = false; // то выключаем обработку этой страницы
+    //                }
+    //                if (work)
+    //                {
+    //                    bool not_moved = false;
+    //                    string newname = forKU[ku, 0].Replace("Инкубатор:", "");
+    //                    Page newpage = new Page(site, newname);
+    //                    if (newpage.Exists())
     //                    {
-    //                        if (str[i].Contains("Файл:[[Файл:"))
-    //                            str[i] = str[i].Replace("Файл:[[Файл:", "Файл:");
-    //                        if (str[i] != "Файл:Example.jpg" & str[i] != "Файл:Person.jpg" & str[i] != "Файл:")
-    //                            im = im + str[i] + "|";
+    //                        if (newname.IndexOf(",") != -1)
+    //                            newname = newname.Replace(",", "");
+    //                        else
+    //                            newname += ".";
     //                    }
-    //                    if (im.Length > 1)
+    //                    string token = "";
+    //                    using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&meta=tokens&type=csrf"))))
+    //                        while (r.Read())
+    //                            if (r.Name == "tokens")
+    //                                token = r.GetAttribute("csrftoken");
+    //                    string result = site.PostDataAndGetResult("/w/api.php?action=move&format=xml", "from=" + Uri.EscapeDataString(forKU[ku, 0]) + "&to=" + Uri.EscapeDataString(newname) +
+    //                        "&reason=автоперенос в ОП для номинации [[ВП:КУ|к удалению]]&movetalk=1&noredirect=1&token=" + Uri.EscapeDataString(token));
+    //                    if (result.Contains("error"))
     //                    {
-    //                        im = im.Remove(im.Length - 1);
-    //                        if (string.IsNullOrEmpty(im)) // API запрос
-    //                            throw new WikiBotException(Bot.Msg("No title specified for page to load."));
-    //                        try
+    //                        not_moved = true;
+    //                        Console.WriteLine(forKU[ku, 0] + ";" + newname + ";" + result);
+    //                    }
+    //                    if (!not_moved)
+    //                    {
+    //                        Page page_in_mainspace = new Page(site, newname);
+    //                        page_in_mainspace.Load();
+
+    //                        string revid_to_unpatrol = "";
+    //                        using (var r = new XmlTextReader(new StringReader(site.GetWebPage("/w/api.php?action=query&format=xml&prop=revisions&titles=" + Uri.EscapeDataString(newname) + "&rvprop=ids"))))
+    //                            while (r.Read())
+    //                                if (r.Name == "rev")
+    //                                    revid_to_unpatrol = r.GetAttribute("revid");
+    //                        Thread.Sleep(5000);
+    //                        string unpat_result = site.PostDataAndGetResult("/w/api.php?action=review&format=xml", "revid=" + revid_to_unpatrol +
+    //                            "&comment=статья Инкубатора, перенесённая в ОП&unapprove=1&token=" + Uri.EscapeDataString(token));
+    //                        if (!unpat_result.Contains("uccess"))
+    //                            Console.WriteLine(unpat_result);
+
+    //                        // почистить от шаблонов инкубатора
+    //                        Regex itemplates = new Regex(@"\{\{.{0,5}(инкубатор|пишу|редактирую).*?(/n|\}\})", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+    //                        while (itemplates.IsMatch(page_in_mainspace.text, 0))
     //                        {
-    //                            var reader = new XmlTextReader(new StringReader(site.GetWebPage(site.apiPath + "?action=query&prop=imageinfo&iiprop=timestamp|user|size|dimensions&titles=" + HttpUtility.UrlEncode(im) + "&format=xml")));
-    //                            while (reader.Read())
-    //                                if (reader.NodeType == XmlNodeType.Element)
-    //                                {
-    //                                    if (reader.Name == "page")
-    //                                    {
-    //                                        m++;
-    //                                        imgs[m, 0] = reader.GetAttribute("title");
-    //                                        imgs[m, 1] = reader.GetAttribute("imagerepository");
-    //                                        imgs[m, 7] = current_page.title;
-    //                                        if (imgs[m, 1] == "" ^ imgs[m, 1] == null)
-    //                                            m--;
-    //                                    }
-    //                                    if (reader.Name == "ii")
-    //                                    {
-    //                                        imgs[m, 2] = reader.GetAttribute("timestamp");
-    //                                        imgs[m, 3] = reader.GetAttribute("user");
-    //                                        imgs[m, 4] = reader.GetAttribute("width");
-    //                                        imgs[m, 5] = reader.GetAttribute("height");
-    //                                    }
-    //                                }
+    //                            for (int qw = 0; qw < itemplates.Matches(page_in_mainspace.text).Count; qw++)
+    //                            {
+    //                                string rep = itemplates.Matches(page_in_mainspace.text)[qw].ToString();
+    //                                page_in_mainspace.text = page_in_mainspace.text.Replace(rep, "");
+    //                            }
     //                        }
-    //                        catch { continue; }
+
+    //                        Regex comments = new Regex("<!--.*?-->", RegexOptions.Singleline | RegexOptions.IgnoreCase);
+    //                        while (comments.IsMatch(page_in_mainspace.text, 0))
+    //                        {
+    //                            for (int qw = 0; qw < comments.Matches(page_in_mainspace.text).Count; qw++)
+    //                            {
+    //                                string rep = comments.Matches(page_in_mainspace.text)[qw].ToString();
+    //                                page_in_mainspace.text = page_in_mainspace.text.Replace(rep, "");
+    //                            }
+    //                        }
+    //                        page_in_mainspace.text = page_in_mainspace.text.Replace("\n•••", "\n***").Replace("\n••", "\n**").Replace("\n•", "\n*").Replace("[[:Кат", "[[Кат").Replace("[[:кат", "[[Кат").Replace("[[:Cat", "[[Cat").Replace("[[:cat", "[[Cat");
+    //                        while (page_in_mainspace.text.IndexOf("\n ") != -1)
+    //                        {
+    //                            page_in_mainspace.text = page_in_mainspace.text.Replace("\n ", "\n"); // строки начинающиеся с пробела
+    //                        }
+    //                        page_in_mainspace.text = "{{подст:Предложение к удалению}}\n" + page_in_mainspace.text; // к удалению
+    //                        while (page_in_mainspace.text.IndexOf("\n\n\n") != -1)
+    //                        {
+    //                            page_in_mainspace.text = page_in_mainspace.text.Replace("\n\n\n", "\n\n"); // лишние переносы строк
+    //                        }
+    //                        page_in_mainspace.Save("[[" + today_afd_page.title + "#" + page_in_mainspace.title + "|автоматическая номинация к удалению]]", false);
+    //                        nom = nom + "\n\n== [[" + page_in_mainspace.title + "]] ==\n{{subst:User:IncubatorBot/mrKU}} ~~~~";
+    //                        max++;
+    //                        if (max == 5)
+    //                            break;
     //                    }
     //                }
     //            }
-    //    for (int n = 1; n < m + 1; n++)
-    //    {
-    //        bool exist = true;
-    //        string ptext = "";
-    //        if (imgs[n, 1] == "local")
-    //        { Page temp = new Page(site, imgs[n, 0]); temp.Load(); ptext = temp.text; }
-    //        else if (imgs[n, 1] == "shared")
-    //        {
-    //            string file = imgs[n, 0].Replace("Файл", "File");
-    //            Page temp = new Page(commons, file); temp.Load(); ptext = temp.text;
     //        }
-    //        else { exist = false; }
-    //        if (exist == true)
+    //    }
+    //    if (max > 0)
+    //    {
+    //        today_afd_page.Load();
+    //        if (today_afd_page.Exists())
     //        {
-    //            imgs[n, 6] = "";
-    //            Regex CC = new Regex("{{.*?CC.*?}}", RegexOptions.IgnoreCase);
-    //            Regex GFDL = new Regex("{{.*?(GFDL|LGPL|GPL).*?}}", RegexOptions.IgnoreCase);
-    //            Regex PD = new Regex("{{(Not-PD|PD).*?}}", RegexOptions.IgnoreCase);
-    //            Regex FU = new Regex("{{(Несвободный файл|FU|Fairuse|Символ|Скриншот).*?}}", RegexOptions.Singleline);
-    //            Regex FoP = new Regex("{{FoP.*?}}", RegexOptions.IgnoreCase);
-    //            Regex VRT = new Regex("{{.*?(OTRS|VRT).*?}}", RegexOptions.IgnoreCase);
-    //            Regex Attribution = new Regex("{{Attribution.*?}}", RegexOptions.IgnoreCase);
-    //            Regex no = new Regex("{{no .*?}}", RegexOptions.IgnoreCase);
-    //            Regex other = new Regex("{{(VI.com-Gerbovnik|FAL|MTL|BSD|Trivial|Свободный скриншот|Kremlin).*?}}", RegexOptions.IgnoreCase);
-    //            Regex comm = new Regex("{{(Apache|ADRM|AGPL|APL|Artistic|BArch|Beerware|C0|CDDL|CPL|Careware|Copyright|DSL|EPL|Expat|FOLP|FWL|MIT|MPL|MTL|OAL|Open|WTFPL|X11|Zlib).*?}}", RegexOptions.IgnoreCase);
-    //            imgs[n, 9] = "0";
-    //            if (!VRT.IsMatch(ptext)) // if OTRS - somebody has already check file, so we don't need to check it again
+    //            today_afd_page.text += nom;
+    //            today_afd_page.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
+    //        }
+    //        else
+    //        {
+    //            today_afd_page.text = "{{КУ-Навигация}}\n\n" + today_afd_page.text + nom;
+    //            today_afd_page.Save("автоматическая номинация просроченных статей (" + max + ") из Инкубатора", false);
+    //        }
+    //    }
+    //    cand_list = bot.GetCategoryMembers102(site, "Инкубатор:Статьи на мини-рецензировании");
+    //    string[] regtitle = new string[] { "== ", @"\[\[", ".*?", @"\]\]", " ==" };
+    //    MatchCollection titles = new Regex(string.Concat(regtitle), RegexOptions.IgnoreCase).Matches(mrpage.text);
+    //    string[] datestring = new string[] { "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
+    //    for (int i = 0; i < titles.Count; i++)
+    //    {
+    //        string target_ns, user, tstamp, comment, target_title, str7;
+    //        DateTime timing = DateTime.Now.AddDays(-5000); //для запоминания времени
+    //        string initial_ns = target_ns = user = tstamp = comment = target_title = str7 = "";
+    //        // переменная - заголовок на мини-рец
+    //        string title = titles[i].Value.Replace("== [[", string.Empty).Replace("]] ==", string.Empty);
+    //        string title2 = title;
+    //        // место положения заголовка
+    //        int index = mrpage.text.IndexOf("== [[" + title, 0);
+    //        bool result = false;
+    //        // если в категории нет такой страницы
+    //        if (!cand_list.Contains(title))
+    //        {
+    //            // положение след. заголовка или конца страницы
+    //            int length = mrpage.text.IndexOf("\n== [[", index + 6);
+    //            int length_add = 0;
+    //            if (length == -1)
+    //                length = mrpage.text.Length;
+
+    //            if (mrpage.text.IndexOf("=== Итог ===", index, length - index) == -1) // проверяем наличие секции "Итог"
     //            {
-    //                if (!no.IsMatch(ptext, 0)) // the same, if here is template {{no permission}} (npd, nad, nld etc), file was checked before
+    //                string pageHTM; // если ее нет
+    //                for (int qaza = 0; qaza < 5; qaza++)
     //                {
-    //                    imgs[n, 9] = "1";
-    //                    if (CC.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + CC.Matches(ptext)[0].ToString();
-    //                    if (GFDL.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + GFDL.Matches(ptext)[0].ToString();
-    //                    if (PD.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + PD.Matches(ptext)[0].ToString();
-    //                    if (FU.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + FU.Matches(ptext)[0].ToString();
-    //                    if (FoP.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + FoP.Matches(ptext)[0].ToString();
-    //                    if (Attribution.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + Attribution.Matches(ptext)[0].ToString();
-    //                    if (other.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + other.Matches(ptext)[0].ToString();
-    //                    if (comm.IsMatch(ptext))
-    //                        imgs[n, 6] = imgs[n, 6] + comm.Matches(ptext)[0].ToString();
+    //                    string xmlresult = site.GetWebPage(site.apiPath + "?action=query&list=logevents&letitle=" + HttpUtility.UrlEncode(title) + "&letype=move&ledir=newer&format=xml");
+    //                    if (xmlresult.IndexOf("<item") != -1)
+    //                    {
+    //                        XmlTextReader reader = new XmlTextReader(new StringReader(xmlresult));
+    //                        while (reader.Read())
+    //                            if (reader.NodeType == XmlNodeType.Element)
+    //                            {
+    //                                if (reader.Name == "item")
+    //                                {
+    //                                    initial_ns = reader.GetAttribute("ns");
+    //                                    user = reader.GetAttribute("user");
+    //                                    tstamp = reader.GetAttribute("timestamp");
+    //                                    comment = reader.GetAttribute("comment");
+    //                                }
+    //                                if (reader.Name == "params")
+    //                                {
+    //                                    target_title = reader.GetAttribute("target_title");
+    //                                    target_ns = reader.GetAttribute("target_ns");
+    //                                }
+    //                            }
+    //                        // если другое пространство имен подводим итог, если нет, меняем заголовок
+    //                        if (initial_ns != target_ns)
+    //                        {
+    //                            if (comment.Contains("{{") || comment.Contains("{|"))
+    //                                comment = "<nowiki>" + comment + "</nowiki>";
+    //                            DateTime time = DateTime.Parse(tstamp).AddHours(-3.0);
+    //                            timing = time;
+    //                            object[] objArray1 = new object[] { time.Day, " ", datestring[time.Month - 1], " ", time.Year, " ", time.TimeOfDay };
+    //                            string str11 = string.Concat(objArray1);
+    //                            string[] textArray4 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title, "]]\x00bb была переименована ", str11, " (UTC) участником [[u:", user,
+    //                                "]] в \x00ab[[", target_title, "]]\x00bb" };
+    //                            str7 = string.Concat(textArray4);
+    //                            if (comment.Length > 0)
+    //                                str7 = str7 + " с комментарием \x00ab" + comment + "\x00bb.";
+    //                            str7 += " <small>Данный итог подведен ботом</small> ~~~~\n";
+    //                            result = true;
+    //                            break;
+    //                        }
+    //                        else
+    //                        {
+    //                            result = false;
+    //                            string repp = "== [[" + target_title + "]] ==\n:<small>Обсуждение начато под заголовком [[" + title + "]]. ~~~~</small>";
+    //                            mrpage.text = mrpage.text.Replace("== [[" + title + "]] ==", repp);
+    //                            length_add += repp.Length;
+    //                            title = target_title;
+    //                        }
+    //                    }
+    //                    else break;
+    //                }
+    //                // еще раз проверим на наличие в категории
+    //                if (!cand_list.Contains(title2)) // title2 = title до переиенования, если оно было
+    //                {
+    //                    if (string.IsNullOrEmpty(title2))
+    //                        throw new WikiBotException(Bot.Msg("No title specified for page to load."));
+    //                    // подгружаем лог удалений
+    //                    string[] textArray5 = new string[] { site.apiPath, "?action=query&list=logevents&letitle=", HttpUtility.UrlEncode(title2), "&letype=delete&ledir=newer&format=xml" };
+    //                    string pageURL = string.Concat(textArray5);
+    //                    try { pageHTM = site.GetWebPage(pageURL); }
+    //                    catch { pageHTM = string.Empty; }
+    //                    // если в логе есть - подводим итог
+    //                    if (pageHTM.IndexOf("<item") != -1)
+    //                    {
+    //                        XmlTextReader reader2 = new XmlTextReader(new StringReader(pageHTM));
+    //                        while (reader2.Read())
+    //                            if ((reader2.NodeType == XmlNodeType.Element) && (reader2.Name == "item"))
+    //                            {
+    //                                user = reader2.GetAttribute("user");
+    //                                tstamp = reader2.GetAttribute("timestamp");
+    //                                comment = reader2.GetAttribute("comment");
+    //                                if (comment.Contains("{{") || comment.Contains("{|"))
+    //                                    comment = "<nowiki>" + comment + "</nowiki>";
+    //                            }
+    //                        DateTime time2 = DateTime.Parse(tstamp);
+    //                        if ((time2 - timing).TotalDays > 2)
+    //                        {
+    //                            object[] objArray2 = new object[] { time2.Day, " ", datestring[time2.Month - 1], " ", time2.Year, " ", time2.TimeOfDay };
+    //                            string str12 = string.Concat(objArray2);
+    //                            string[] textArray6 = new string[] { "\n=== Итог ===\nСтраница \x00ab[[", title2, "]]\x00bb была удалена ", str12, " (UTC) участником [[ut:", user, "|", user,
+    //                                "]] по причине \x00ab", comment, "\x00bb. <small>Данный итог подведен ботом</small> ~~~~\n" };
+    //                            str7 = string.Concat(textArray6);
+    //                            result = true;
+    //                        }
+    //                    }
+    //                }
+    //                if (result != false)
+    //                {
+    //                    Regex langlinks = new Regex(@"\[\[[a-z-]{2,6}:.*?\]\]", RegexOptions.Singleline);
+    //                    MatchCollection ll = langlinks.Matches(str7);
+    //                    foreach (Match m in ll)
+    //                    {
+    //                        string r7 = m.ToString().Replace("[[", "[[:");
+    //                        str7 = str7.Replace(m.ToString(), r7);
+    //                    }
+    //                    try
+    //                    {
+    //                        if (str7.IndexOf("http://") != -1)
+    //                            str7 = str7.Replace("http://", "");
+    //                        if (str7.IndexOf("https://") != -1)
+    //                            str7 = str7.Replace("https://", "");
+    //                    }
+    //                    catch { Console.WriteLine("Error with link parsing: \n\n\"" + str7 + "\"\n"); }
+    //                    // вставляем итог в страницу
+    //                    int startIndex = mrpage.text.IndexOf("}\n", index, (int)((length + length_add) - index));
+    //                    int num6 = mrpage.text.IndexOf("\n==", startIndex);
+    //                    if (num6 == -1)
+    //                        num6 = mrpage.text.Length;
+    //                    mrpage.text = mrpage.text.Insert(num6, str7);
+    //                    num++;
     //                }
     //            }
     //        }
     //    }
-    //    p.text = "{{Проект:Инкубатор/Шаблон навигации}}\n<div align=\"right\">'''Последнее обновление:''' ~~~~~ </div> \n\n{| class=\"wikitable sortable\"\n|-\n! Файл\n! Дата\n! Автор\n! Место\n! Размеры\n! Лицензия\n! Статья\n! Статус\n";
-    //    DateTime now = DateTime.UtcNow;
-    //    // дата и время последней правки
-    //    int term = 120;
-    //    for (int n = 1; n < m + 1; n++)
-    //    {
-    //        DateTime datefile = DateTime.Parse(imgs[n, 2]);
-    //        TimeSpan diff = now - datefile;
-    //        if (imgs[n, 9] == "1")
-    //        {
-    //            if (diff.Days < term)
-    //            {
-    //                if (imgs[n, 0].IndexOf("=") != -1) { imgs[n, 0] = imgs[n, 0].Replace("=", "%3D"); } // поправить - не работает
-    //                p.text = p.text + "{{User:IncubatorBot/img|" + imgs[n, 0] + "|" + imgs[n, 2] + "|" + imgs[n, 3] + "|" + imgs[n, 1] + "|" + imgs[n, 4] + "x" + imgs[n, 5] + "|<nowiki>" + imgs[n, 6] + "</nowiki>|" + imgs[n, 7] + "|" + imgs[n, 8] + "}}\n";
-    //            }
-    //        }
-    //    }
-    //    p.Save("обновление списка", true);
+    //    while (mrpage.text.IndexOf("\n\n\n") != -1)
+    //        mrpage.text = mrpage.text.Replace("\n\n\n", "\n\n");
+    //    mrpage.Save("автоматическое подведение итогов (" + num + "), коррекция заголовков", true);
     //}
     static void Main()
     {
@@ -955,9 +1160,10 @@ class Program
         site = Site(creds[0], creds[1]);
         dtn = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        try { inc_check_help_requests(); } catch(Exception e) { Console.WriteLine(e.ToString()); }
+        try { img_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { mini_recenz(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { inc_check_help_requests(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { stat_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { img_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
