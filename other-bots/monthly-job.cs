@@ -66,21 +66,18 @@ class Program
         monthname[7] = "июль"; monthname[8] = "август"; monthname[9] = "сентябрь"; monthname[10] = "октябрь"; monthname[11] = "ноябрь"; monthname[12] = "декабрь";
         prepositional[1] = "январе"; prepositional[2] = "феврале"; prepositional[3] = "марте"; prepositional[4] = "апреле"; prepositional[5] = "мае"; prepositional[6] = "июне";
         prepositional[7] = "июле"; prepositional[8] = "августе"; prepositional[9] = "сентябре"; prepositional[10] = "октябре"; prepositional[11] = "ноябре"; prepositional[12] = "декабре";
-        popular_userscripts();
-        most_edits();
-        most_watched_pages();
-        adminstats();
-        likes_stats();
-        summary_stats();
-        popular_wd_items_without_ru();
-        page_creators();
-        if (now.Day == 1)
-        {
-            apat_for_filemovers();
-            pats_awarding();
-        }
-        pageview_peaks();
-        incorrect_redirects();
+        try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { most_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { pageview_peaks(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
     }
     static HttpClient Site(string lang, string login, string password)
     {
