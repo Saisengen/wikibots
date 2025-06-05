@@ -73,9 +73,9 @@ class Program
         try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { pageview_peaks(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
     }
@@ -113,6 +113,10 @@ class Program
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
         if (!result.ToString().Contains("uccess"))
             Console.WriteLine(result);
+    }
+    static string e(string input)
+    {
+        return Uri.EscapeUriString(input);
     }
     static void pats_awarding()
     {
@@ -159,7 +163,7 @@ class Program
         {
             if (++c > 10) break;
             addition += "||{{u|" + p.Key + "}} (" + p.Value.Count + ")";
-            string usertalk = site.GetStringAsync("https://ru.wikipedia.org/wiki/user talk:" + Uri.EscapeDataString(p.Key) + "?action=raw").Result;
+            string usertalk = site.GetStringAsync("https://ru.wikipedia.org/wiki/user talk:" + e(p.Key) + "?action=raw").Result;
             string grade = c < 4 ? "I" : (c < 7 ? "II" : "III");
             if (!newfromabove.Contains(p.Key) || (newfromabove.Contains(p.Key) && usertalk.IndexOf("==") == -1))
                 Save(site, "ru", "user talk:" + p.Key, usertalk + "\n\n==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/Заслуженному патрулирующему " + grade + "|За " + c +
@@ -247,10 +251,10 @@ class Program
             {
                 foreach (var k in type.Keys)
                 {
-                    string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucprop=title&ucuser=" + Uri.EscapeDataString(k);
+                    string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucprop=title&ucuser=" + e(k);
                     while (cont != null)
                     {
-                        string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&uccontinue=" + Uri.EscapeDataString(cont)).Result);
+                        string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&uccontinue=" + e(cont)).Result);
                         using (var r = new XmlTextReader(new StringReader(apiout)))
                         {
                             r.WhitespaceHandling = WhitespaceHandling.None;
@@ -346,7 +350,7 @@ class Program
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&aplimit=max&apfilterredir=nonredirects&apnamespace=";
             while (cont != null)
             {
-                apiout = (cont == "" ? site.GetStringAsync(query + n).Result : site.GetStringAsync(query + n + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+                apiout = (cont == "" ? site.GetStringAsync(query + n).Result : site.GetStringAsync(query + n + "&apcontinue=" + e(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -523,7 +527,7 @@ class Program
                         {
                             string pagetext;
                             try
-                            { pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(page) + "?action=raw").Result; }
+                            { pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(page) + "?action=raw").Result; }
                             catch
                             { continue; }
                             var results = summaryrgx.Matches(pagetext);
@@ -676,7 +680,7 @@ class Program
             {
                 var temp = new Dictionary<string, redir>();
                 string idset = "";
-                using (var rdr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + Uri.EscapeDataString(cont)).Result)))
+                using (var rdr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + e(cont)).Result)))
                 {
                     rdr.WhitespaceHandling = WhitespaceHandling.None;
                     rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("arcontinue");
@@ -739,7 +743,7 @@ class Program
             string offset = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + skin + ".js&srnamespace=2&srlimit=max&srprop=";
             while (offset != null)
             {
-                string apiout = (offset == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&sroffset=" + Uri.EscapeDataString(offset)).Result);
+                string apiout = (offset == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&sroffset=" + e(offset)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -755,7 +759,7 @@ class Program
         {
             username = invoking_page.Substring(invoking_page.IndexOf(':') + 1, invoking_page.IndexOf('/') - 1 - invoking_page.IndexOf(':'));
             Program.invoking_page = invoking_page;
-            process_site("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=" + Uri.EscapeUriString(invoking_page));
+            process_site("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=" + e(invoking_page));
             if (!script_users.Contains(username))
                 script_users.Add(username);
         }
@@ -764,7 +768,7 @@ class Program
         {
             Program.username = username;
             invoking_page = "meta:" + username + "/global.js";
-            process_site("https://meta.wikimedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=user:" + Uri.EscapeUriString(username) + "/global.js");
+            process_site("https://meta.wikimedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=user:" + e(username) + "/global.js");
         }
 
         foreach (var s in scripts.OrderByDescending(s => s.Value.active))
@@ -793,14 +797,14 @@ class Program
         else
         {
             DateTime edit_ts = new DateTime(), log_ts = new DateTime();
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucprop=timestamp&ucuser=" + Uri.EscapeUriString(username)).Result)))
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucprop=timestamp&ucuser=" + e(username)).Result)))
                 while (r.Read())
                     if (r.Name == "item")
                     {
                         string raw_ts = r.GetAttribute("timestamp");
                         edit_ts = new DateTime(Convert.ToInt16(raw_ts.Substring(0, 4)), Convert.ToInt16(raw_ts.Substring(5, 2)), Convert.ToInt16(raw_ts.Substring(8, 2)));
                     }
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=timestamp&lelimit=1&leuser=" + Uri.EscapeUriString(username)).Result)))
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=timestamp&lelimit=1&leuser=" + e(username)).Result)))
                 while (r.Read())
                     if (r.Name == "item")
                     {
@@ -827,7 +831,7 @@ class Program
             scriptname = scriptname.Substring(3);
         if (scriptname.IndexOf(":") > -1)
             scriptname = scriptname.Substring(0, scriptname.IndexOf(":")).ToLower() + scriptname.Substring(scriptname.IndexOf(":"));
-        scriptname = Uri.UnescapeDataString(scriptname).Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
+        scriptname = e(scriptname).Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
             .Replace("википедия:", "project:").Replace("вікіпедія:", "project:").Replace("користувач:", "user:").Replace("користувачка:", "user:");
         if (scriptname.StartsWith("u:"))
             scriptname = "user:" + scriptname.Substring(2);
@@ -852,7 +856,7 @@ class Program
                 {
                     r.Read(); r.Read(); r.Read(); content = r.Value; break;
                 }
-        content = Uri.UnescapeDataString(multiline_comment.Replace(content, "")).Replace("(\n", "(").Replace("{\n", "{");
+        content = e(multiline_comment.Replace(content, "")).Replace("(\n", "(").Replace("{\n", "{");
         foreach (var s in content.Split('\n'))
             if (!s.TrimStart(' ').StartsWith("//"))
             {
@@ -937,7 +941,7 @@ class Program
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=category:" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
             while (cont != null)
             {
-                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + Uri.EscapeDataString(cont)).Result);
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -952,7 +956,7 @@ class Program
                 cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
                 while (cont != "-")
                 {
-                    Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+                    Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                     cont = response.@continue == null ? "-" : response.@continue.apcontinue;
                     foreach (var pageinfo in response.query.allpages)
                     {
@@ -969,7 +973,7 @@ class Program
             cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&aplimit=max&apfilterredir=redirects&apnamespace=0";
             while (cont != "-")
             {
-                Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+                Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                 cont = response.@continue == null ? "-" : response.@continue.apcontinue;
                 foreach (var pageinfo in response.query.allpages)
                     get_page_author(pageinfo.pageid, "r", lang);
@@ -1042,7 +1046,8 @@ class Program
 
         var lastmonth = DateTime.Now.AddMonths(-1);
         foreach (var mover in globalusers)
-            using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString("yyyy-MM-dd") + "T00:00:00.000Z&ucprop=comment&ucuser=" + Uri.EscapeDataString(mover)).Result)))
+            using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString
+                ("yyyy-MM-dd") + "T00:00:00&ucprop=comment&ucuser=" + e(mover)).Result)))
                 while (rdr.Read())
                     if (rdr.Name == "item" && rdr.GetAttribute("comment") != null)
                         if (rdr.GetAttribute("comment").Contains("GR]") && !badusers.Contains(mover))
@@ -1136,7 +1141,7 @@ class Program
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&apprefix=" + pagetype + "&apnamespace=" + ns + "&aplimit=max";
             while (cont != "-")
             {
-                Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+                Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                 cont = response.@continue == null ? "-" : response.@continue.apcontinue;
                 foreach (var pageinfo in response.query.allpages)
                 {
@@ -1152,7 +1157,7 @@ class Program
                             correctpage = true;
                     if (correctpage)
                     {
-                        string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pagetitle) + "?action=raw").Result;
+                        string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(pagetitle) + "?action=raw").Result;
                         var summaries = (pagetype == "Запросы к ботоводам" || pagetype == "Запросы к патрулирующим от автоподтверждённых участников" || pagetype == "Запросы к патрулирующим") ?
                             rdb_zkp_summary_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
                         foreach (Match summary in summaries)
@@ -1274,7 +1279,7 @@ class Program
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
             while (cont != null)
             {
-                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout)))
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
@@ -1286,7 +1291,7 @@ class Program
                             var thispagestats = new Dictionary<string, int>();
                             string currres = "";
                             string reqstr = "";
-                            reqstr = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/" + lang + ".wikipedia/all-access/user/" + Uri.EscapeDataString(page) + "/daily/" + reqstr_period;
+                            reqstr = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/" + lang + ".wikipedia/all-access/user/" + e(page) + "/daily/" + reqstr_period;
                             try
                             {
                                 currres = cl.DownloadString(reqstr);
