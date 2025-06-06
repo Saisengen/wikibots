@@ -33,7 +33,7 @@ class Program
     }
     static string e(string src)
     {
-        return Uri.EscapeUriString(src);
+        return Uri.EscapeDataString(src);
     }
     static HttpClient Site(string wiki, string login, string password)
     {
@@ -233,7 +233,7 @@ class Program
                             newname = commons_importer_link.Match(replacedfiles[rf].comment).Groups[1].Value;
                         }
                         string rgxtext = filename.Substring(5).Replace(" ", "[ _]");
-                        rgxtext = "(" + rgxtext + "|" + Uri.EscapeDataString(filename.Substring(5)) + ")";
+                        rgxtext = "(" + rgxtext + "|" + e(filename.Substring(5)) + ")";
                         var rgx = new Regex(rgxtext, RegexOptions.IgnoreCase);
                         string new_page_text = rgx.Replace(initial_text, newname);
                         if (new_page_text != initial_text)
