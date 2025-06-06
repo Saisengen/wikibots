@@ -118,6 +118,10 @@ class Program
     {
         return Uri.EscapeUriString(input);
     }
+    static string readpage(string input)
+    {
+        return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result;
+    }
     static void pats_awarding()
     {
         var newfromabove = new HashSet<string>();
@@ -163,7 +167,7 @@ class Program
         {
             if (++c > 10) break;
             addition += "||{{u|" + p.Key + "}} (" + p.Value.Count + ")";
-            string usertalk = site.GetStringAsync("https://ru.wikipedia.org/wiki/user talk:" + e(p.Key) + "?action=raw").Result;
+            string usertalk = readpage("ut:" + p.Key);
             string grade = c < 4 ? "I" : (c < 7 ? "II" : "III");
             if (!newfromabove.Contains(p.Key) || (newfromabove.Contains(p.Key) && usertalk.IndexOf("==") == -1))
                 Save(site, "ru", "user talk:" + p.Key, usertalk + "\n\n==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/Заслуженному патрулирующему " + grade + "|За " + c +
@@ -177,7 +181,7 @@ class Program
                     " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года. Поздравляем! ~~~~}}\n\n" + pagebody, "орден заслуженному патрулирующему за " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
             }
         }
-        string pats_order = site.GetStringAsync("https://ru.wikipedia.org/wiki/ВП:Ордена/Заслуженному патрулирующему?action=raw").Result;
+        string pats_order = readpage("ВП:Ордена/Заслуженному патрулирующему");
         Save(site, "ru", "ВП:Ордена/Заслуженному патрулирующему", pats_order + addition, "ордена за " + monthname[lastmonth.Month]);
     }
     static void most_edits()
@@ -527,7 +531,7 @@ class Program
                         {
                             string pagetext;
                             try
-                            { pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(page) + "?action=raw").Result; }
+                            { pagetext = readpage(page);  }
                             catch
                             { continue; }
                             var results = summaryrgx.Matches(pagetext);
@@ -545,7 +549,7 @@ class Program
                         }
                     }
 
-        string cutext = site.GetStringAsync("https://ru.wikipedia.org/wiki/u:BotDR/CU_stats?action=raw").Result;
+        string cutext = readpage("u:BotDR/CU_stats");
         var custats = cutext.Split('\n');
         foreach (var s in custats)
             if (s.Contains('='))
@@ -1058,7 +1062,7 @@ class Program
 
         if (globalusers_needs_flag.Count > 0)
         {
-            string zkatext = site.GetStringAsync("https://ru.wikipedia.org/wiki/ВП:Запросы к администраторам?action=raw").Result;
+            string zkatext = readpage("ВП:Запросы к администраторам");
             var header = new Regex(@"(^\{[^\n]*\}\s*<[^>]*>\n)");
             string newmessage = "==Выдать апата глобальным правщикам==\nПеречисленные ниже участники занимаются переименованием файлов на Викискладе с заменой включений во всех разделах. В соответствии с [[ВП:ПАТ#ГЛОБ]] прошу рассмотреть их вклад и выдать им апата, чтобы такие правки не распатрулировали страницы.";
             foreach (var mover in globalusers_needs_flag)
@@ -1157,7 +1161,7 @@ class Program
                             correctpage = true;
                     if (correctpage)
                     {
-                        string pagetext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(pagetitle) + "?action=raw").Result;
+                        string pagetext = readpage(pagetitle);
                         var summaries = (pagetype == "Запросы к ботоводам" || pagetype == "Запросы к патрулирующим от автоподтверждённых участников" || pagetype == "Запросы к патрулирующим") ?
                             rdb_zkp_summary_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
                         foreach (Match summary in summaries)
