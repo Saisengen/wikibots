@@ -58,7 +58,7 @@ class Program
     static string orphan_article;
     static string e(string input)
     {
-        return Uri.EscapeUriString(input);
+        return Uri.EscapeDataString(input);
     }
     static string readpage(string input)
     {
@@ -346,7 +346,6 @@ class Program
                                 }
                             }
                         }
-
                 }
             }
         }
@@ -852,7 +851,7 @@ class Program
                     result += "\n" + img.title + "|[[" + page.title + "|" + page.title.Substring(10) + "]]";
             }
         }
-        Save(site, "u:MBH/Черновик", result + "\n</gallery>", "");
+        Save(site, "ВП:Форум/Авторское право/Файлы Инкубатора", result + "\n</gallery>", "");
     }
     static void main_inc_bot()
     {
