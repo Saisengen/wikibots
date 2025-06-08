@@ -138,8 +138,8 @@ class Program
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        site = Site(creds[0], creds[1]); var iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\}\}");
-        var iw2 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *\| *\| *([^{}|]*) *\}\}");
+        site = Site(creds[0], creds[1]); //var iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\}\}");
+        //var iw2 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *\| *\| *([^{}|]*) *\}\}");
         var iw3 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}");
         var needed_articles = new Dictionary<string, int>();
         //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:Не переведено&eilimit=max";
@@ -238,37 +238,31 @@ class Program
             if (++c % 10000 == 0)
                 Console.WriteLine(c + "/263000 processed");
             string processed_page_text;
-            try
-            {
-                processed_page_text = readpage("ru", processed_page);
-            }
-            catch { continue; }
+            try { processed_page_text = readpage("ru", processed_page); } catch { continue; }
             string newtext = processed_page_text; string comment = "";
             foreach (Match m in iw3.Matches(processed_page_text))
             {
+                string lang = m.Groups[4].Value;
+                if (lang == "")
+                    continue;
                 string ru_pagename = m.Groups[2].Value;
                 string visible_text = m.Groups[3].Value;
-                string lang = m.Groups[4].Value;
                 string iw_pagename = m.Groups[5].Value;
-                try
-                {
-                    string test = readpage("ru", ru_pagename);
-                    if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
-                    {
-                        string text_in_article_for_replacement = m.Groups[0].Value;
-                        var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
-                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
-                        newtext = replacement_rgx.Replace(newtext, newlink);
-                    }
-                }
-                catch
+                if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
                 {
                     string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
                     if (needed_articles.ContainsKey(key))
                         needed_articles[key]++;
                     else
                         needed_articles.Add(key, 1);
+                }
+                else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
+                {
+                    string text_in_article_for_replacement = m.Groups[0].Value;
+                    var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
+                    string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                    comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                    newtext = replacement_rgx.Replace(newtext, newlink);
                 }
             }
             if (newtext != processed_page_text)
