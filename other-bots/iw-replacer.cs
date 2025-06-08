@@ -63,16 +63,24 @@ class Program
             return false;
         if (!redirects.ContainsKey(lang))
             redirects.Add(lang, new Dictionary<string, bool>());
-        if (redirects[lang].ContainsKey(input))
-            return redirects[lang][input];
-        else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result.Contains("redirect="))
+        try
         {
-            redirects[lang].Add(input, true);
-            return true;
+            if (redirects[lang].ContainsKey(input))
+                return redirects[lang][input];
+            else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result.Contains("redirect="))
+            {
+                redirects[lang].Add(input, true);
+                return true;
+            }
+            else
+            {
+                redirects[lang].Add(input, false);
+                return false;
+            }
         }
-        else
+        catch
         {
-            redirects[lang].Add(input, false);
+            Console.WriteLine("error in isRed for " + lang + " and " + input);
             return false;
         }
     }
@@ -84,29 +92,34 @@ class Program
         {
             var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
             connect.Open();
-            var query = new MySqlCommand("select * from wb_items_per_site where ips_item_id=9700479 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q9700479
-            MySqlDataReader r = query.ExecuteReader();
+            var query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_item_id=9700479 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q9700479
+            var r = query.ExecuteReader();
             if (r.Read())
-                disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("ips_site_page"), nocat = false });
+                disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("p"), nocat = false });
             else
             {
-                query = new MySqlCommand("select * from wb_items_per_site where ips_item_id=1982926 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q1982926
+                query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_item_id=1982926 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q1982926
+                r.Close();
                 r = query.ExecuteReader();
                 if (r.Read())
-                    disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("ips_site_page"), nocat = false });
+                    disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("p"), nocat = false });
                 else
                     disambs.Add(lang, new dis_data() { nocat = true });
             }            
         }
         if (disambs[lang].nocat)
+        {
+            Console.WriteLine(lang + "wiki has no dis category (error)");
             return false;
-        else
+        }
+        else try
         {
             if (disambs[lang].disambs.ContainsKey(input))
                 return disambs[lang].disambs[input];
             else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=" + e(disambs[lang].dis_cat_name)).Result.Contains("<c"))
             {
                 disambs[lang].disambs.Add(input, true);
+                Console.WriteLine(input + " is in dis category (error) for " + lang + ": " + disambs[lang].dis_cat_name);
                 return true;
             }
             else
@@ -115,6 +128,11 @@ class Program
                 return false;
             }
         }
+            catch
+            {
+                Console.WriteLine("error in isDis for " + lang + " and " + input);
+                return false;
+            }
     }
     static bool onAfD(string input)
     {
@@ -139,7 +157,6 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = Site(creds[0], creds[1]); //var iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\}\}");
-        //var iw2 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *\| *\| *([^{}|]*) *\}\}");
         var iw3 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}");
         var needed_articles = new Dictionary<string, int>();
         //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:Не переведено&eilimit=max";
@@ -192,47 +209,6 @@ class Program
         //    if (newtext != processed_page_text)
         //        Save(site, processed_page, newtext, comment.Substring(2));
         //}
-        //foreach (string processed_page in new StreamReader("iw2.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        //{
-        //    if (++c % 200 == 0)
-        //        Console.WriteLine(c + "/35500 processed");
-        //    string processed_page_text;
-        //    try
-        //    {
-        //        processed_page_text = readpage("ru", processed_page);
-        //    }
-        //    catch { continue; }
-        //    string newtext = processed_page_text; string comment = "";
-        //    foreach (Match m in iw2.Matches(processed_page_text))
-        //    {
-        //        string iw_pagename = m.Groups[3].Value;
-        //        string ru_pagename = m.Groups[2].Value;
-        //        try
-        //        {
-        //            string test = readpage("ru", ru_pagename);
-        //            if (!isRedirect("en", iw_pagename) && !isRedirect("ru", ru_pagename) && !dis_data_list["en"].disambs.Contains(iw_pagename) && !dis_data_list["ru"].disambs.Contains(ru_pagename))
-        //            {
-        //                string text_in_article_for_replacement = m.Groups[0].Value;
-        //                var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-        //                comment += ", " + text_in_article_for_replacement + "->[[" + ru_pagename + "]]";
-        //                newtext = replacement_rgx.Replace(newtext, "[[" + ru_pagename + "]]");
-        //            }
-        //        }
-        //        catch
-        //        {
-        //            string key = "[[" + ru_pagename + "]] ([[:en:" + iw_pagename + "]])";
-        //            if (needed_articles.ContainsKey(iw_pagename))
-        //                needed_articles[iw_pagename]++;
-        //            else
-        //                needed_articles.Add(iw_pagename, 1);
-        //        }
-        //    }
-        //    if (newtext != processed_page_text)
-        //    {
-        //        Save(site, processed_page, newtext, comment.Substring(2));
-        //        Console.WriteLine(processed_page + '\t' + comment.Substring(2));
-        //    }
-        //}
         foreach (string processed_page in new StreamReader("iw3.txt").ReadToEnd().Replace("\r", "").Split('\n'))
         {
             if (++c % 10000 == 0)
@@ -242,27 +218,34 @@ class Program
             string newtext = processed_page_text; string comment = "";
             foreach (Match m in iw3.Matches(processed_page_text))
             {
-                string lang = m.Groups[4].Value;
+                string lang = m.Groups[4].Value.Trim();
                 if (lang == "")
                     continue;
-                string ru_pagename = m.Groups[2].Value;
-                string visible_text = m.Groups[3].Value;
-                string iw_pagename = m.Groups[5].Value;
-                if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
+                string ru_pagename = m.Groups[2].Value.Trim();
+                string visible_text = m.Groups[3].Value.Trim();
+                string iw_pagename = m.Groups[5].Value.Trim();
+                try
                 {
-                    string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
-                    if (needed_articles.ContainsKey(key))
-                        needed_articles[key]++;
-                    else
-                        needed_articles.Add(key, 1);
+                    if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
+                    {
+                        string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
+                        if (needed_articles.ContainsKey(key))
+                            needed_articles[key]++;
+                        else
+                            needed_articles.Add(key, 1);
+                    }
+                    else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
+                    {
+                        string text_in_article_for_replacement = m.Groups[0].Value;
+                        var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
+                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                        newtext = replacement_rgx.Replace(newtext, newlink);
+                    }
                 }
-                else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
+                catch
                 {
-                    string text_in_article_for_replacement = m.Groups[0].Value;
-                    var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                    string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
-                    comment += ", " + text_in_article_for_replacement + "->" + newlink;
-                    newtext = replacement_rgx.Replace(newtext, newlink);
+                    Console.WriteLine("error in checking presence of " + ru_pagename);
                 }
             }
             if (newtext != processed_page_text)
