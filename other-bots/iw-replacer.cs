@@ -157,22 +157,64 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = Site(creds[0], creds[1]); //var iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\}\}");
-        var iw3 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}");
-        var needed_articles = new Dictionary<string, int>();
-        //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:Не переведено&eilimit=max";
-        //while (cont != null)
-        //    using (var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result)))
-        //    {
-        //        r.WhitespaceHandling = WhitespaceHandling.None;
-        //        r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
-        //        while (r.Read())
-        //            if (r.Name == "ei")
-        //            {
-        //                string pagename = r.GetAttribute("title");
-        //            }
-        //    }
+        var iw3 = new Regex(@"\{\{ *([нН]е переведено \d|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}");
+        var needed_articles = new Dictionary<string, int>(); string cont, query; int c = 0;
         disambs = new Dictionary<string, dis_data>(); redirects = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
-        int c = 0;
+        foreach (string template in "Не переведено 2|Не переведено".Split('|'))
+        {
+            cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:" + template + "&eilimit=max";
+            while (cont != null)
+                using (var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result)))
+                {
+                    r.WhitespaceHandling = WhitespaceHandling.None;
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
+                    while (r.Read())
+                        if (r.Name == "ei")
+                        {
+                            string processed_page = r.GetAttribute("title");
+                            if (++c % 10000 == 0)
+                                Console.WriteLine(c + "/263000 processed");
+                            string processed_page_text;
+                            try { processed_page_text = readpage("ru", processed_page); } catch { continue; }
+                            string newtext = processed_page_text; string comment = "";
+                            foreach (Match m in iw3.Matches(processed_page_text))
+                            {
+                                string lang = m.Groups[4].Value.Trim();
+                                if (lang == "")
+                                    continue;
+                                string ru_pagename = m.Groups[2].Value.Trim();
+                                string visible_text = m.Groups[3].Value.Trim();
+                                string iw_pagename = m.Groups[5].Value.Trim();
+                                try
+                                {
+                                    if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
+                                    {
+                                        string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
+                                        if (needed_articles.ContainsKey(key))
+                                            needed_articles[key]++;
+                                        else
+                                            needed_articles.Add(key, 1);
+                                    }
+                                    else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
+                                    {
+                                        string text_in_article_for_replacement = m.Groups[0].Value;
+                                        var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
+                                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                                        newtext = replacement_rgx.Replace(newtext, newlink);
+                                    }
+                                }
+                                catch
+                                {
+                                    Console.WriteLine("error in checking presence of " + ru_pagename);
+                                }
+                            }
+                            if (newtext != processed_page_text)
+                                Save(site, processed_page, newtext, comment.Substring(2));
+                        }
+                }
+        }
+        
         //foreach (string processed_page in new StreamReader("iw1.txt").ReadToEnd().Replace("\r", "").Split('\n'))
         //{
         //    if (++c % 200 == 0)
@@ -209,48 +251,10 @@ class Program
         //    if (newtext != processed_page_text)
         //        Save(site, processed_page, newtext, comment.Substring(2));
         //}
-        foreach (string processed_page in new StreamReader("iw3.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        {
-            if (++c % 10000 == 0)
-                Console.WriteLine(c + "/263000 processed");
-            string processed_page_text;
-            try { processed_page_text = readpage("ru", processed_page); } catch { continue; }
-            string newtext = processed_page_text; string comment = "";
-            foreach (Match m in iw3.Matches(processed_page_text))
-            {
-                string lang = m.Groups[4].Value.Trim();
-                if (lang == "")
-                    continue;
-                string ru_pagename = m.Groups[2].Value.Trim();
-                string visible_text = m.Groups[3].Value.Trim();
-                string iw_pagename = m.Groups[5].Value.Trim();
-                try
-                {
-                    if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
-                    {
-                        string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
-                        if (needed_articles.ContainsKey(key))
-                            needed_articles[key]++;
-                        else
-                            needed_articles.Add(key, 1);
-                    }
-                    else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
-                    {
-                        string text_in_article_for_replacement = m.Groups[0].Value;
-                        var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
-                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
-                        newtext = replacement_rgx.Replace(newtext, newlink);
-                    }
-                }
-                catch
-                {
-                    Console.WriteLine("error in checking presence of " + ru_pagename);
-                }
-            }
-            if (newtext != processed_page_text)
-                Save(site, processed_page, newtext, comment.Substring(2));
-        }
+        //foreach (string processed_page in new StreamReader("iw3.txt").ReadToEnd().Replace("\r", "").Split('\n'))
+        //{
+            
+        //}
         string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
         foreach (var article_data in needed_articles.OrderByDescending(t => t.Value))
         {
