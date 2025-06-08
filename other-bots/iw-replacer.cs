@@ -20,6 +20,7 @@ class Program
     static Dictionary<string, dis_data> disambs;
     static Dictionary<string, bool> AfDpages;
     static string[] creds;
+    static string lang, ru_pagename, iw_pagename;
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -30,7 +31,8 @@ class Program
         var doc = new XmlDocument();
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password },
+            { "lgtoken", logintoken }, { "format", "xml" } })).Result;
         if (!result.IsSuccessStatusCode)
             return null;
         return client;
@@ -43,8 +45,8 @@ class Program
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        var request = new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent(comment), "summary" },
-            { new StringContent(token), "token" } };
+        var request = new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent("1"), "bot" },
+            { new StringContent(comment), "summary" }, { new StringContent(token), "token" } };
         result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
         if (!result.ToString().Contains("uccess"))
             Console.WriteLine(result.ToString());
@@ -109,7 +111,7 @@ class Program
         }
         if (disambs[lang].nocat)
         {
-            Console.WriteLine(lang + "wiki has no dis category (error)");
+            Console.WriteLine(lang + "wiki has no dis category");
             return false;
         }
         else try
@@ -119,7 +121,6 @@ class Program
             else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=" + e(disambs[lang].dis_cat_name)).Result.Contains("<c"))
             {
                 disambs[lang].disambs.Add(input, true);
-                Console.WriteLine(input + " is in dis category (error) for " + lang + ": " + disambs[lang].dis_cat_name);
                 return true;
             }
             else
@@ -153,6 +154,35 @@ class Program
             }
         }
     }
+    static bool ruPageExist()
+    {
+        bool sql = false;
+        try
+        {
+            if (!site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
+                return true;
+            else
+            {
+                var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
+                connect.Open();
+                sql = true;
+                var query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_site_id=\"ruwiki\" and ips_item_id=(select ips_item_id from wb_items_per_site where " +
+                    "ips_site_id=\"" + lang + "wiki\" and ips_site_page=\"" + iw_pagename + "\");", connect);
+                var r = query.ExecuteReader();
+                if (r.Read())
+                {
+                    ru_pagename = r.GetString("p");
+                    return true;
+                }
+                else return false;
+            }
+        }
+        catch
+        {
+            Console.WriteLine((sql ? "sql" : "api") + " error in checking presence of " + ru_pagename);
+            return false;
+        }
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
@@ -172,41 +202,34 @@ class Program
                         if (r.Name == "ei")
                         {
                             string processed_page = r.GetAttribute("title");
-                            if (++c % 10000 == 0)
-                                Console.WriteLine(c + "/263000 processed");
+                            if (++c % 5000 == 0)
+                                Console.WriteLine(c + "/360000 processed");
                             string processed_page_text;
                             try { processed_page_text = readpage("ru", processed_page); } catch { continue; }
                             string newtext = processed_page_text; string comment = "";
                             foreach (Match m in iw3.Matches(processed_page_text))
                             {
-                                string lang = m.Groups[4].Value.Trim();
+                                lang = m.Groups[4].Value.Trim();
                                 if (lang == "")
                                     continue;
-                                string ru_pagename = m.Groups[2].Value.Trim();
+                                ru_pagename = m.Groups[2].Value.Trim();
                                 string visible_text = m.Groups[3].Value.Trim();
-                                string iw_pagename = m.Groups[5].Value.Trim();
-                                try
+                                iw_pagename = m.Groups[5].Value.Trim();
+                                if (ruPageExist() && !isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
                                 {
-                                    if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
-                                    {
-                                        string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
-                                        if (needed_articles.ContainsKey(key))
-                                            needed_articles[key]++;
-                                        else
-                                            needed_articles.Add(key, 1);
-                                    }
-                                    else if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
-                                    {
-                                        string text_in_article_for_replacement = m.Groups[0].Value;
-                                        var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
-                                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
-                                        newtext = replacement_rgx.Replace(newtext, newlink);
-                                    }
+                                    string text_in_article_for_replacement = m.Groups[0].Value;
+                                    var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
+                                    string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                                    comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                                    newtext = replacement_rgx.Replace(newtext, newlink);
                                 }
-                                catch
+                                else
                                 {
-                                    Console.WriteLine("error in checking presence of " + ru_pagename);
+                                    string key = "[[" + ru_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
+                                    if (needed_articles.ContainsKey(key))
+                                        needed_articles[key]++;
+                                    else
+                                        needed_articles.Add(key, 1);
                                 }
                             }
                             if (newtext != processed_page_text)
@@ -250,10 +273,6 @@ class Program
         //    }
         //    if (newtext != processed_page_text)
         //        Save(site, processed_page, newtext, comment.Substring(2));
-        //}
-        //foreach (string processed_page in new StreamReader("iw3.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        //{
-            
         //}
         string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
         foreach (var article_data in needed_articles.OrderByDescending(t => t.Value))
