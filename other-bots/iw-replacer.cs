@@ -18,6 +18,7 @@ class Program
     static HttpClient site = new HttpClient();
     static Dictionary<string, Dictionary<string, bool>> redirects;
     static Dictionary<string, dis_data> disambs;
+    static Dictionary<string, bool> AfDpages;
     static string[] creds;
     static HttpClient Site(string login, string password)
     {
@@ -58,6 +59,10 @@ class Program
     }
     static bool isRedirect(string lang, string input)
     {
+        if (lang == "d")
+            return false;
+        if (!redirects.ContainsKey(lang))
+            redirects.Add(lang, new Dictionary<string, bool>());
         if (redirects[lang].ContainsKey(input))
             return redirects[lang][input];
         else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result.Contains("redirect="))
@@ -73,6 +78,8 @@ class Program
     }
     static bool isDisambig(string lang, string input)
     {
+        if (lang == "d")
+            return false;
         if (!disambs.ContainsKey(lang))
         {
             var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
@@ -97,7 +104,7 @@ class Program
         {
             if (disambs[lang].disambs.ContainsKey(input))
                 return disambs[lang].disambs[input];
-            else if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=" + e(disambs[lang].dis_cat_name)).Result.Contains("<c"))
+            else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=" + e(disambs[lang].dis_cat_name)).Result.Contains("<c"))
             {
                 disambs[lang].disambs.Add(input, true);
                 return true;
@@ -105,6 +112,25 @@ class Program
             else
             {
                 disambs[lang].disambs.Add(input, false);
+                return false;
+            }
+        }
+    }
+    static bool onAfD(string input)
+    {
+        if (AfDpages.ContainsKey(input))
+            return AfDpages[input];
+        else
+        {
+            if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=К:Википедия:Кандидаты на удаление").Result.Contains("<c") ||
+                site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=К:Википедия:К быстрому удалению").Result.Contains("<c"))
+            {
+                AfDpages.Add(input, true);
+                return true;
+            }
+            else
+            {
+                AfDpages.Add(input, false);
                 return false;
             }
         }
@@ -128,9 +154,7 @@ class Program
         //                string pagename = r.GetAttribute("title");
         //            }
         //    }
-        disambs = new Dictionary<string, dis_data>() { { "en", new dis_data() { disambs = new Dictionary <string, bool>(), dis_cat_name = "All disambiguation pages" } },
-        { "ru", new dis_data() { disambs = new Dictionary <string, bool>(), dis_cat_name = "Страницы значений по алфавиту" } } };
-        redirects = new Dictionary<string, Dictionary<string, bool>> { { "en", new Dictionary<string, bool>() }, { "ru", new Dictionary<string, bool>() } };
+        disambs = new Dictionary<string, dis_data>(); redirects = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
         int c = 0;
         //foreach (string processed_page in new StreamReader("iw1.txt").ReadToEnd().Replace("\r", "").Split('\n'))
         //{
@@ -220,7 +244,7 @@ class Program
             }
             catch { continue; }
             string newtext = processed_page_text; string comment = "";
-            foreach (Match m in iw2.Matches(processed_page_text))
+            foreach (Match m in iw3.Matches(processed_page_text))
             {
                 string ru_pagename = m.Groups[2].Value;
                 string visible_text = m.Groups[3].Value;
@@ -229,12 +253,13 @@ class Program
                 try
                 {
                     string test = readpage("ru", ru_pagename);
-                    if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename))
+                    if (!isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
                     {
                         string text_in_article_for_replacement = m.Groups[0].Value;
                         var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                        comment += ", " + text_in_article_for_replacement + "->[[" + ru_pagename + "]]";
-                        newtext = replacement_rgx.Replace(newtext, "[[" + ru_pagename + "]]");
+                        string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                        comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                        newtext = replacement_rgx.Replace(newtext, newlink);
                     }
                 }
                 catch
@@ -252,7 +277,7 @@ class Program
         string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
         foreach (var article_data in needed_articles.OrderByDescending(t => t.Value))
         {
-            if (article_data.Value < 5)
+            if (article_data.Value < 10)
                 break;
             result += "\n|-\n|" + article_data.Key + "||" + article_data.Value;
         }
