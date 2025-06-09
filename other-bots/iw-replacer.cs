@@ -20,7 +20,7 @@ class Program
     static Dictionary<string, dis_data> disambs;
     static Dictionary<string, bool> AfDpages;
     static string[] creds;
-    static string lang, ru_pagename, iw_pagename;
+    static string lang, ru_pagename, iw_pagename, new_ru_pagename;
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
@@ -107,7 +107,8 @@ class Program
                     disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("p"), nocat = false });
                 else
                     disambs.Add(lang, new dis_data() { nocat = true });
-            }            
+            }
+            r.Close(); connect.Close();
         }
         if (disambs[lang].nocat)
         {
@@ -156,25 +157,26 @@ class Program
     }
     static bool ruPageExist()
     {
-        bool sql = false;
+        bool sql = false, answer;
         try
         {
             if (!site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(ru_pagename)).Result.Contains("_idx=\"-1\""))
                 return true;
             else
             {
+                sql = true;
                 var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
                 connect.Open();
-                sql = true;
                 var query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_site_id=\"ruwiki\" and ips_item_id=(select ips_item_id from wb_items_per_site where " +
                     "ips_site_id=\"" + lang + "wiki\" and ips_site_page=\"" + iw_pagename + "\");", connect);
                 var r = query.ExecuteReader();
                 if (r.Read())
                 {
-                    ru_pagename = r.GetString("p");
-                    return true;
+                    new_ru_pagename = r.GetString("p");
+                    answer = true;
                 }
-                else return false;
+                else answer = false;
+                r.Close(); connect.Close(); return answer;
             }
         }
         catch
@@ -210,16 +212,20 @@ class Program
                             foreach (Match m in iw3.Matches(processed_page_text))
                             {
                                 lang = m.Groups[4].Value.Trim();
-                                if (lang == "")
-                                    continue;
                                 ru_pagename = m.Groups[2].Value.Trim();
                                 string visible_text = m.Groups[3].Value.Trim();
                                 iw_pagename = m.Groups[5].Value.Trim();
+                                if (lang == "" || ru_pagename == "" || iw_pagename == "")
+                                    continue;
+                                new_ru_pagename = "";
                                 if (ruPageExist() && !isRedirect(lang, iw_pagename) && !isRedirect("ru", ru_pagename) && !isDisambig(lang, iw_pagename) && !isDisambig("ru", ru_pagename) && !onAfD(ru_pagename))
                                 {
-                                    string text_in_article_for_replacement = m.Groups[0].Value;
+                                    string text_in_article_for_replacement = m.Groups[0].Value, newlink;
                                     var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-                                    string newlink = "[[" + ru_pagename + (visible_text == "" ? "]]" : "|" + visible_text + "]]");
+                                    if (new_ru_pagename == "")
+                                        newlink = "[[" + ru_pagename + (visible_text == "" ? "" : "|" + visible_text) + "]]";
+                                    else
+                                        newlink = "[[" + new_ru_pagename + "|" + (visible_text == "" ? ru_pagename : visible_text) + "]]";
                                     comment += ", " + text_in_article_for_replacement + "->" + newlink;
                                     newtext = replacement_rgx.Replace(newtext, newlink);
                                 }
