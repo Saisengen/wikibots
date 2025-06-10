@@ -489,8 +489,6 @@ class Program
                         string oldtitle = r.GetAttribute("title");
                         string date = r.GetAttribute("timestamp").Substring(5, 5);
                         string comment = r.GetAttribute("comment");
-                        if (comment != null)
-                            comment = e(comment);
                         r.Read();
                         string newns = r.GetAttribute("target_ns");
                         if (newns != "0")
@@ -820,22 +818,13 @@ class Program
     }
     static void inc_check_help_requests()
     {
-        string result = "{{/Doc}}";
-        string comment = "";
+        string result = "";
         foreach (var cat in "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|'))
-        {
-            result += "\n==[[:К:" + cat + "|]]==\n{|class=\"standard sortable\"\n!Статья!!Размер!!Посл. правщик!!Посл. правка";
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:" + cat).Result)))
                 while (r.Read())
                     if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10"))
-                    {
-                        string title = r.GetAttribute("title");
-                        result += "\n{{/строка|" + title + "}}";
-                        comment += "[[" + title + "]], ";
-                    }
-            result += "\n|}";
-        }
-        Save(site, "Проект:Инкубатор/Запросы помощи и проверки", result, comment.Substring(0, comment.Length - 2));
+                        result += ", [[" + r.GetAttribute("title") + "|" + r.GetAttribute("title").Substring(10) + "]]";
+        Save(site, "ВП:Форум/Общий/Запросы помощи в Инкубаторе", result.Substring(2), "");
     }
     static void img_inc_bot()
     {
@@ -939,9 +928,9 @@ class Program
         site = Site(creds[0], creds[1]);
         now = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
+        try { inc_check_help_requests(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { img_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { inc_check_help_requests(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { stat_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
