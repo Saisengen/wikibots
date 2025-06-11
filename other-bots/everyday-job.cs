@@ -489,6 +489,8 @@ class Program
                         string oldtitle = r.GetAttribute("title");
                         string date = r.GetAttribute("timestamp").Substring(5, 5);
                         string comment = r.GetAttribute("comment");
+                        if (comment != null)
+                            comment = Uri.UnescapeDataString(comment);
                         r.Read();
                         string newns = r.GetAttribute("target_ns");
                         if (newns != "0")
@@ -819,11 +821,20 @@ class Program
     static void inc_check_help_requests()
     {
         string result = "";
+        var processed = new HashSet<string>();
         foreach (var cat in "Инкубатор:Запросы на проверку|Инкубатор:Запросы о помощи".Split('|'))
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:" + cat).Result)))
                 while (r.Read())
                     if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10"))
-                        result += ", [[" + r.GetAttribute("title") + "|" + r.GetAttribute("title").Substring(10) + "]]";
+                    {
+                        string title = r.GetAttribute("title");
+                        string shorttitle = title.Substring(title.IndexOf(':'));
+                        if (!processed.Contains(shorttitle))
+                        {
+                            processed.Add(shorttitle);
+                            result += ", [[" + title + "|" + shorttitle + "]]";
+                        }
+                    }
         Save(site, "ВП:Форум/Общий/Запросы помощи в Инкубаторе", result.Substring(2), "");
     }
     static void img_inc_bot()
