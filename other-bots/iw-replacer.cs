@@ -7,7 +7,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Linq;
 using MySql.Data.MySqlClient;
-using System.Xml.Linq;
 class dis_data
 {
     public Dictionary<string, bool> disambs;
@@ -16,8 +15,8 @@ class dis_data
 }
 class Program
 {
-    static HttpClient site = new HttpClient(); static string[] creds; static string lang, home_pagename, iw_pagename, new_home_pagename, home_lang, visible_text, comment, newtext; static int c;
-    static Dictionary<string, Dictionary<string, bool>> redirects; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw00;
+    static HttpClient site = new HttpClient(); static string[] creds; static string lang, home_pagename, iw_pagename, new_home_pagename, home_lang, visible_text, comment, newtext; static bool from_template;
+    static Dictionary<string, Dictionary<string, bool>> redirects; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw00; static int c;
     static Dictionary<string, Dictionary<string, int>> needed_articles;
     static HttpClient Site(string lang, string login, string password)
     {
@@ -43,7 +42,7 @@ class Program
             return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        var request = new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent("1"), "bot" },
+        var request = new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, /*{ new StringContent("1"), "bot" },*/
             { new StringContent(comment), "summary" }, { new StringContent(token), "token" } };
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
         if (!result.ToString().Contains("uccess"))
@@ -158,7 +157,7 @@ class Program
         bool answer;
         try
         {
-            if (home_pagename != "" && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
+            if (from_template && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
                 return true;
             else
             {
@@ -193,26 +192,24 @@ class Program
                 needed_articles.Add(key, 1);
         }
     }
-    static void check_for_blockers_and_generate_new_text(string page_for_processing, Match m)
+    static void check_for_blockers_and_generate_new_text_and_comment(string page_for_processing, Match m)
     {
-        //if (iw_pagename.Contains(':'))
-        //    return;
         if (homePageExist())
         {
             if (isRedirect(lang, iw_pagename))
                 addNeededArticle(needed_articles["iw_redir"], home_pagename);
             else if (isRedirect(home_lang, home_pagename))
                 addNeededArticle(needed_articles["home_redir"], home_pagename);
-            /*else if (isDisambig(lang, iw_pagename))
+            else if (isDisambig(lang, iw_pagename))
                 addNeededArticle(needed_articles["iw_dis"], home_pagename);
             else if (isDisambig(home_lang, home_pagename))
-                addNeededArticle(needed_articles["home_dis"], home_pagename);*/
+                addNeededArticle(needed_articles["home_dis"], home_pagename);
             else if (onAfD(home_pagename))
                 addNeededArticle(needed_articles["home_afd"], home_pagename);
             else if (new_home_pagename != "" && isRedirect(home_lang, new_home_pagename))
                 addNeededArticle(needed_articles["home_redir"], new_home_pagename);
-            /*else if (new_home_pagename != "" && isDisambig(home_lang, new_home_pagename))
-                addNeededArticle(needed_articles["home_dis"], new_home_pagename);*/
+            else if (new_home_pagename != "" && isDisambig(home_lang, new_home_pagename))
+                addNeededArticle(needed_articles["home_dis"], new_home_pagename);
             else
             {
                 string text_in_article_for_replacement = m.Groups[0].Value, newlink;
@@ -224,9 +221,11 @@ class Program
                         newlink = "[[" + home_pagename + "|" + visible_text + "]]";
                 else if (visible_text == "")
                     newlink = "[[" + new_home_pagename + "|" + home_pagename + "]]";
+                else if (visible_text == new_home_pagename)
+                    newlink = "[[" + new_home_pagename + "]]";
                 else
                     newlink = "[[" + new_home_pagename + "|" + visible_text + "]]";
-                comment += ", " + text_in_article_for_replacement + "->" + newlink;
+                comment += ", " + text_in_article_for_replacement.Substring(1, text_in_article_for_replacement.Length - 2) + "->" + newlink.Substring(1, newlink.Length - 2);
                 newtext = replacement_rgx.Replace(newtext, newlink);
             }
         }
@@ -235,6 +234,12 @@ class Program
     }
     static void processPage(string page_for_processing)
     {
+        if (page_for_processing.Contains(':'))
+        {
+            string ns = page_for_processing.Substring(0, page_for_processing.IndexOf(':'));
+            if (ns.Contains("частни") || ns.Contains("бсуждение") || ns.Contains("икипедия") || ns.Contains("роект"))
+                return;
+        }
         if (++c % 5000 == 0)
             Console.WriteLine(c + "/360000 processed");
         string processed_page_text;
@@ -251,18 +256,19 @@ class Program
             if (iw_pagename == "")
                 iw_pagename = home_pagename;
             new_home_pagename = "";
-            check_for_blockers_and_generate_new_text(page_for_processing, m);
+            from_template = true;
+            check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
         }
-        foreach (Match m in iw0.Matches(processed_page_text))
-        {
-            lang = m.Groups[1].Value.Trim();
-            iw_pagename = m.Groups[2].Value.Trim();
-            if (lang == "" || iw_pagename == "")
-                continue;
-            visible_text = iw_pagename; home_pagename = iw_pagename;
-            new_home_pagename = "";
-            check_for_blockers_and_generate_new_text(page_for_processing, m);
-        }
+        //foreach (Match m in iw0.Matches(processed_page_text))
+        //{
+        //    lang = m.Groups[1].Value.Trim();
+        //    iw_pagename = m.Groups[2].Value.Trim();
+        //    if (lang == "" || iw_pagename == "")
+        //        continue;
+        //    visible_text = ""; home_pagename = "";
+        //    new_home_pagename = "";
+        //    check_for_blockers_and_generate_new_text(page_for_processing, m);
+        //}
         foreach (Match m in iw00.Matches(processed_page_text))
         {
             lang = m.Groups[1].Value.Trim();
@@ -270,9 +276,10 @@ class Program
             if (lang == "" || iw_pagename == "")
                 continue;
             visible_text = m.Groups[3].Value.Trim();
-            iw_pagename = visible_text;
+            home_pagename = visible_text;
             new_home_pagename = "";
-            check_for_blockers_and_generate_new_text(page_for_processing, m);
+            from_template = false;
+            check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
         }
         if (newtext != processed_page_text)
             Save(site, home_lang, page_for_processing, newtext, comment.Substring(2));
@@ -286,6 +293,7 @@ class Program
         needed_articles = new Dictionary<string, Dictionary<string, int>>() { { "iw_redir", new Dictionary<string, int>() }, { "home_redir", new Dictionary<string, int>() }, { "iw_dis", 
                 new Dictionary<string, int>() }, { "home_dis", new Dictionary<string, int>() }, { "home_afd", new Dictionary<string, int>() }, { "other", new Dictionary<string, int>() } };
         disambs = new Dictionary<string, dis_data>(); redirects = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
+
         foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
             processPage(page_for_processing);
         foreach (string template in "Не переведено 2|Не переведено".Split('|'))
@@ -338,6 +346,7 @@ class Program
         //    if (newtext != processed_page_text)
         //        Save(site, processed_page, newtext, comment.Substring(2));
         //}
+
         foreach (string type in "home_dis|iw_dis|home_redir|iw_redir|home_afd|other".Split('|'))
         {
             string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
