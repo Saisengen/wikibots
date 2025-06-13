@@ -11,7 +11,6 @@ class dis_data
 {
     public Dictionary<string, bool> disambs;
     public string dis_cat_name;
-    public bool nocat;
 }
 class Program
 {
@@ -85,34 +84,23 @@ class Program
     }
     static bool isDisambig(string lang, string input)
     {
-        if (lang == "d")
-            return false;
-        if (!disambs.ContainsKey(lang))
-        {
-            var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
-            connect.Open();
-            var query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_item_id=9700479 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q9700479
-            var r = query.ExecuteReader();
-            if (r.Read())
-                disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("p"), nocat = false });
-            else
+        foreach (var cat in "Страницы значений по алфавиту|Страницы значений".Split('|'))
+            if (!disambs.ContainsKey(lang))
             {
-                query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_item_id=1982926 and ips_site_id=\"" + lang + "wiki\";", connect);//https://www.wikidata.org/wiki/Q1982926
-                r.Close();
-                r = query.ExecuteReader();
-                if (r.Read())
-                    disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = r.GetString("p"), nocat = false });
-                else
-                    disambs.Add(lang, new dis_data() { nocat = true });
+                var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + lang + "&titles=К:" + cat).Result));
+                while (rr.Read())
+                    if (rr.Name == "ll" && rr.NodeType == XmlNodeType.Element)
+                    {
+                        rr.Read();
+                        disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = rr.Value });
+                    }
             }
-            r.Close(); connect.Close();
-        }
-        if (disambs[lang].nocat)
+        if (!disambs.ContainsKey(lang))
         {
             Console.WriteLine(lang + "wiki has no dis category");
             return false;
         }
-        else try
+        try
         {
             if (disambs[lang].disambs.ContainsKey(input))
                 return disambs[lang].disambs[input];
@@ -129,7 +117,7 @@ class Program
         }
             catch
             {
-                Console.WriteLine("error in isDis for " + lang + " and " + input);
+                Console.WriteLine("error in isDis for lang=\"" + lang + "\" and page=\"" + input + "\"");
                 return false;
             }
     }
@@ -154,26 +142,22 @@ class Program
     }
     static bool homePageExist()
     {
-        bool answer;
         try
         {
             if (from_template && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
                 return true;
             else
             {
-                var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
-                connect.Open();
-                var query = new MySqlCommand("select cast(ips_site_page as char) p from wb_items_per_site where ips_site_id=\"" + home_lang + "wiki\" and ips_item_id=(select ips_item_id from wb_items_per_site " +
-                    "where ips_site_id=\"" + lang + "wiki\" and ips_site_page=\"" + iw_pagename + "\");", connect);
-                var r = query.ExecuteReader();
-                if (r.Read())
-                {
-                    new_home_pagename = r.GetString("p");
-                    answer = true;
-                }
-                else answer = false;
-                r.Close(); connect.Close(); return answer;
+                var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + home_lang + "&titles=" + iw_pagename).Result));
+                    while (rr.Read())
+                        if (rr.Name == "ll")
+                        {
+                            rr.Read();
+                            new_home_pagename = rr.Value;
+                            return true;
+                        }
             }
+            return false;
         }
         catch (Exception e)
         {
@@ -237,7 +221,7 @@ class Program
         if (page_for_processing.Contains(':'))
         {
             string ns = page_for_processing.Substring(0, page_for_processing.IndexOf(':'));
-            if (ns.Contains("частни") || ns.Contains("бсуждение") || ns.Contains("икипедия") || ns.Contains("роект"))
+            if (ns.Contains("частни") || ns.Contains("бсуждение") || ns.Contains("икипедия") || ns.Contains("роект") || ns.Contains("рбитраж"))
                 return;
         }
         if (++c % 5000 == 0)
@@ -249,7 +233,7 @@ class Program
         {
             lang = m.Groups[4].Value.Trim();
             home_pagename = m.Groups[2].Value.Trim();
-            if (lang == "" || home_pagename == "")
+            if (lang == "" || home_pagename == "" || lang == "d")
                 continue;
             visible_text = m.Groups[3].Value.Trim();
             iw_pagename = m.Groups[5].Value.Trim();
@@ -273,7 +257,7 @@ class Program
         {
             lang = m.Groups[1].Value.Trim();
             iw_pagename = m.Groups[2].Value.Trim();
-            if (lang == "" || iw_pagename == "")
+            if (lang == "" || home_pagename == "" || lang == "d")
                 continue;
             visible_text = m.Groups[3].Value.Trim();
             home_pagename = visible_text;
@@ -292,10 +276,9 @@ class Program
         iw0 = new Regex(@"\[\[ *: *([a-zA-Z\-]{2,3}) *: *([^[|\]]*) *\]\]"); iw00 = new Regex(@"\[\[ *: *([a-zA-Z\-]{2,3}) *: *([^[|\]]*) *\| *([^[|\]]*) *\]\]");
         needed_articles = new Dictionary<string, Dictionary<string, int>>() { { "iw_redir", new Dictionary<string, int>() }, { "home_redir", new Dictionary<string, int>() }, { "iw_dis", 
                 new Dictionary<string, int>() }, { "home_dis", new Dictionary<string, int>() }, { "home_afd", new Dictionary<string, int>() }, { "other", new Dictionary<string, int>() } };
-        disambs = new Dictionary<string, dis_data>(); redirects = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
+        disambs = new Dictionary<string, dis_data>() { { "ru", new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = "Страницы значений по алфавиту" } } };
+        redirects = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
 
-        foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-            processPage(page_for_processing);
         foreach (string template in "Не переведено 2|Не переведено".Split('|'))
         {
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:" + template + "&eilimit=max";
@@ -309,6 +292,8 @@ class Program
                             processPage(r.GetAttribute("title"));
                 }
         }
+        foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
+            processPage(page_for_processing);
 
         //foreach (string processed_page in new StreamReader("iw1.txt").ReadToEnd().Replace("\r", "").Split('\n'))
         //{
