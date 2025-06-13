@@ -78,15 +78,12 @@ class Program
     }
     static void Save(HttpClient site, string title, string text, string comment)
     {
-        var doc = new XmlDocument();
-        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         if (!result.IsSuccessStatusCode)
             return;
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        var request = new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent(comment), "summary" },
-            { new StringContent(token), "token" } };
-        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text),
+                "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" } }).Result;
         if (!result.ToString().Contains("uccess"))
             Console.WriteLine(result.ToString());
     }
@@ -273,6 +270,20 @@ class Program
                 Save(site, file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла");
         }
     }
+    static bool always_redir(string page, bool title)
+    {
+        var redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[");
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=ids|content&rvlimit=max&" + (title ? "titles=" :
+            "pageids=") + page).Result));
+        while (r.Read())
+            if (r.Name == "rev" && r.NodeType == XmlNodeType.Element)
+            {
+                r.Read();
+                if (!redir_rgx.IsMatch(r.Value))
+                    return false;
+            }
+        return true;
+    }
     static void redirs_deletion()
     {
         var doc = new XmlDocument();
@@ -282,13 +293,11 @@ class Program
         doc.LoadXml(result.Content.ReadAsStringAsync().Result);
         var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
         var legal_redirs = new List<string>();
-
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=Категория:Википедия:Намеренные перенаправления между СО&cmlimit=max").Result)))
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=К:Википедия:Намеренные перенаправления между СО&cmlimit=max").Result)))
             while (r.Read())
                 if (r.Name == "cm")
                     legal_redirs.Add(r.GetAttribute("pageid"));
-
-        foreach (int ns in new int[] { 1, 3, 5, 7, 9, 11, 13, 15, 101, 103, 105, 107, 829 })
+        foreach (int ns in new int[] { /*3,*/ 1, 5, 7, 9, 11, 13, 15, 101, 103, 105, 107, 829 })
         {
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allredirects&arprop=title|ids&arnamespace=" + ns + "&arlimit=max";
             while (cont != null)
@@ -300,65 +309,36 @@ class Program
                     while (r.Read())
                         if (r.Name == "r" && (ns != 3 || r.GetAttribute("title").Contains("/")))
                         {
-                            int cntr = 0;
                             string id = r.GetAttribute("fromid");
-                            using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + id + "&rvprop=ids&rvlimit=max").Result)))
-                                while (rr.Read())
-                                    if (rr.Name == "rev" && rr.NodeType == XmlNodeType.Element)
-                                        cntr++;
-                            if (!legal_redirs.Contains(id) && cntr == 1)
+                            if (!legal_redirs.Contains(id) && always_redir(id, false))
                             {
-                                using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + id + "&rvprop=ids&rvlimit=max").Result)))
-                                    while (rr.Read())
-                                        if (rr.Name == "rev")
-                                        {
-                                            rr.Read();
-                                            if (rr.NodeType == XmlNodeType.EndElement && rr.Name == "revisions")
-                                                using (var rrr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result)))
-                                                {
-                                                    bool there_are_links = false;
-                                                    while (rrr.Read())
-                                                        if (rrr.Name == "bl" && !rrr.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями") && !rrr.GetAttribute("title").StartsWith("Участник:DvoreBot/Оставленные перенаправления"))
-                                                            there_are_links = true;
-                                                    if (!there_are_links)
-                                                    {
-                                                        var request = new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(id), "pageid" },
-                                                            { new StringContent("[[ВП:КБУ#П6|редирект между СО без ссылок]]"), "reason" }, { new StringContent(token), "token" } };
-                                                        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-                                                        if (!result.ToString().Contains("uccess"))
-                                                            Console.WriteLine(result);
-                                                    }
-                                                }
-                                            break;
-                                        }
+                                var r3 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result));
+                                bool there_are_links = false;
+                                while (r3.Read())
+                                    if (r3.Name == "bl" && !r3.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями") && !r3.GetAttribute("title").StartsWith("Участник:DvoreBot/Оставленные перенаправления"))
+                                        there_are_links = true;
+                                if (!there_are_links)
+                                    result = site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(id), "pageid" },
+                                        { new StringContent(token), "token" }, { new StringContent("[[ВП:КБУ#П6|редирект между СО без ссылок]]"), "reason" } }).Result;
                             }
                         }
                 }
             }
         }
-
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=querypage&qppage=BrokenRedirects&qplimit=max").Result)))
-            while (r.Read())
-                if (r.Name == "page")
+        var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=querypage&qppage=BrokenRedirects&qplimit=max").Result));
+        while (r2.Read())
+            if (r2.Name == "page")
+            {
+                string title = r2.GetAttribute("title");
+                string ns = r2.GetAttribute("ns");
+                if (ns != "2" || (ns == "2" && title.Contains("/")))//ЛС с меты?
                 {
-                    string title = r.GetAttribute("title");
-                    string ns = r.GetAttribute("ns");
-                    if (ns != "2" || (ns == "2" && title.Contains("/")))
-                        using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + title + "&rvprop=ids&rvlimit=max").Result)))
-                        {
-                            int cntr = 0;
-                            while (rr.Read())
-                                if (rr.Name == "rev" && rr.NodeType == XmlNodeType.Element)
-                                    cntr++;
-                            if (cntr == 1)
-                            {
-                                var request = new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(title), "title" }, { new StringContent(token), "token" } };
-                                result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result;
-                                if (!result.ToString().Contains("uccess"))
-                                    Console.WriteLine(result);
-                            }
-                        }
+                    var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + title + "&rvprop=ids&rvlimit=max").Result));
+                    if (always_redir(title, true))
+                        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(title), "title" },
+                            { new StringContent(token), "token" } }).Result;
                 }
+            }
     }
     static void unreviewed_in_nonmain_ns()
     {
@@ -883,7 +863,7 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site(creds[0], creds[1]); now = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        //try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { img_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
