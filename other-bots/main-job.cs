@@ -797,7 +797,7 @@ class Program
                 {
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
                     "&rvlimit=max&titles=" + e(incname)).Result);
-                    if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(30, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(14, 0, 0, 0) &&
+                    if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0) &&
                         num_of_nominated_pages < 5)
                     {
                         string newname = incname.Substring(10);
@@ -820,7 +820,7 @@ class Program
                         while (r.Read())
                             if (r.Name == "rev")
                                 revid_to_unpatrol = r.GetAttribute("revid");//ревизия будет всего одна
-                        Thread.Sleep(3000);
+                        Thread.Sleep(4000);//3000 мало
                         if (revid_to_unpatrol != null)
                         {
                             request = new MultipartFormDataContent { { new StringContent("review"), "action" }, { new StringContent(revid_to_unpatrol), "revid" }, { new StringContent("депатрулирование " +
@@ -914,7 +914,7 @@ class Program
             if (!newfromabove.Contains(p.Key) || (newfromabove.Contains(p.Key) && usertalk.IndexOf("==") == -1))
                 save("ru", "ut:" + p.Key, usertalk + "\n\n==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/" +
                     "Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года. Поздравляем! ~~~~}}",
-                    "орден заслуженному патрулирующему за " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
+                    "орден за патрулирования в " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
             else
             {
                 int border = usertalk.IndexOf("==");
@@ -922,7 +922,7 @@ class Program
                 string pagebody = usertalk.Substring(border);
                 save("ru", "ut:" + p.Key, header + "==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/" +
                     "Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года. Поздравляем! ~~~~}}\n\n" +
-                    pagebody, "орден заслуженному патрулирующему за " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
+                    pagebody, "орден за патрулирования в " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
             }
         }
         string pats_order = readpage("ВП:Ордена/Заслуженному патрулирующему");
