@@ -474,27 +474,20 @@ class Program
     }
     static void zsf_archiving()
     {
-        var year = DateTime.Now.Year;
-        string zsftext = readpage("ВП:Заявки на снятие флагов");
-        string initialtext = zsftext;
+        var year = DateTime.Now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
         var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж|АИ|бот)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
-        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)");
-        var threads = threadrgx.Matches(zsftext);
+        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)"); var threads = threadrgx.Matches(zsftext);
         foreach (Match thread in threads)
         {
-            string archivepage = "";
-            string threadtext = thread.Groups[0].Value;
-            var summary = signature.Matches(thread.Groups[1].Value);
-            var summary_discuss = signature.Matches(thread.Groups[4].Value);
+            string archivepage = ""; string threadtext = thread.Groups[0].Value; var summary = signature.Matches(thread.Groups[1].Value); var summary_discuss = signature.Matches(thread.Groups[4].Value);
             bool outdated = true;
             foreach (Match s in summary)
-                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
                     outdated = false;
             foreach (Match s in summary_discuss)
-                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, System.Globalization.CultureInfo.GetCultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
                     outdated = false;
-            if (!outdated)
-                continue;
+            if (!outdated) continue;
             switch (thread.Groups[2].Value)
             {
                 case "апат":
@@ -675,7 +668,7 @@ class Program
             apiout1 = (cont1 == "" ? site.GetStringAsync(query1).Result : site.GetStringAsync(query1 + "&eicontinue=" + e(cont1)).Result);
             using (var r = new XmlTextReader(new StringReader(apiout1)))
             {
-                r.Read(); r.Read(); r.Read(); cont1 = r.GetAttribute("eicontinue"); Console.WriteLine(cont1);
+                r.Read(); r.Read(); r.Read(); cont1 = r.GetAttribute("eicontinue");
                 while (r.Read())
                     if (r.Name == "ei")
                     {
@@ -785,14 +778,13 @@ class Program
         var except_rgx = new Regex(@"#(REDIRECT|перенаправление) \[\[|\{\{ *db-|\{\{ *к удалению|инкубатор, (на доработке|черновик ВУС)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
         var inc_tmplt_rgx = new Regex(@"\{\{[^{}|]*инкубатор[^{}]*\}\}\n", RegexOptions.IgnoreCase); var suppressed_cats_rgx = new Regex(@"\[\[ *: *(category|категория|к) *:", RegexOptions.IgnoreCase);
         var cats_rgx = new Regex(@"\[\[ *(Category|Категория|К) *:.*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase); int num_of_nominated_pages = 0; string afd_addition = "";
-        var index_rgx = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.IgnoreCase); string afd_pagename = "Википедия:К удалению/" + now.Day + " " + monthname[now.Month] + " " + now.Year;
+        var index_rgx = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.IgnoreCase); string afd_pagename = "Википедия:К удалению/" + now.Day + " " + monthname[now.Month] + " " + now.Year; var ts = now;
 
         var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml").Result));
         while (rdr.Read())
             if (rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница")
             {
-                string incname = rdr.GetAttribute("title");
-                string pagetext = readpage(incname);
+                string incname = rdr.GetAttribute("title"); string pagetext = readpage(incname);
                 if (!except_rgx.IsMatch(pagetext))
                 {
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
@@ -800,34 +792,29 @@ class Program
                     if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0) &&
                         num_of_nominated_pages < 5)
                     {
-                        string newname = incname.Substring(10);
-                        string article_exist = "";
+                        string newname = incname.Substring(10); string article_exist = "";
                         var r1 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(newname)).Result));
                         while (r1.Read())
-                            if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1")
-                            {
-                                article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] в ОП уже существует.";
-                                newname += " (из Инкубатора)";
-                            }
+                            if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1") {
+                                article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] в ОП уже существует."; newname += " (из Инкубатора)"; }
                         var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
                         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
                         { { new StringContent("move"), "action" }, { new StringContent(incname), "from" }, { new StringContent(newname), "to" }, { new StringContent("1"), "movetalk" },
                             { new StringContent("1"), "noredirect" }, { new StringContent(token), "token" } };
-                        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result; if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
+                        site.PostAsync("https://ru.wikipedia.org/w/api.php", request);
 
                         string revid_to_unpatrol = "";
                         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + e(newname) + "&rvprop=ids").Result));
                         while (r.Read())
                             if (r.Name == "rev")
                                 revid_to_unpatrol = r.GetAttribute("revid");//ревизия будет всего одна
-                        Thread.Sleep(4000);//3000 мало
+                        Thread.Sleep(5000);//4000 мало
                         if (revid_to_unpatrol != null)
                         {
                             request = new MultipartFormDataContent { { new StringContent("review"), "action" }, { new StringContent(revid_to_unpatrol), "revid" }, { new StringContent("депатрулирование " +
                             "автопатрулированной при переносе в ОП статьи Инкубатора"), "comment" }, { new StringContent("1"), "unapprove" }, { new StringContent(token), "token" } };
-                            result = site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result; if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
+                            site.PostAsync("https://ru.wikipedia.org/w/api.php", request);
                         }
-
                         string newtext = pagetext;
                         while (newtext.Contains("\n "))
                             newtext = newtext.Replace("\n ", "\n");
@@ -838,7 +825,7 @@ class Program
                             newname + "|вынос на КУ]]");
                         num_of_nominated_pages++;
                         afd_addition += "\n\n==[[" + newname + "]]==\n[[file:Songbird-egg.svg|20px]] Исчерпало срок нахождения в [[ВП:Инкубатор|]]е, нужно оценить допустимость нахождения статьи в основном " +
-                            "пространстве." + article_exist + " ~~~~";
+                            "пространстве." + article_exist + " [[u:MBHbot]] " + ts.ToString("HH:mm, d MMMM yyyy", new CultureInfo("ru-RU")) + " (UTC)"; ts = ts.AddMinutes(1);
                     }
                     else
                     {
@@ -1925,9 +1912,9 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
