@@ -11,7 +11,7 @@ enum type { home_dis, iw_dis, home_section_redir, iw_section_redir, home_afd, ot
 class Program
 {
     static HttpClient site = new HttpClient(); static string[] creds; static string lang, home_pagename, iw_pagename, new_home_pagename, home_lang, visible_text, comment, newtext; static bool from_template;
-    static Dictionary<string, Dictionary<string, bool>> redirects_to_section; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw00, redir;
+    static Dictionary<string, Dictionary<string, bool>> redirects_to_section; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw00, redir_rgx;
     static int c; static Dictionary<type, Dictionary<string, int>> needed_articles;
     static HttpClient Site(string lang, string login, string password)
     {
@@ -54,9 +54,14 @@ class Program
             return redirects_to_section[lang][input];
         else if (!site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result.Contains("redirect="))
         { redirects_to_section[lang].Add(input, false); return false; }
-        else if (redir.IsMatch(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result))
-        { redirects_to_section[lang].Add(input, false); return false; }
-        else { redirects_to_section[lang].Add(input, true); return true; }
+        else
+        {
+            string redir_text = site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(input)).Result;
+            if (redir_rgx.IsMatch(redir_text)) {
+                new_home_pagename = redir_rgx.Match(redir_text).Groups[1].Value; redirects_to_section[lang].Add(input, false); return false; }
+            else {
+                redirects_to_section[lang].Add(input, true); return true; }
+        }
     }
     static bool isDisambig(string lang, string input)
     {
@@ -65,25 +70,19 @@ class Program
             {
                 var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + lang + "&titles=К:" + cat).Result));
                 while (rr.Read())
-                    if (rr.Name == "ll" && rr.NodeType == XmlNodeType.Element)
-                    {
-                        rr.Read();
-                        disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = rr.Value });
-                    }
+                    if (rr.Name == "ll" && rr.NodeType == XmlNodeType.Element) {
+                        rr.Read(); disambs.Add(lang, new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = rr.Value }); }
             }
-        if (disambs[lang].disambs.ContainsKey(input))
+        if (!disambs.ContainsKey(lang)) { disambs.Add(lang, new dis_data() { dis_cat_name = "" }); }
+        if (disambs[lang].dis_cat_name == "")
+            return false;
+        else if (disambs[lang].disambs.ContainsKey(input))
             return disambs[lang].disambs[input];
         else if (site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=category:" +
-            e(disambs[lang].dis_cat_name)).Result.Contains("<cl"))
-        {
-            disambs[lang].disambs.Add(input, true);
-            return true;
-        }
-        else
-        {
-            disambs[lang].disambs.Add(input, false);
-            return false;
-        }
+            e(disambs[lang].dis_cat_name)).Result.Contains("<cl")) {
+            disambs[lang].disambs.Add(input, true); return true; }
+        else {
+            disambs[lang].disambs.Add(input, false); return false; }
     }
     static bool onAfD(string input)
     {
@@ -98,20 +97,15 @@ class Program
     }
     static bool homePageExist()
     {
-        try
-        {
-            if (from_template && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
-                return true;
-            else {
-                var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + home_lang + "&titles=" + iw_pagename).Result));
-                while (rr.Read())
-                    if (rr.Name == "ll") { rr.Read(); new_home_pagename = rr.Value; return true; } }
-            return false;
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine(e.ToString()); return false;
-        }
+        //if (from_template && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
+        //    return true;
+        //else
+        //{
+            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + home_lang + "&titles=" + iw_pagename).Result));
+            while (rr.Read())
+                if (rr.Name == "ll") { rr.Read(); new_home_pagename = rr.Value; return true; }
+        //}
+        return false;
     }
     static void addNeededArticle(Dictionary<string, int> needed_articles, string home_pagename)
     {
@@ -139,7 +133,7 @@ class Program
                 addNeededArticle(needed_articles[type.home_section_redir], new_home_pagename);
             else if (new_home_pagename != "" && isDisambig(home_lang, new_home_pagename))
                 addNeededArticle(needed_articles[type.home_dis], new_home_pagename);
-            else
+            else if (home_pagename != page_for_processing && new_home_pagename != page_for_processing)
             {
                 string text_in_article_for_replacement = m.Groups[0].Value, newlink;
                 var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
@@ -219,7 +213,7 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); string cont, query; c = 0; home_lang = "ru";
         site = Site(home_lang, creds[0], creds[1]); //var iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\}\}");
-        iw3 = new Regex(@"\{\{ *([нН]е переведено \d|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}"); redir = new Regex(@"#\w*\[\[([^#\]]*)\]\]");
+        iw3 = new Regex(@"\{\{ *([нН]е переведено \d|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\}\}"); redir_rgx = new Regex(@"#\w*\[\[ *([^#\]]*) *\]\]");
         iw0 = new Regex(@"\[\[ *: *([a-zA-Z\-]{2,3}) *: *([^[|\]]*) *\]\]"); iw00 = new Regex(@"\[\[ *: *([a-zA-Z\-]{2,3}) *: *([^[|\]]*) *\| *([^[|\]]*) *\]\]");
         needed_articles = new Dictionary<type, Dictionary<string, int>>() { { type.home_dis, new Dictionary<string, int>() }, { type.home_afd, new Dictionary<string, int>() }, { type.home_section_redir, 
                 new Dictionary<string, int>() }, { type.iw_section_redir, new Dictionary<string, int>() }, { type.iw_dis, new Dictionary<string, int>() }, { type.other, new Dictionary<string, int>() } };
