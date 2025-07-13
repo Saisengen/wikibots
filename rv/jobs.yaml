@@ -6,13 +6,13 @@
   filelog-stdout: logs/antvand.out
   filelog-stderr: logs/antvand.err
 
-- name: antclr
-  command: pyvenv/bin/python ./py/antivand_cleaner.py
+- name: newbiehelp
+  command: pyvenv/bin/python ./py/other/newbie_help.py
   image: python3.11
   continuous: true
   emails: none
-  filelog-stdout: logs/antclr.out
-  filelog-stderr: logs/antclr.err
+  filelog-stdout: logs/newbiehelp.out
+  filelog-stderr: logs/newbiehelp.err
 
 - name: tw
   command: pyvenv/bin/python ./py/tw.py
