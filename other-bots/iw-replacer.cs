@@ -72,35 +72,21 @@ class Program
     }
     static bool onAfD(string input)
     {
-        if (AfDpages.ContainsKey(input)) return AfDpages[input];
-        else
-        {
-            if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=К:" + e(input) + "&clcategories=К:Википедия:Кандидаты на удаление").Result.Contains("<cl") ||
-                site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=К:" + e(input) + "&clcategories=К:Википедия:К быстрому удалению").Result.Contains("<cl"))
+        if (AfDpages.ContainsKey(input)) return AfDpages[input]; else {
+            if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=К:Википедия:Кандидаты на удаление").Result.Contains("<cl") ||
+                site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categories&titles=" + e(input) + "&clcategories=К:Википедия:К быстрому удалению").Result.Contains("<cl"))
             { AfDpages.Add(input, true); return true; }
             else { AfDpages.Add(input, false); return false; }
         }
     }
     static bool homePageExist()
     {
-        //if (from_template && !site.GetStringAsync("https://" + home_lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(home_pagename)).Result.Contains("_idx=\"-1\""))
-        //    return true;
-        //else
-        //{
-            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + home_lang + "&titles=" + iw_pagename).Result));
-            while (rr.Read())
-                if (rr.Name == "ll") { rr.Read(); new_home_pagename = rr.Value; return true; }
-        //}
-        return false;
+        string request = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&prop=langlinks&lllang=" + home_lang + "&titles=" + e(iw_pagename);
+        try { var rr = new XmlTextReader(new StringReader(site.GetStringAsync(request).Result)); while (rr.Read()) if (rr.Name == "ll") { rr.Read(); new_home_pagename = rr.Value; return true; } }
+        catch { Console.WriteLine("error while lang=" + lang); } return false;
     }
-    static void addNeededArticle(Dictionary<string, int> needed_articles, string home_pagename)
-    {
-            string key = "[[" + home_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])";
-            if (needed_articles.ContainsKey(key))
-                needed_articles[key]++;
-            else
-                needed_articles.Add(key, 1);
-    }
+    static void addNeededArticle(Dictionary<string, int> needed_articles, string home_pagename) {
+        string key = "[[" + home_pagename + "]] ([[:" + lang + ":" + iw_pagename + "]])"; if (needed_articles.ContainsKey(key)) needed_articles[key]++; else needed_articles.Add(key, 1); }
     static void check_for_blockers_and_generate_new_text_and_comment(string page_for_processing, Match m)
     {
         if (homePageExist())
@@ -208,7 +194,7 @@ class Program
         disambs = new Dictionary<string, dis_data>() { { "ru", new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = "Страницы значений по алфавиту" } } };
         redirects_to_section = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
         //foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n')) processPage(page_for_processing);
-        foreach (string template in "Не переведено|Не переведено 2".Split('|'))
+        foreach (string template in "Не переведено 2|Не переведено".Split('|'))
         {
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:" + template + "&eilimit=max"; while (cont != null)
             {
