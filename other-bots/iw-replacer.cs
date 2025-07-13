@@ -16,18 +16,10 @@ class Program
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        client.DefaultRequestHeaders.Add("User-Agent", login);
-        var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        var doc = new XmlDocument();
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password },
-            { "lgtoken", logintoken }, { "format", "xml" } })).Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        return client;
+        client.DefaultRequestHeaders.Add("User-Agent", login); var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
+        var doc = new XmlDocument(); doc.LoadXml(result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password },
+            { "lgtoken", logintoken }, { "format", "xml" } })); return client;
     }
     static void Save(HttpClient site, string lang, string title, string text, string comment)
     {
@@ -36,14 +28,8 @@ class Program
                 "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, /*{ new StringContent("1"), "bot" },*/ { new StringContent(comment), "summary" }, { new StringContent
                 (token), "token" } }; if (!site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
     }
-    static string e(string input)
-    {
-        return Uri.EscapeDataString(input);
-    }
-    static string readpage(string lang, string input)
-    {
-        return site.GetStringAsync("https://" + lang + ".wikipedia.org/wiki/" + e(input) + "?action=raw").Result;
-    }
+    static string e(string input) { return Uri.EscapeDataString(input); }
+    static string readpage(string lang, string input) { return site.GetStringAsync("https://" + lang + ".wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
     static bool isRedirectToSection(string lang, string input)
     {
         if (lang == "d")
@@ -178,6 +164,8 @@ class Program
                 continue;
             visible_text = m.Groups[3].Value.Trim();
             iw_pagename = m.Groups[5].Value.Trim();
+            if (iw_pagename.Contains('#'))
+                return;
             if (iw_pagename == "")
                 iw_pagename = home_pagename;
             new_home_pagename = "";
@@ -219,53 +207,15 @@ class Program
                 new Dictionary<string, int>() }, { type.iw_section_redir, new Dictionary<string, int>() }, { type.iw_dis, new Dictionary<string, int>() }, { type.other, new Dictionary<string, int>() } };
         disambs = new Dictionary<string, dis_data>() { { "ru", new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = "Страницы значений по алфавиту" } } };
         redirects_to_section = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
-        //foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        //    processPage(page_for_processing);
+        //foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n')) processPage(page_for_processing);
         foreach (string template in "Не переведено|Не переведено 2".Split('|'))
         {
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=Ш:" + template + "&eilimit=max"; while (cont != null)
             {
                 var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
-                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read()) if (r.Name == "ei") processPage(r.GetAttribute("title"));
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read()) if (r.Name == "ei") try { processPage(r.GetAttribute("title")); } catch (Exception e) { Console.WriteLine(e); }
             }
         }
-        //foreach (string processed_page in new StreamReader("iw1.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        //{
-        //    if (++c % 200 == 0)
-        //        Console.WriteLine(c + "/35000 processed");
-        //    string processed_page_text;
-        //    try
-        //    {
-        //        processed_page_text = readpage(home_lang, processed_page);
-        //    }
-        //    catch { continue; }
-        //    string newtext = processed_page_text; string comment = "";
-        //    foreach (Match m in iw1.Matches(processed_page_text))
-        //    {
-        //        string iw_pagename = m.Groups[2].Value;
-        //        try
-        //        {
-        //            string test = readpage("ru", iw_pagename);
-        //            if (!isRedirect("en", iw_pagename) && !isRedirect("ru", iw_pagename) && !dis_data_list["en"].disambs.Contains(iw_pagename) && !dis_data_list["ru"].disambs.Contains(iw_pagename))
-        //            {
-        //                string text_in_article_for_replacement = m.Groups[0].Value;
-        //                var replacement_rgx = new Regex(Regex.Escape(text_in_article_for_replacement));
-        //                comment += ", " + text_in_article_for_replacement + "->[[" + iw_pagename + "]]";
-        //                newtext = replacement_rgx.Replace(newtext, "[[" + iw_pagename + "]]");
-        //            }
-        //        }
-        //        catch
-        //        {
-        //            if (needed_articles.ContainsKey(iw_pagename))
-        //                needed_articles[iw_pagename]++;
-        //            else
-        //                needed_articles.Add(iw_pagename, 1);
-        //        }
-        //    }
-        //    if (newtext != processed_page_text)
-        //        Save(site, processed_page, newtext, comment.Substring(2));
-        //}
-
         foreach (var type in needed_articles.Keys)
         {
             string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
