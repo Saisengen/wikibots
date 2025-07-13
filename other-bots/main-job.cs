@@ -128,57 +128,39 @@ class Program
     }
     static void nonfree_files_in_nonmain_ns()
     {
-        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&generator=categorymembers&fuprop=title&fulimit=5000&gcmtitle=Категория:Файлы:Несвободные&gcmtype=file&gcmlimit=1000";
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&generator=categorymembers&fuprop=title&fulimit=max&gcmtitle=К:Файлы:Несвободные&gcmtype=file&gcmlimit=1000";
         while (cont != null)
         {
             apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&gcmcontinue=" + e(cont)).Result);
-            using (var r = new XmlTextReader(new StringReader(apiout)))
+            var r = new XmlTextReader(new StringReader(apiout)); r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("gcmcontinue"); string file = "";
+            while (r.Read())
             {
-                r.WhitespaceHandling = WhitespaceHandling.None;
-                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("gcmcontinue");
-                string file = "";
-                while (r.Read())
+                if (r.Name == "page")
+                    file = r.GetAttribute("title");
+                if (r.Name == "fu" && r.GetAttribute("ns") != "0" && r.GetAttribute("ns") != "102")
                 {
-                    if (r.Name == "page")
-                        file = r.GetAttribute("title");
-                    if (r.Name == "fu" && r.GetAttribute("ns") != "0" && r.GetAttribute("ns") != "102")
+                    string title = r.GetAttribute("title"); if (title == "Википедия:Форум/Авторское право/Файлы Инкубатора") continue;
+                    string text = readpage(title); string initialtext = text; string filename = file.Substring(5);
+                    filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(e(filename)) + ")"; filename = filename.Replace(@"\ ", "[ _]+");
+                    var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
+                    var r2 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
+                    var r3 = new Regex(@"<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    var r4 = new Regex(@"(<\s*gallery[^>]*>.*)(file|image|файл|изображение):\s*" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    var r5 = new Regex(@"(<\s*gallery[^>]*>.*)" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    var r6 = new Regex(@"<\s*gallery[^>]*>\s*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                    var r7 = new Regex(@"\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + filename + @"[^}]*\}\}");
+                    var r8 = new Regex(@"([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
+                    var r9 = new Regex(@"([=|]\s*)" + filename, RegexOptions.IgnoreCase); text = r1.Replace(text, ""); text = r2.Replace(text, ""); text = r3.Replace(text, ""); text = r4.Replace(text, "$1");
+                    text = r5.Replace(text, "$1"); text = r6.Replace(text, ""); text = r7.Replace(text, ""); text = r8.Replace(text, "$1"); text = r9.Replace(text, "$1");
+                    if (text != initialtext)
                     {
-                        string title = r.GetAttribute("title");
-                        string text = readpage(title);
-                        string initialtext = text;
-                        string filename = file.Substring(5);
-                        filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(e(filename)) + ")";
-                        filename = filename.Replace(@"\ ", "[ _]+");
-                        var r1 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
-                        var r2 = new Regex(@"\[\[\s*(file|image|файл|изображение):\s*" + filename + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
-                        var r3 = new Regex(@"<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + filename + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                        var r4 = new Regex(@"(<\s*gallery[^>]*>.*)(file|image|файл|изображение):\s*" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                        var r5 = new Regex(@"(<\s*gallery[^>]*>.*)" + filename + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                        var r6 = new Regex(@"<\s*gallery[^>]*>\s*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                        var r7 = new Regex(@"\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + filename + @"[^}]*\}\}");
-                        var r8 = new Regex(@"([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
-                        var r9 = new Regex(@"([=|]\s*)" + filename, RegexOptions.IgnoreCase);
-                        text = r1.Replace(text, "");
-                        text = r2.Replace(text, "");
-                        text = r3.Replace(text, "");
-                        text = r4.Replace(text, "$1");
-                        text = r5.Replace(text, "$1");
-                        text = r6.Replace(text, "");
-                        text = r7.Replace(text, "");
-                        text = r8.Replace(text, "$1");
-                        text = r9.Replace(text, "$1");
-                        if (text != initialtext)
-                        {
-                            save("ru", title, text, "удаление несвободного файла из служебных пространств");
-                            if (r.GetAttribute("ns") == "10")
-                            {
-                                string tracktext = readpage("u:MBH/Шаблоны с удалёнными файлами");
-                                rsave("u:MBH/Шаблоны с удалёнными файлами", tracktext + "\n* [[" + title + "]]");
-                            }
-                        }
+                        save("ru", title, text, "удаление несвободного файла из служебных пространств");
+                        if (r.GetAttribute("ns") == "10") {
+                            string tracktext = readpage("u:MBH/Шаблоны с удалёнными файлами"); rsave("u:MBH/Шаблоны с удалёнными файлами", tracktext + "\n* [[" + title + "]]"); }
                     }
                 }
             }
+
         }
     }
     static void outdated_templates()
@@ -716,8 +698,8 @@ class Program
     {        
         var cats = new Dictionary<string, string>() { {"Википедия:Статьи для срочного улучшения","0" },{ "Википедия:Незакрытые обсуждения переименования страниц","0" },{ "Википедия:Незакрытые обсуждения " +
                 "статей для улучшения", "0" },{ "Википедия:Кандидаты на удаление", "0" },{ "Википедия:Незакрытые обсуждения удаления страниц", "0" },{ "Википедия:Статьи для переименования", "0" },
-            { "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц", "0" },{ "Википедия:Статьи для разделения", "0" },{ "Инкубатор:Запросы на проверку", "0" },{ "Википедия:Незакрытые обсуждения разделения страниц", "0" },{ "Википедия:Незакрытые обсуждения " +
-                "восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы о помощи", "0" }};
+            { "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц", "0" },{ "Википедия:Статьи для разделения", "0" },{ "Википедия:Незакрытые обсуждения разделения " +
+            "страниц", "0" },{ "Википедия:Незакрытые обсуждения восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы помощи/проверки", "0" }};
         foreach (var cat in cats.Keys.ToList())
         {
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
@@ -735,7 +717,7 @@ class Program
             "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
             "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" +
             cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"];
-        rsave("Участник:MBH/Завалы", stat_text + result);
+        rsave("u:MBH/Завалы", stat_text + result);
     }
     static void inc_check_help_requests_img()
     {
@@ -1907,6 +1889,7 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1919,7 +1902,6 @@ class Program
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
