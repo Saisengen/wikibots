@@ -20,7 +20,7 @@ public class discordjson { public List<Embed> embeds; }
 public class Continue { public string rccontinue; public string @continue; }
 public class Query { public List<Recentchange> recentchanges; }
 public class Recentchange { public string type, title, user, comment; public Int64 revid, old_revid, rcid; public int oldlen, newlen, ns, pageid; public DateTime timestamp; public List<string> tags;
-    public object oresscores; public bool? anon; }
+    public object oresscores;}
 public class rchanges { public bool batchcomplete; public Continue @continue; public Query query; }
 public class replace_pair { public Regex one, two; public string replacement; }
 public class langdata_element { public string last_checked_edit_time, notifying_page_name, domain; public Int64 last_checked_id; }
@@ -48,7 +48,7 @@ class Program
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replace, new color(0, 255, 255) }, { type.deletion, new color(255, 255, 255) } };
     static void Main() { initialize_bot(); while (true) { if (currminute != DateTime.UtcNow.Minute / 10) { currminute = DateTime.UtcNow.Minute / 10; read_config(); read_patterns(); }
-            foreach (var lang in langdata.Keys) check(lang); Thread.Sleep(2000); } }
+            foreach (var lang in langdata.Keys) try { check(lang); } catch { } Thread.Sleep(2000); } }
     static void initialize_bot()
     {
         settings = new StreamReader("./reimu/config.txt").ReadToEnd().Split('\n');
@@ -146,14 +146,13 @@ class Program
         Program.lang = lang;
         var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2" +
             "&rcstart=" + langdata[lang].last_checked_edit_time + "&rcdir=newer&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
-        foreach (var edit in edits.query.recentchanges)
-            if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !read_edit_data_and_exclude_some_cases(edit) && !whitelist_title_rgx.IsMatch(edit.title) &&
-                !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit))
-                {
-                    generate_all_ins_del();
-                    if (!deletion_is_triggered() && !addition_is_triggered(all_ins))
-                        check_replaces(edit);
+        try {
+            foreach (var edit in edits.query.recentchanges)
+                if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !read_edit_data_and_exclude_some_cases(edit) && !whitelist_title_rgx.IsMatch(edit.title) &&
+                    !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit)) {
+                    generate_all_ins_del(); if (!deletion_is_triggered() && !addition_is_triggered(all_ins)) check_replaces(edit);
                 }
+        } catch { }
     }
     static bool read_edit_data_and_exclude_some_cases(Recentchange edit)
     {
@@ -250,7 +249,7 @@ class Program
                 post_suspicious_edit(rgxpair.replacement, type.replace); return;
             }
     }
-    static string e(string input) { return Uri.EscapeUriString(input); }
+    static string e(string input) { return input == null ? "" : Uri.EscapeUriString(input); }
     static void post_suspicious_edit(string reason, type type)
     {
         Program.reason = reason; check_if_author_is_recidivist(); generate_visible_diff(); post_edit_to_discord(type);
@@ -296,38 +295,36 @@ class Program
         string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs;
         reason += ", dsize:" + diff_size + revisions_info;
         comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ").Replace("&lt;", "<").Replace("&gt;", ">");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("&lt;", "<").Replace("&gt;", ">");
+        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("&lt;", "<").Replace("&gt;", ">").Replace("`", "\\`");
     }
     static void post_edit_to_discord(type type)
     {
-        if (discord_diff.Length > 1022)
-            discord_diff = discord_diff.Substring(0, 1022);
-        if (comment.Length > 254)
-            comment = comment.Substring(0, 254);
+        if (discord_diff.Length > 1022) discord_diff = discord_diff.Substring(0, 1022);
+        if (comment.Length > 254) comment = comment.Substring(0, 254);
         bool single_author = false;
-        string revs1 = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
-        if (revid_rgx.IsMatch(revs1))
-            edit_id_of_first_another_author = revid_rgx.Match(revs1).Groups[1].Value;
+        string revs = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
+        if (revid_rgx.IsMatch(revs))
+            edit_id_of_first_another_author = revid_rgx.Match(revs).Groups[1].Value;
         else single_author = true;
-        string visible_wd_title = title;
         if (lang == lang.d)
         {
+            string ru_lbl = "", en_lbl = "", mul_lbl = "";
             var labels = site[lang].GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + title + "&format=xml&props=labels").Result;
             foreach (Match lang in wd_label_rgx.Matches(labels))
                 if (lang.Groups[1].Value == "ru")
-                    visible_wd_title = lang.Groups[2].Value;
+                    ru_lbl = lang.Groups[2].Value;
                 else if (lang.Groups[1].Value == "en")
-                    visible_wd_title = lang.Groups[2].Value;
+                    en_lbl = lang.Groups[2].Value;
                 else if (lang.Groups[1].Value == "mul")
-                    visible_wd_title = lang.Groups[2].Value;
+                    mul_lbl = lang.Groups[2].Value;
+            if (ru_lbl != "") title = ru_lbl; else if (en_lbl != "") title = en_lbl; else if (mul_lbl != "") title = mul_lbl;
         }
-
         string curr_link = single_author ? "" : ", [curr](<https://" + langdata[lang].domain + ".org/wiki/" + e(title) + ">)";
         string main_link = single_author ? "https://" + langdata[lang].domain + ".org/wiki/" + e(title) : "https://" + langdata[lang].domain + ".org/w/index.php?oldid=" + edit_id_of_first_another_author +
             "&diff=curr&ilu=" + newid;
         var json = new discordjson()
         {
-            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = visible_wd_title, url = main_link, description = reason + ", [hist](<https://" + langdata[lang].domain +
+            embeds = new List<Embed>() { new Embed() { color = colors[type].convert(), title = title, url = main_link, description = reason + ", [hist](<https://" + langdata[lang].domain +
             ".org/wiki/special:history/" + e(title) + ">)" + curr_link, fields = new List<Field>(){ new Field(){ name = comment, value = discord_diff }}, author = new Author(){ name = editcount == 0 ?
             user : user + ", " + editcount + " edits", url = "https://" + langdata[lang].domain + ".org/wiki/special:contribs/" + e(user) } } }
         };
