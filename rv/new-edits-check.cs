@@ -27,9 +27,9 @@ public class langdata_element { public string last_checked_edit_time, notifying_
 public class pattern_info { public Regex regex; public bool only_content, not_uk; public int stringnumber; }
 class Program
 {
-    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
+    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, wiki_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
         all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.000Z"); static string[] settings; static lang lang;
-    static Dictionary<lang, HttpClient> site = new Dictionary<lang, HttpClient>(); static HttpClient client = new HttpClient(); static double ores_value, lw_value, ores_limit = 1;
+    static HttpClient site = new HttpClient(); static HttpClient client = new HttpClient(); static double ores_value, lw_value, ores_limit = 1;
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
         "multilingual", limit = 1 } } }; static HashSet<string> suspicious_users = new HashSet<string>(), trusted_users = new HashSet<string>();
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"), ins_rgx = new Regex
@@ -60,7 +60,7 @@ class Program
             trusted_users.Add(g);
         foreach (lang lang in langdata.Keys)
         {
-            site.Add(lang, Site(lang, settings[0].Split(':')[0], settings[0].Split(':')[1]));
+            site = Site(settings[0].Split(':')[0], settings[0].Split(':')[1]);
             foreach (string flag in new string[] { "editor", "autoreview", "bot" })
             {
                 if ((lang == lang.d || lang == lang.c) && (flag == "editor" || flag == "autoreview"))
@@ -68,7 +68,7 @@ class Program
                 string apiout, cont = "", request = "https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max";
                 while (cont != null)
                 {
-                    apiout = (cont == "" ? site[lang].GetStringAsync(request).Result : site[lang].GetStringAsync(request + "&aufrom=" + e(cont)).Result);
+                    apiout = (cont == "" ? site.GetStringAsync(request).Result : site.GetStringAsync(request + "&aufrom=" + e(cont)).Result);
                     using (var r = new XmlTextReader(new StringReader(apiout)))
                     {
                         r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("aufrom");
@@ -81,15 +81,15 @@ class Program
             }
         }
     }
-    static HttpClient Site(lang lang, string login, string password)
+    static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        var result = client.GetAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument();
+        var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument();
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        client.PostAsync("https://" + langdata[lang].domain + ".org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login },
+        client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login },
             { "lgpassword", password }, { "lgtoken", logintoken } })); return client;
     }
-    static string Save(lang lang, HttpClient site, string title, string appendtext, string comment)
+    static string Save(lang lang, string title, string appendtext, string comment)
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var request = new MultipartFormDataContent{{ new StringContent("edit"),"action" },{ new StringContent(title),"title" },
@@ -103,8 +103,7 @@ class Program
         ores_limit = Convert.ToDouble(limits[0]);
         liftwing[type.lwa].limit = Convert.ToDouble(limits[1]);
         liftwing[type.lwm].limit = Convert.ToDouble(limits[2]);
-        if (!trusted_users.Contains(settings[6].Split(':')[1]))
-            trusted_users.Add(settings[6].Split(':')[1]);
+        if (!trusted_users.Contains(settings[6].Split(':')[1])) trusted_users.Add(settings[6].Split(':')[1]);
         suspicious_tags_rgx = new Regex(settings[7].Split(':')[1], RegexOptions.IgnoreCase);
         deletions_rgx = new Regex(settings[8].Split(':')[1], RegexOptions.IgnoreCase);
         whitelist_text_rgx = new Regex(settings[9].Split(':')[1], RegexOptions.IgnoreCase);
@@ -116,38 +115,25 @@ class Program
     }
     static void read_patterns()
     {
-        patterns.Clear();
-        var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n');
-        int c = 0;
-        foreach (var pattern in patterns_list)
-        {
-            if (pattern == "")
-                continue;
-            else try
-                {
-                    if (pattern.Contains('☯'))
+        patterns.Clear(); var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n'); int c = 0;
+        foreach (var pattern in patterns_list) {
+            if (pattern == "") continue;
+            else try { if (pattern.Contains('☯'))
                     {
-                        string pattern_body = pattern.Split('☯')[0];
-                        string flags = pattern.Split('☯')[1];
-                        bool ignorecase = flags[0] == '0';
-                        bool not_uk = flags[1] == '1';
-                        bool only_content = flags[2] == '1';
-                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = c });
+                        string pattern_body = pattern.Split('☯')[0]; string flags = pattern.Split('☯')[1]; bool ignorecase = flags[0] == '0'; bool not_uk = flags[1] == '1'; bool only_content = flags[2] == '1';
+                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = ++c });
                     }
                     else
-                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = c });
-                }
-                catch { }
-            c++;
+                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = ++c });
+                } catch { }
         }   
     }
     static void check(lang lang)
     {
         Program.lang = lang;
-        var edits = JsonConvert.DeserializeObject<rchanges>(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2" +
+        var edits = JsonConvert.DeserializeObject<rchanges>(site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=json&list=recentchanges&formatversion=2" +
             "&rcstart=" + langdata[lang].last_checked_edit_time + "&rcdir=newer&rcprop=title|timestamp|ids|oresscores|comment|user|sizes|tags&rctype=edit|new|log&rclimit=max").Result);
-        try {
-            foreach (var edit in edits.query.recentchanges)
+        try { foreach (var edit in edits.query.recentchanges)
                 if (edit.revid > langdata[lang].last_checked_id && !trusted_users.Contains(edit.user) && !read_edit_data_and_exclude_some_cases(edit) && !whitelist_title_rgx.IsMatch(edit.title) &&
                     !ores_is_triggered(edit) && !tags_is_triggered(edit) && !addition_is_triggered(edit.comment) && !addition_is_triggered(edit.title) && !lw_is_triggered(edit)) {
                     generate_all_ins_del(); if (!deletion_is_triggered() && !addition_is_triggered(all_ins)) check_replaces(edit);
@@ -168,7 +154,7 @@ class Program
         pageid = edit.pageid;
         try
         {
-            editcount = Convert.ToInt32(editcount_rgx.Match(site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
+            editcount = Convert.ToInt32(editcount_rgx.Match(site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=&list=users&usprop=editcount" +
                 "&ususers=" + e(user)).Result).Groups[1].Value);
         }
         catch { editcount = 0; }
@@ -218,7 +204,7 @@ class Program
     }
     static void generate_all_ins_del()
     {
-        var alldiff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff" +
+        var alldiff = site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff" +
             "&difftype=inline&uselang=ru").Result;
         var ins_array = ins_rgx.Matches(alldiff); var del_array = del_rgx.Matches(alldiff); all_ins = ""; all_del = "";
         foreach (var elem in ins_array) all_ins += "\n" + elem; foreach (var elem in del_array) all_del += "\n" + elem;
@@ -226,15 +212,11 @@ class Program
     }
     static bool addition_is_triggered(string text)
     {
-        //return false;
-        if (text == null)
-            return false;
-        foreach (var pattern in patterns)
-        {
+        if (text == null) return false;
+        foreach (var pattern in patterns) {
             bool edit_is_on_the_discussion_page = ns % 2 == 1 || talk_ns_rgx.IsMatch(ns.ToString());
             if ((pattern.not_uk && lang == lang.uk) || (pattern.only_content && edit_is_on_the_discussion_page)) continue;
-            else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value))
-            {
+            else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value)) {
                 post_suspicious_edit(pattern.regex.Match(text).Value + ", line" + pattern.stringnumber, type.addition); return true;
             }
         } return false;
@@ -253,8 +235,8 @@ class Program
     static void post_suspicious_edit(string reason, type type)
     {
         Program.reason = reason; check_if_author_is_recidivist(); generate_visible_diff(); post_edit_to_discord(type);
-        if (langdata[lang].notifying_page_name != "") Save(lang, site[lang], langdata[lang].notifying_page_name, ".", "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
-            "|history]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + comment_diff);
+        if (langdata[lang].notifying_page_name != "") Save(lang, langdata[lang].notifying_page_name, ".", "[[special:diff/" + newid + "|" + title + "]] ([[special:history/" + title +
+            "|history]]), [[special:contribs/" + e(user) + "|" + user + "]], " + reason + ", " + wiki_diff);
     }
     static void check_if_author_is_recidivist()
     {
@@ -268,21 +250,19 @@ class Program
     }
     static void zkab_report()
     {
-        string zkab = site[lang.ru].GetStringAsync("https://ru.wikipedia.org/wiki/ВП:Запросы_к_администраторам/Быстрые?action=raw").Result;
+        string zkab = site.GetStringAsync("https://ru.wikipedia.org/wiki/ВП:Запросы_к_администраторам/Быстрые?action=raw").Result;
         var reportedusers = reportedusers_rgx.Matches(zkab); bool reportedyet = false;
         foreach (Match r in reportedusers) if (user == r.Groups[1].Value) reportedyet = true;
-        if (!reportedyet)
-            Save(lang.ru, site[lang.ru], "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
+        if (!reportedyet) Save(lang.ru, "ВП:Запросы к администраторам/Быстрые", "\n\n{{subst:t:preload/ЗКАБ/subst|участник=" + user + "|пояснение=}}", "[[special:contribs/" + user + "]] - новый запрос");
     }
     static void generate_visible_diff()
     {
         string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline&uselang=ru";
-        diff_text = trash_tags_rgx.Replace(empty_del_rgx.Replace(empty_ins_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), "")
+        diff_text = trash_tags_rgx.Replace(empty_del_rgx.Replace(empty_ins_rgx.Replace(site.GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), "")
             .Replace("\\n", "\n").Replace("\\\"", "\"").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
         diff = "";
         foreach (string str in diff_text.Split('\n'))
-            if (ins_del_rgx.IsMatch(str))
-            {
+            if (ins_del_rgx.IsMatch(str)) {
                 var matches = ins_del_rgx.Matches(str);
                 startpos = matches[0].Index - num_of_surrounding_chars;
                 if (startpos < 0) startpos = 0;
@@ -290,28 +270,27 @@ class Program
                 if (endpos >= str.Length) endpos = str.Length - 1;
                 diff += str.Substring(startpos, endpos - startpos + 1) + "<...>";
             }
-        string revs = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
+        string revs = site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
         string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs; reason += ", dsize:" + diff_size + revisions_info;
-        if (num_of_revs == 1)
-            diff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result;
+        if (num_of_revs == 1) { diff = site.GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result; comment = ""; }
         diff = diff.Replace("&lt;", "<").Replace("&gt;", ">");
-        string discord_syntax_escaping = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*");
-        comment_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(discord_syntax_escaping, "~~$1~~ "), "`$1` ");
+        string diff_escaped_for_discord = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*");
+        wiki_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(diff_escaped_for_discord, "~~$1~~ "), "`$1` ");
     }
     static void post_edit_to_discord(type type)
     {
         if (discord_diff.Length > 1022) discord_diff = discord_diff.Substring(0, 1022);
         if (comment.Length > 254) comment = comment.Substring(0, 254);
         bool single_author = false;
-        string revs = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
+        string revs = site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=1&rvexcludeuser=" + e(user)).Result;
         if (revid_rgx.IsMatch(revs))
             edit_id_of_first_another_author = revid_rgx.Match(revs).Groups[1].Value;
         else single_author = true;
         if (lang == lang.d)
         {
             string ru_lbl = "", en_lbl = "", mul_lbl = "";
-            var labels = site[lang].GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + title + "&format=xml&props=labels").Result;
+            var labels = site.GetStringAsync("https://www.wikidata.org/w/api.php?action=wbgetentities&ids=" + title + "&format=xml&props=labels").Result;
             foreach (Match lang in wd_label_rgx.Matches(labels))
                 if (lang.Groups[1].Value == "ru")
                     ru_lbl = lang.Groups[2].Value;
