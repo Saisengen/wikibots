@@ -19,7 +19,7 @@ public class Field { public string name, value; }
 public class discordjson { public List<Embed> embeds; }
 public class Continue { public string rccontinue; public string @continue; }
 public class Query { public List<Recentchange> recentchanges; }
-public class Recentchange { public string type, title, user, comment; public Int64 revid, old_revid, rcid; public int oldlen, newlen, ns, pageid; public DateTime timestamp; public List<string> tags;
+public class Recentchange { public string type, title, user, comment; public Int64 revid, old_revid, rcid, pageid; public int oldlen, newlen, ns; public DateTime timestamp; public List<string> tags;
     public object oresscores;}
 public class rchanges { public bool batchcomplete; public Continue @continue; public Query query; }
 public class replace_pair { public Regex one, two; public string replacement; }
@@ -27,7 +27,7 @@ public class langdata_element { public string last_checked_edit_time, notifying_
 public class pattern_info { public Regex regex; public bool only_content, not_uk; public int stringnumber; }
 class Program
 {
-    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, strings_with_changes, edit_id_of_first_another_author,
+    static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, comment_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
         all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.000Z"); static string[] settings; static lang lang;
     static Dictionary<lang, HttpClient> site = new Dictionary<lang, HttpClient>(); static HttpClient client = new HttpClient(); static double ores_value, lw_value, ores_limit = 1;
     static Dictionary<type, model> liftwing = new Dictionary<type, model>() { { type.lwa, new model() { longname = "language-agnostic", limit = 1 } }, { type.lwm, new model() { longname = 
@@ -44,7 +44,7 @@ class Program
         { global::lang.c, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "commons.wikimedia" } },
         { global::lang.d, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "", domain = "www.wikidata" } } };
     static List<pattern_info> patterns = new List<pattern_info>(); static List<replace_pair> replaces = new List<replace_pair>();
-    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, pageid, ns; static Int64 newid, oldid;
+    static int currminute = -1, diff_size, num_of_surrounding_chars = 25, num_of_revs_to_check = 20, startpos, endpos, editcount, ns; static Int64 newid, oldid, pageid;
     static Dictionary<type, color> colors = new Dictionary<type, color>() { { type.addition, new color(255, 0, 0) }, { type.lwa, new color(255, 255, 0) }, { type.ores, new color(255, 0, 255) },
         { type.tag, new color(0, 255, 0) }, { type.lwm, new color(255, 128, 0) }, { type.replace, new color(0, 255, 255) }, { type.deletion, new color(255, 255, 255) } };
     static void Main() { initialize_bot(); while (true) { if (currminute != DateTime.UtcNow.Minute / 10) { currminute = DateTime.UtcNow.Minute / 10; read_config(); read_patterns(); }
@@ -262,7 +262,7 @@ class Program
         {
             client.PostAsync("https://discord.com/api/webhooks/" + authors_token, new FormUrlEncodedContent(new Dictionary<string, string>{ { "content", "[" + user + "](<https://" + langdata[lang].domain +
                 ".org/wiki/special:contribs/" + e(user) + ">), " + title} }));
-            if (lang == lang.ru && reason.StartsWith("ores:")) zkab_report();
+            if (lang == lang.ru && (reason.StartsWith("ores:") || reason.StartsWith("lw"))) zkab_report();
         }
         else suspicious_users.Add(user);
     }
@@ -279,7 +279,7 @@ class Program
         string diff_request = "https://" + langdata[lang].domain + ".org/w/api.php?action=compare&format=json&formatversion=2&fromrev=" + oldid + "&torev=" + newid + "&prop=diff&difftype=inline&uselang=ru";
         diff_text = trash_tags_rgx.Replace(empty_del_rgx.Replace(empty_ins_rgx.Replace(site[lang].GetStringAsync(diff_request).Result.Replace("&#160;", ""), ""), ""), "")
             .Replace("\\n", "\n").Replace("\\\"", "\"").Replace("&#9650;", "↕").Replace("&#9660;", "↕");
-        strings_with_changes = "";
+        diff = "";
         foreach (string str in diff_text.Split('\n'))
             if (ins_del_rgx.IsMatch(str))
             {
@@ -288,14 +288,16 @@ class Program
                 if (startpos < 0) startpos = 0;
                 endpos = matches[matches.Count - 1].Index + matches[matches.Count - 1].Length + num_of_surrounding_chars;
                 if (endpos >= str.Length) endpos = str.Length - 1;
-                strings_with_changes += str.Substring(startpos, endpos - startpos + 1) + "<...>";
+                diff += str.Substring(startpos, endpos - startpos + 1) + "<...>";
             }
         string revs = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
-        string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs;
-        reason += ", dsize:" + diff_size + revisions_info;
-        comment_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "-$1 "), "+$1 ").Replace("&lt;", "<").Replace("&gt;", ">");
-        discord_diff = ins_rgx.Replace(del_rgx.Replace(strings_with_changes, "~~$1~~ "), "`$1` ").Replace("&lt;", "<").Replace("&gt;", ">").Replace("`", "\\`");
+        string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs; reason += ", dsize:" + diff_size + revisions_info;
+        if (num_of_revs == 1)
+            diff = site[lang].GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result;
+        diff = diff.Replace("&lt;", "<").Replace("&gt;", ">");
+        string discord_syntax_escaping = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*");
+        comment_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(discord_syntax_escaping, "~~$1~~ "), "`$1` ");
     }
     static void post_edit_to_discord(type type)
     {
