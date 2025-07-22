@@ -24,7 +24,7 @@ public class Recentchange { public string type, title, user, comment; public Int
 public class rchanges { public bool batchcomplete; public Continue @continue; public Query query; }
 public class replace_pair { public Regex one, two; public string replacement; }
 public class langdata_element { public string last_checked_edit_time, notifying_page_name, domain; public Int64 last_checked_id; }
-public class pattern_info { public Regex regex; public bool only_content, not_uk; public int stringnumber; }
+public class pattern_info { public Regex regex; public bool only_content, not_uk; public int line; }
 class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, wiki_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
@@ -53,7 +53,6 @@ class Program
     {
         settings = new StreamReader("./reimu/config.txt").ReadToEnd().Split('\n');
         liftwing_token = settings[1].Split(':')[1]; swviewer_token = settings[2].Split(':')[1]; discord_token = settings[3].Split(':')[1]; authors_token = settings[4].Split(':')[1];
-
         client.DefaultRequestHeaders.Add("Authorization", "Bearer " + liftwing_token); client.DefaultRequestHeaders.Add("User-Agent", "vandalism_detection_tool_by_user_MBH");
         var swviewer_trusted_users = client.GetStringAsync("https://swviewer.toolforge.org/php/getGlobals.php?ext_token=" + swviewer_token + "&user=Рейму").Result.Split('|');
         foreach (var g in swviewer_trusted_users)
@@ -116,16 +115,13 @@ class Program
     static void read_patterns()
     {
         patterns.Clear(); var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n'); int c = 0;
-        foreach (var pattern in patterns_list) {
-            if (pattern == "") continue;
-            else try { if (pattern.Contains('☯'))
-                    {
+        foreach (var pattern in patterns_list) { if (pattern == "") continue; else try { if (pattern.Contains('☯')) {
                         string pattern_body = pattern.Split('☯')[0]; string flags = pattern.Split('☯')[1]; bool ignorecase = flags[0] == '0'; bool not_uk = flags[1] == '1'; bool only_content = flags[2] == '1';
-                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, stringnumber = ++c });
+                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, line = ++c });
                     }
-                    else
-                        patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, stringnumber = ++c });
-                } catch { }
+                    else patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, line = ++c });
+                }
+                catch { }
         }   
     }
     static void check(lang lang)
@@ -217,7 +213,7 @@ class Program
             bool edit_is_on_the_discussion_page = ns % 2 == 1 || talk_ns_rgx.IsMatch(ns.ToString());
             if ((pattern.not_uk && lang == lang.uk) || (pattern.only_content && edit_is_on_the_discussion_page)) continue;
             else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value)) {
-                post_suspicious_edit(pattern.regex.Match(text).Value + ", line" + pattern.stringnumber, type.addition); return true;
+                post_suspicious_edit(pattern.regex.Match(text).Value + ", line" + pattern.line, type.addition); return true;
             }
         } return false;
     }
@@ -273,7 +269,10 @@ class Program
         string revs = site.GetStringAsync("https://" + langdata[lang].domain + ".org/w/api.php?action=query&format=xml&prop=revisions&pageids=" + pageid + "&rvprop=ids&rvlimit=" + num_of_revs_to_check).Result;
         int num_of_revs = rev_rgx.Matches(revs).Count;
         string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs; reason += ", dsize:" + diff_size + revisions_info;
-        if (num_of_revs == 1) { diff = site.GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result; comment = ""; }
+        if (num_of_revs == 1) {
+            diff = site.GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result;
+            if (diff.Substring(0,10) == comment.Substring(0,10)) comment = "";
+        }
         diff = diff.Replace("&lt;", "<").Replace("&gt;", ">");
         string diff_escaped_for_discord = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*");
         wiki_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(diff_escaped_for_discord, "~~$1~~ "), "`$1` ");
