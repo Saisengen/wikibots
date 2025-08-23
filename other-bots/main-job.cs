@@ -95,10 +95,7 @@ class Program
     loader_foreign2_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/([^?]*)\?", RegexOptions.IgnoreCase),
     r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase);
     static Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(); static bool legit_link_found; static int position_number = 0;
-    static string e(string input)
-    {
-        return Uri.EscapeDataString(input);
-    }
+    static string e(string input) { return Uri.EscapeDataString(input); }
     static string readpage(string input)
     {
         return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result;
@@ -756,7 +753,7 @@ class Program
         var inc_tmplt_rgx = new Regex(@"\{\{[^{}|]*инкубатор[^{}]*\}\}\n", RegexOptions.IgnoreCase); var suppressed_cats_rgx = new Regex(@"\[\[ *: *(category|категория|к) *:", RegexOptions.IgnoreCase);
         var cats_rgx = new Regex(@"\[\[ *(Category|Категория|К) *:.*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase); int num_of_nominated_pages = 0; string afd_addition = "";
         var index_rgx = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.IgnoreCase); string afd_pagename = "Википедия:К удалению/" + now.Day + " " + monthname[now.Month] + " " + now.Year; var ts = now;
-
+        var unpatbot = login("ru", creds[3], creds[4]);
         var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml").Result));
         while (rdr.Read())
             if (rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница")
@@ -778,20 +775,8 @@ class Program
                         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
                         { { new StringContent("move"), "action" }, { new StringContent(incname), "from" }, { new StringContent(newname), "to" }, { new StringContent("1"), "movetalk" },
                             { new StringContent("1"), "noredirect" }, { new StringContent(token), "token" } };
-                        site.PostAsync("https://ru.wikipedia.org/w/api.php", request);
+                        unpatbot.PostAsync("https://ru.wikipedia.org/w/api.php", request);
 
-                        string revid_to_unpatrol = "";
-                        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + e(newname) + "&rvprop=ids").Result));
-                        while (r.Read())
-                            if (r.Name == "rev")
-                                revid_to_unpatrol = r.GetAttribute("revid");//ревизия будет всего одна
-                        Thread.Sleep(5000);//4000 мало
-                        if (revid_to_unpatrol != null)
-                        {
-                            request = new MultipartFormDataContent { { new StringContent("review"), "action" }, { new StringContent(revid_to_unpatrol), "revid" }, { new StringContent("депатрулирование " +
-                            "автопатрулированной при переносе в ОП статьи Инкубатора"), "comment" }, { new StringContent("1"), "unapprove" }, { new StringContent(token), "token" } };
-                            site.PostAsync("https://ru.wikipedia.org/w/api.php", request);
-                        }
                         string newtext = pagetext;
                         while (newtext.Contains("\n "))
                             newtext = newtext.Replace("\n ", "\n");
@@ -1116,10 +1101,7 @@ class Program
         }
         rsave("ВП:Администраторы/Активность", result + "\n|}");
     }
-    static string cell(int number)
-    {
-        if (number == 0) return ""; else return number.ToString();
-    }
+    static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static bool sameuser(string s1, string s2)
     {
         if (s1.Contains(":"))
