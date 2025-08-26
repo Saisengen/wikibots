@@ -96,13 +96,15 @@ class Program
     r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase);
     static Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(); static bool legit_link_found; static int position_number = 0;
     static string e(string input) { return Uri.EscapeDataString(input); }
-    static string readpage(string input)
+    static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
+    static string serialize(HashSet<string> list) { list.ExceptWith(highflags); return JsonConvert.SerializeObject(list); }
+    static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
+    static string escape_comment(string comment)
     {
-        return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result;
-    }
-    static string serialize(HashSet<string> list)
-    {
-        list.ExceptWith(highflags); return JsonConvert.SerializeObject(list);
+        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C");
+        if (result.Contains("{") || result.Contains("}") || result.Contains("|"))
+            result = "<nowiki>" + result + "</nowiki>";
+        return result;
     }
     static HttpClient login(string lang, string login, string password)
     {
@@ -289,8 +291,7 @@ class Program
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=ids|content&rvlimit=max&" + (title ? "titles=" :
             "pageids=") + page).Result));
         while (r.Read())
-            if (r.Name == "rev" && r.NodeType == XmlNodeType.Element)
-            {
+            if (r.Name == "rev" && r.NodeType == XmlNodeType.Element) {
                 r.Read();
                 if (!redir_rgx.IsMatch(r.Value))
                     return false;
@@ -577,13 +578,6 @@ class Program
         string result = "{\"userSet\":{\"p,r\":" + serialize(patrolls) + ",\"ap\":" + serialize(apats) + ",\"p\":" + serialize(patnotrolls) + ",\"r\":" + serialize(rollnotpats) + "," + "\"f\":" + serialize(fmovers) + "}}";
         rsave("MediaWiki:Gadget-markothers.json", result);
     }
-    static string escape_comment(string comment)
-    {
-        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C");
-        if (result.Contains("{") || result.Contains("}") || result.Contains("|"))
-            result = "<nowiki>" + result + "</nowiki>";
-        return result;
-    }
     static void catmoves()
     {
         string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
@@ -771,7 +765,8 @@ class Program
                         while (r1.Read())
                             if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1") {
                                 article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] в ОП уже существует."; newname += " (из Инкубатора)"; }
-                        var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+
+                        var doc = new XmlDocument(); var result = unpatbot.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
                         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
                         { { new StringContent("move"), "action" }, { new StringContent(incname), "from" }, { new StringContent(newname), "to" }, { new StringContent("1"), "movetalk" },
                             { new StringContent("1"), "noredirect" }, { new StringContent(token), "token" } };
@@ -1101,7 +1096,6 @@ class Program
         }
         rsave("ВП:Администраторы/Активность", result + "\n|}");
     }
-    static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static bool sameuser(string s1, string s2)
     {
         if (s1.Contains(":"))
@@ -1871,8 +1865,8 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
-        try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
