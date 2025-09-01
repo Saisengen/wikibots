@@ -765,24 +765,23 @@ class Program
                         while (r1.Read())
                             if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1") {
                                 article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] в ОП уже существует."; newname += " (из Инкубатора)"; }
-
-                        var doc = new XmlDocument(); var result = unpatbot.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
-                        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
-                        { { new StringContent("move"), "action" }, { new StringContent(incname), "from" }, { new StringContent(newname), "to" }, { new StringContent("1"), "movetalk" },
-                            { new StringContent("1"), "noredirect" }, { new StringContent(token), "token" } };
-                        unpatbot.PostAsync("https://ru.wikipedia.org/w/api.php", request);
-
                         string newtext = pagetext;
                         while (newtext.Contains("\n "))
                             newtext = newtext.Replace("\n ", "\n");
                         while (newtext.Contains("\n\n\n"))
                             newtext = newtext.Replace("\n\n\n", "\n\n");
 
-                        save("ru", newname, "{{подст:КУ}}" + inc_tmplt_rgx.Replace(suppressed_cats_rgx.Replace(newtext, "[[К:"), ""), "удаление инк-шаблонов, возврат категорий, [[" + afd_pagename + "#" + 
+                        save("ru", incname, "{{подст:КУ}}" + inc_tmplt_rgx.Replace(suppressed_cats_rgx.Replace(newtext, "[[К:"), ""), "удаление инк-шаблонов, возврат категорий, [[" + afd_pagename + "#" + 
                             newname + "|вынос на КУ]]");
                         num_of_nominated_pages++;
                         afd_addition += "\n\n==[[" + newname + "]]==\n[[file:Songbird-egg.svg|20px]] Исчерпало срок нахождения в [[ВП:Инкубатор|]]е, нужно оценить допустимость нахождения статьи в основном " +
                             "пространстве." + article_exist + " [[u:MBHbot]] " + ts.ToString("HH:mm, d MMMM yyyy", new CultureInfo("ru-RU")) + " (UTC)"; ts = ts.AddMinutes(1);
+
+                        var doc = new XmlDocument(); var result = unpatbot.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+                        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var unpat_token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
+                        { { new StringContent("move"), "action" }, { new StringContent(incname), "from" }, { new StringContent(newname), "to" }, { new StringContent("1"), "movetalk" },
+                            { new StringContent("1"), "noredirect" }, { new StringContent(unpat_token), "token" } };
+                        unpatbot.PostAsync("https://ru.wikipedia.org/w/api.php", request);
                     }
                     else
                     {
@@ -825,13 +824,10 @@ class Program
             string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result);
             using (var r = new XmlTextReader(new StringReader(apiout)))
             {
-                r.WhitespaceHandling = WhitespaceHandling.None;
-                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue");
-                while (r.Read())
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue"); while (r.Read())
                     if (r.Name == "item")
                     {
-                        string user = r.GetAttribute("user");
-                        string page = r.GetAttribute("title");
+                        string user = r.GetAttribute("user"); string page = r.GetAttribute("title");
                         if (user != null)
                         {
                             if (!pats.ContainsKey(user))
@@ -844,9 +840,9 @@ class Program
         }
         string addition = "\n|-\n";
         if (lastmonth.Month == 1)
-            addition += "|rowspan=\"12\"|" + lastmonth.Year + "||" + monthname[lastmonth.Month];
+            addition += "|rowspan=\"12\"|" + lastmonth.Year + "||" + prepositional[lastmonth.Month];
         else
-            addition += "|" + monthname[lastmonth.Month];
+            addition += "|" + prepositional[lastmonth.Month];
         int c = 0;
         pats.Remove("MBHbot");
         foreach (var p in pats.OrderByDescending(p => p.Value.Count))
@@ -858,7 +854,7 @@ class Program
             if (!newfromabove.Contains(p.Key) || (newfromabove.Contains(p.Key) && usertalk.IndexOf("==") == -1))
                 save("ru", "ut:" + p.Key, usertalk + "\n\n==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/" +
                     "Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года. Поздравляем! ~~~~}}",
-                    "орден за патрулирования в " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
+                    "орден за патрулирования в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года");
             else
             {
                 int border = usertalk.IndexOf("==");
@@ -866,7 +862,7 @@ class Program
                 string pagebody = usertalk.Substring(border);
                 save("ru", "ut:" + p.Key, header + "==Орден заслуженному патрулирующему " + grade + " степени (" + monthname[lastmonth.Month] + " " + lastmonth.Year + ")==\n{{subst:u:Орденоносец/" +
                     "Заслуженному патрулирующему " + grade + "|За " + c + " место по числу патрулирований в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года. Поздравляем! ~~~~}}\n\n" +
-                    pagebody, "орден за патрулирования в " + monthname[lastmonth.Month] + " " + lastmonth.Year + " года");
+                    pagebody, "орден за патрулирования в " + prepositional[lastmonth.Month] + " " + lastmonth.Year + " года");
             }
         }
         string pats_order = readpage("ВП:Ордена/Заслуженному патрулирующему");
@@ -1120,14 +1116,13 @@ class Program
                 }
         foreach (var current_target_ns in nss)
         {
-            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allredirects&format=xml&arprop=ids%7Ctitle&arnamespace=" + current_target_ns.Key + "&arlimit=500";//NOT 5000
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allredirects&format=xml&arprop=ids|title&arnamespace=" + current_target_ns.Key + "&arlimit=500";//NOT 5000
             while (cont != null)
             {
                 var temp = new Dictionary<string, redir>();
                 string idset = "";
                 using (var rdr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + e(cont)).Result)))
                 {
-                    rdr.WhitespaceHandling = WhitespaceHandling.None;
                     rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("arcontinue");
                     while (rdr.Read())
                         if (rdr.Name == "r") {
@@ -1151,10 +1146,12 @@ class Program
         }
         var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
         foreach (var r in redirs) {
-            string sort_src_title = r.Value.src_ns == 0 ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
-            string sort_dest_title = r.Value.dest_ns == 0 ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
-            result += "\n|-\n|data-sort-value=\"" + r.Value.src_ns + "-" + sort_src_title + "\"|[[:" + r.Value.src_title + "]]||data-sort-value=\"" + r.Value.dest_ns + "-" + sort_dest_title + "\"|[[:" + r.Value.dest_title + "]]";
+            //string sort_src_title = r.Value.src_ns == 0 ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
+            //string sort_dest_title = r.Value.dest_ns == 0 ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
+            //result += "\n|-\n|data-sort-value=\"" + r.Value.src_ns + "-" + sort_src_title + "\"|[[:" + r.Value.src_title + "]]||data-sort-value=\"" + r.Value.dest_ns + "-" + sort_dest_title + "\"|[[:" + r.Value.dest_title + "]]";
+            result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
         }
+        var w = new StreamWriter("incorr.redir.txt"); w.Write(result + "\n|}"); w.Close();
         rsave("u:MBH/incorrect redirects", result + "\n|}");
     }
     static void apat_for_filemovers()
@@ -1880,6 +1877,7 @@ class Program
         try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
