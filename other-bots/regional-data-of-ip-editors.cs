@@ -5,8 +5,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Xml;
+using System.Threading;
 using Newtonsoft.Json;
 public class Root { public string country, regionName; public Dictionary<int, int> edits; }
 public class regdata { public string country; public Dictionary<int, int> edits; }
@@ -27,67 +27,90 @@ class Program
             result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new 
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken } })).Result; return client;
     }
-    static Regex iprgx = new Regex(@"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$"); static HttpClient site; static int startyear = 2002, endyear = 2025; static string langlist = "be";
+    static Regex iprgx = new Regex(@"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$"); static HttpClient site; static int startyear = 2002, endyear = 2025, halfyear = 2014; static string lang = "sv";
     static void Main()
     {
-        var client = new HttpClient(); var ranges = new Dictionary<string, Root>(); var output_data = new Dictionary<string, regdata>();
+        var client = new HttpClient(); var ranges = new Dictionary<string, Root>(); var first_half = new Dictionary<string, regdata>();
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site(creds[0], creds[1]);
-        foreach (var lang in langlist.Split('|'))
-            for (int year = startyear; year <= endyear; year = year + 2)
-            {
-                string query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allrevisions&arvprop=user&arvlimit=max&arvend=" + year + "-01-01T00:00:00&&arvstart=" + (year + 1) +
-                    "-12-31T23:59:59", cont = "";
-                while (cont != null)
-                {
-                    var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arvcontinue=" + cont).Result)); r.Read(); r.Read(); r.Read();
-                    cont = r.GetAttribute("arvcontinue"); while (r.Read())
-                        if (r.Name == "rev" && r.GetAttribute("anon") == "")
-                        {
-                            string user = r.GetAttribute("user");
-                            if (IPAddress.TryParse(user, out IPAddress address))
-                            {
-                                string range = "";
-                                if (iprgx.IsMatch(user)) range = iprgx.Match(user).Groups[1].Value + ".0";
-                                else if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6) {
-                                    byte[] bytes = address.GetAddressBytes(); for (int i = 4; i < 16; i++) bytes[i] = 0; range = new IPAddress(bytes).ToString(); }
-                                if (range != "")
-                                {
-                                    if (!ranges.ContainsKey(range))
-                                    {
-                                        var root = new Root() { edits = new Dictionary<int, int> { { 0, 0 } } };
-                                        for (int y = startyear; y <= endyear; y++)
-                                            root.edits.Add(y, 0);
-                                        ranges.Add(range, root);
-                                    }
-                                    ranges[range].edits[year]++; ranges[range].edits[0]++;
-                                }
-                            }
 
+        //var r1 = new StreamReader("result1.txt"); var r2 = new StreamReader("result2.txt");
+        //first_half = JsonConvert.DeserializeObject<Dictionary<string, regdata>>(r1.ReadToEnd()); var temp_data = JsonConvert.DeserializeObject<Dictionary<string, regdata>>(r2.ReadToEnd());
+        //foreach(var str in first_half)
+        //    for (int year = halfyear; year < endyear; year = year + 2)
+        //        str.Value.edits.Add(year, 0);
+        //foreach (var second_half in temp_data)
+        //    if (!first_half.ContainsKey(second_half.Key))
+        //    {
+        //        first_half.Add(second_half.Key, second_half.Value);
+        //        for (int year = startyear; year < halfyear; year = year + 2)
+        //            first_half[second_half.Key].edits.Add(year, 0);
+        //    }  
+        //    else
+        //    {
+        //        first_half[second_half.Key].edits[0] += second_half.Value.edits[0];
+        //        for (int year = halfyear; year < endyear; year = year + 2)
+        //            first_half[second_half.Key].edits[year] += second_half.Value.edits[year];
+        //    }
+
+        for (int year = startyear; year <= endyear; year = year + 2)
+        {
+            string query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allrevisions&arvprop=user&arvlimit=max&arvend=" + year + "-01-01T00:00:00&&arvstart=" + (year + 1) +
+                "-12-31T23:59:59", cont = "";
+            while (cont != null)
+            {
+                var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arvcontinue=" + cont).Result)); r.Read(); r.Read(); r.Read();
+                cont = r.GetAttribute("arvcontinue"); while (r.Read())
+                    if (r.Name == "rev" && r.GetAttribute("anon") == "")
+                    {
+                        string user = r.GetAttribute("user");
+                        if (IPAddress.TryParse(user, out IPAddress address))
+                        {
+                            string range = "";
+                            if (iprgx.IsMatch(user)) range = iprgx.Match(user).Groups[1].Value + ".0";
+                            else if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                            {
+                                byte[] bytes = address.GetAddressBytes(); for (int i = 4; i < 16; i++) bytes[i] = 0; range = new IPAddress(bytes).ToString();
+                            }
+                            if (range != "")
+                            {
+                                if (!ranges.ContainsKey(range))
+                                {
+                                    var root = new Root() { edits = new Dictionary<int, int> { { 0, 0 } } };
+                                    for (int y = startyear; y <= endyear; y = y + 2)
+                                        root.edits.Add(y, 0);
+                                    ranges.Add(range, root);
+                                }
+                                ranges[range].edits[year]++; ranges[range].edits[0]++;
+                            }
                         }
-                }
+                    }
             }
+        }
         Console.WriteLine("ranges=" + ranges.Count); int c = 0;
-        foreach (var range in ranges) try {
+        foreach (var range in ranges) try
+            {
                 Root data = JsonConvert.DeserializeObject<Root>(client.GetStringAsync("http://ip-api.com/json/" + range.Key).Result);
                 Thread.Sleep(1450); if (++c % 3000 == 0) Console.WriteLine(c); string key = data.regionName;
-                if (!output_data.ContainsKey(key)) output_data.Add(key, new regdata() { edits = range.Value.edits, country = data.country });
-                else {
+                if (!first_half.ContainsKey(key)) first_half.Add(key, new regdata() { edits = range.Value.edits, country = data.country });
+                else
+                {
                     for (int year = startyear; year <= endyear; year = year + 2)
-                        output_data[key].edits[year] += range.Value.edits[year];
-                    output_data[key].edits[0] += range.Value.edits[0];
+                        first_half[key].edits[year] += range.Value.edits[year];
+                    first_half[key].edits[0] += range.Value.edits[0];
                 }
-            } catch (Exception e) { Console.WriteLine("exception=" + e.ToString()); }
-        foreach (var lang in langlist.Split('|'))
-        {
-            string result = "<center>\n{|class=\"standard sortable\"\n!rowspan=2|Регион!!colspan=13|Правок в этой вики\n|-\n!02-03!!04-05!!06-07!!08-09!!10-11!!12-13!!14-15!!16-17!!18-19!!20-21!!22-23!!24-25!!Всего";
-            foreach (var r in output_data.OrderByDescending(r => r.Value.edits[0]))
-            {
-                result += "\n|-\n|{{flag|" + r.Value.country + "}} " + r.Key;
-                for (int year = startyear; year <= endyear; year = year + 2)
-                    result += "||" + cell(r.Value.edits[year]);
-                result += "||" + cell(r.Value.edits[0]);
             }
-            save("ВП:Геопозиция анонимных правщиков/" + lang, result + "\n|}");
+            catch (Exception e) { Console.WriteLine("exception=" + e.ToString()); }
+
+        string result = "<center>\n{|class=\"standard sortable\"\n!rowspan=2|Регион!!colspan=13|Правок в этой вики\n|-\n!02-03!!04-05!!06-07!!08-09!!10-11!!12-13!!14-15!!16-17!!18-19!!20-21!!22-23!!24-25!!Всего";
+        foreach (var r in first_half.OrderByDescending(r => r.Value.edits[0]))
+        {
+            result += "\n|-\n|{{flag|" + r.Value.country + "}} " + r.Key;
+            for (int year = startyear; year <= endyear; year = year + 2)
+                result += "||" + cell(r.Value.edits[year]);
+            result += "||" + cell(r.Value.edits[0]);
         }
+        result += "\n|}";
+        //var w = new StreamWriter("result" + startyear + ".txt"); w.Write(JsonConvert.SerializeObject(output_data)); w.Close();
+        save("ВП:Геопозиция анонимных правщиков/" + lang + "wiki", result);
     }
 }
