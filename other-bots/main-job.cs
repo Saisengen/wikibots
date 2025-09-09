@@ -101,9 +101,7 @@ class Program
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static string escape_comment(string comment)
     {
-        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C");
-        if (result.Contains("{") || result.Contains("}") || result.Contains("|"))
-            result = "<nowiki>" + result + "</nowiki>";
+        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C"); if (result.Contains("{") || result.Contains("}") || result.Contains("|")) result = "<nowiki>" + result + "</nowiki>";
         return result;
     }
     static HttpClient login(string lang, string login, string password)
@@ -492,7 +490,7 @@ class Program
                     archivepage = "Википедия:Заявки на снятие флагов/Архив/Инженеры и АИ";
                     break;
                 case "бот":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Боты";
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Нарушающие боты";
                     break;
                 default:
                     continue;
@@ -1111,31 +1109,25 @@ class Program
         var nss = new Dictionary<string, string>();
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=xml&siprop=namespaces").Result)))
             while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "ns" && !r.GetAttribute("id").StartsWith("-")) {
-                    string id = r.GetAttribute("id"); r.Read();nss.Add(id, r.Value);
-                }
+                if (r.NodeType == XmlNodeType.Element && r.Name == "ns" && !r.GetAttribute("id").StartsWith("-")) { string id = r.GetAttribute("id"); r.Read();nss.Add(id, r.Value); }
         foreach (var current_target_ns in nss)
         {
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allredirects&format=xml&arprop=ids|title&arnamespace=" + current_target_ns.Key + "&arlimit=500";//NOT 5000
-            while (cont != null)
-            {
+            while (cont != null) {
                 var temp = new Dictionary<string, redir>();
                 string idset = "";
-                using (var rdr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + e(cont)).Result)))
-                {
+                using (var rdr = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + e(cont)).Result))) {
                     rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("arcontinue");
                     while (rdr.Read())
                         if (rdr.Name == "r") {
                             idset += '|' + rdr.GetAttribute("fromid"); temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = Convert.ToInt16(rdr.GetAttribute("ns")) });
                         }
-                }
-                if (idset.Length != 0)
+                } if (idset.Length != 0)
                     idset = idset.Substring(1);
 
                 using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=info&format=xml&pageids=" + idset).Result)))
                     while (rdr.Read())
-                        if (rdr.Name == "page")
-                        {
+                        if (rdr.Name == "page") {
                             var id = rdr.GetAttribute("pageid");
                             int src_ns = Convert.ToInt16(rdr.GetAttribute("ns"));
                             if (temp[id].dest_ns != src_ns || temp[id].dest_ns == 6 || temp[id].dest_ns == 14)
@@ -1145,13 +1137,7 @@ class Program
             }
         }
         var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
-        foreach (var r in redirs) {
-            //string sort_src_title = r.Value.src_ns == 0 ? r.Value.src_title : r.Value.src_title.Substring(r.Value.src_title.IndexOf(':') + 1);
-            //string sort_dest_title = r.Value.dest_ns == 0 ? r.Value.dest_title : r.Value.dest_title.Substring(r.Value.dest_title.IndexOf(':') + 1);
-            //result += "\n|-\n|data-sort-value=\"" + r.Value.src_ns + "-" + sort_src_title + "\"|[[:" + r.Value.src_title + "]]||data-sort-value=\"" + r.Value.dest_ns + "-" + sort_dest_title + "\"|[[:" + r.Value.dest_title + "]]";
-            result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]";
-        }
-        var w = new StreamWriter("incorr.redir.txt"); w.Write(result + "\n|}"); w.Close();
+        foreach (var r in redirs) { result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]"; }//var w = new StreamWriter("incorr.redir.txt"); w.Write(result + "\n|}"); w.Close();
         rsave("u:MBH/incorrect redirects", result + "\n|}");
     }
     static void apat_for_filemovers()
@@ -1863,7 +1849,6 @@ class Program
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1877,9 +1862,10 @@ class Program
         try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
+            try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
