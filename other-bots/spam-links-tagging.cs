@@ -6,53 +6,33 @@ using System.Net;
 using PCRE;
 using System.Net.Http;
 using System.Linq;
-
 class Program
 {
-    static string[] creds;
     static HttpClient Site(string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
         client.DefaultRequestHeaders.Add("User-Agent", login.Contains("@") ? login.Substring(0, login.IndexOf('@')) : login);
         var result = client.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        var doc = new XmlDocument();
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result;
-        if (!result.IsSuccessStatusCode)
-            return null;
-        return client;
+        var doc = new XmlDocument(); doc.LoadXml(result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
+        result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password },
+            { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
     }
     static string Save(HttpClient site, string title, string text, string comment)
     {
-        var doc = new XmlDocument();
-        var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
-        if (!result.IsSuccessStatusCode)
-            return "";
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        var request = new MultipartFormDataContent();
-        request.Add(new StringContent("edit"), "action");
-        request.Add(new StringContent("1"), "bot");
-        request.Add(new StringContent(title), "title");
-        request.Add(new StringContent(text), "text");
-        request.Add(new StringContent(comment), "summary");
-        request.Add(new StringContent(token), "token");
-        request.Add(new StringContent("xml"), "format");
-        return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
+        var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent();
+        request.Add(new StringContent("edit"), "action"); request.Add(new StringContent(title), "title"); request.Add(new StringContent(text), "text"); request.Add(new StringContent(comment), "summary");
+        request.Add(new StringContent(token), "token"); return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
     static void Main()
     {
         var new_spamlinks_on_page = new HashSet<string>(); var pagenames = new Dictionary<string, string>(); var requeststrings = new HashSet<string>();
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        var bot = Site(creds[0], creds[1]); var nonbot = Site(creds[3], creds[4]);
-        string rawblacklist = bot.GetStringAsync("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw").Result;
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        var bot = Site(creds[0], creds[1]); var nonbot = Site(creds[3], creds[4]); string rawblacklist = bot.GetStringAsync("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw").Result;
         rawblacklist += bot.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Spam-blacklist?action=raw").Result;
         string rawwhitelist = bot.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Spam-whitelist?action=raw").Result;
         var blacklist = rawblacklist.Split('\n'); var whitelist = rawwhitelist.Split('\n'); var blackrgx = new HashSet<PcreRegex>(); var whitergx = new HashSet<PcreRegex>();
-        var spam_template_rgx = new PcreRegex(@"\n*\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}"); var too_many_stars_rgx = new PcreRegex(@"^\*{2,}");
+        var spam_template_rgx = new PcreRegex(@"\n*\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}"); var too_many_stars_rgx = new PcreRegex(@"^\*{2,}"); var start = new StreamReader("spamstart.txt").ReadLine();
         foreach (string b in blacklist.OrderBy(b => b)) {
             string current = b;
             if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();
@@ -63,9 +43,8 @@ class Program
             if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();
             if (current != "") whitergx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
-        string apiout, cont = "", id="", idset="", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max";//&apfrom=Merry Christmas II You
-        while (cont != null)
-        {
+        string apiout, cont = "", id="", idset="", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apnamespace=0&apfilterredir=nonredirects&aplimit=max&apfrom=" + start;
+        while (cont != null) {
             apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
             using (var r = new XmlTextReader(new StringReader(apiout))) {
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
@@ -75,15 +54,11 @@ class Program
                     }
             }
         }
-        int c = 0;
-        foreach (var p in pagenames.Keys) { idset += "|" + p; if (++c % 500 == 0) { requeststrings.Add(idset.Substring(1)); idset = ""; } }
+        int c = 0; foreach (var p in pagenames.Keys) { idset += "|" + p; if (++c % 500 == 0) { requeststrings.Add(idset.Substring(1)); idset = ""; } }
         if (idset.Length > 0) requeststrings.Add(idset.Substring(1));
 
-        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
-        foreach (var q in requeststrings) {
-            string title = "";
-            cont = "";
-            while (cont != null) {
+        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids="; foreach (var q in requeststrings) {
+            string title = ""; cont = ""; while (cont != null) {
                 apiout = (cont == "" ? bot.GetStringAsync(query + q).Result : bot.GetStringAsync(query + q + "&eloffset=" + cont).Result);
                 using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eloffset"); while (r.Read()) {
