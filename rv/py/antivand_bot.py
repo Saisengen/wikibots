@@ -14,10 +14,11 @@ from discord.app_commands import CommandTree, Group, Choice, autocomplete
 from discord.ext import tasks
 from discord.ui import Button, button, View, Select, select, TextInput, Modal
 
-from antivand_config import HEADERS, DOMAINS, DISCORD_TOKEN, SERVERS, SOURCE_CHANNEL, STREAM_CHANNELS, ADMINS, BOT, SOURCE_BOT, USERS_PAGE, UPDATE_USERS_SUMMARY, LOG_TEMPLATES, SUMMARY, REASONS
-from antivand_db import now, db_record_action, db_get_stats, db_remove_user, db_store_ad_message, db_get_expired_ads, db_fetch_users, db_update_users
+from antivand_config import BOT_NAME, HEADERS, WAB2_HEADERS, DOMAINS, DISCORD_TOKEN, SERVERS, SOURCE_CHANNEL, STREAM_CHANNELS, ADMINS, BOT, SOURCE_BOT, USERS_PAGE, UPDATE_USERS_SUMMARY, LOG_TEMPLATES, SUMMARY, REASONS
+from antivand_db import now, db_record_action, db_get_stats, db_remove_user, db_store_ad_message, db_get_expired_ads, db_sort_users
 
-USERS = {}
+USERS = []
+DISCORD_TO_WIKI = {}
 
 intents = Intents.default()
 intents.message_content = True
@@ -33,7 +34,7 @@ template_regexp = re.compile(r'{{(.+)\|(.+)}}')
 author_regexp = re.compile(r'https://\w+\.\w+\.org/wiki/special:contribs/(\S+)')
 title_regexp = re.compile(r'\[hist\]\(<https://\w+\.\w+\.org/wiki/special:history/(\S+)>\)')
 
-session, api_session = None, None
+session, api_session, wab2_session = None, None, None
 
 def get_lang(url: str) -> str:
     """Получение кода языкового раздела из ссылки."""
@@ -49,6 +50,10 @@ def get_user_link(user: str) -> str:
     """Получение викиссылки на участника."""
     return f'[[:User:{user}|{user}]]'
 
+def get_globuser_link(user: str) -> str:
+    """Получение викиссылки на глобальную учётную запись участника."""
+    return f'[[Special:CentralAuth/{user}|{user}]]'
+
 def get_contribs_link(user: str) -> str:
     """Получение викиссылки на вклад участника."""
     return f'[[Special:Contribs/{user}|{user}]]'
@@ -58,15 +63,8 @@ def get_page_link(embed: Embed, rev_id: int = 0) -> str:
     url = f'{get_domain(get_lang(embed.url))}/w/index.php?diff={rev_id}' if rev_id else embed.url
     return f'[{embed.title}](<{url}>)'
 
-def get_interaction_data(interaction: Interaction) -> tuple[str, Message, Embed]:
-    """Получение данных о действии."""
-    actor = USERS[interaction.user.id]
-    msg = interaction.message
-    embed = msg.embeds[0]
-    return actor, msg, embed
-
 def get_embed_data(embed: Embed) -> tuple[str | None, str | None, str | None, str | None]:
-    """Получение данных о правки."""
+    """Получение данных о правке из эмбеда."""
     diff_url = embed.url
     if not diff_url:
         return None, None, None, None
@@ -76,10 +74,57 @@ def get_embed_data(embed: Embed) -> tuple[str | None, str | None, str | None, st
     rev_id = diff_url.split('ilu=')[1] if 'ilu' in diff_url else None
     return lang, title, author, rev_id
 
+async def request(func: Coroutine, type: Literal['text', 'JSON'] = 'text'):
+    """Сетевой запрос, повторяемый несколько раз в случае ошибки."""
+    for _ in range(5):
+        try:
+            res = await func()
+            if not res.ok:
+                raise Exception(str(res.status_code))
+            return await (res.json() if type == 'JSON' else res.text())
+        except Exception as e:
+            if _ == 4:
+                raise e
+            await sleep(1)
+
+async def api_request(lang: str, method: Literal['GET', 'POST'] = 'POST', **kwargs) -> dict:
+    """Запрос к API раздела."""
+    url = f'{get_domain(lang)}/w/api.php'
+    params = {key: value for key, value in kwargs.items() if value is not None} | {'assertuser': BOT_NAME, 'errorformat': 'plaintext', 'errorlang': 'ru', 'format': 'json', 'formatversion': 2}
+    return await request(lambda: api_session.get(url, params=params) if method == 'GET' else api_session.post(url, data=params), 'JSON')
+
+async def get_page_text(lang: str, title: str) -> str:
+    """Получение викитекста страницы."""
+    return await request(lambda: session.get(f'{get_domain(lang)}/w/index.php', params={'title': title, 'action': 'raw'}))
+
+async def get_user(discord_id: int) -> str:
+    """Получение имени участника в Википедии по айди Дискорда."""
+    if discord_id not in DISCORD_TO_WIKI:
+        wiki_id = await request(lambda: wab2_session.get(f'https://wikiauthbot-ng.toolforge.org/whois/{discord_id}'))
+        r = await api_request('m', action='query', meta='globaluserinfo', guiid=wiki_id)
+        if r.get('errors'):
+            DISCORD_TO_WIKI[discord_id] = ''
+        else:
+            DISCORD_TO_WIKI[discord_id] = r['query']['globaluserinfo']['name']
+    return DISCORD_TO_WIKI[discord_id]
+
+async def fetch_users() -> None:
+    """Получение списка доверенных участников из внешних источников."""
+    global USERS
+    USERS = await db_sort_users(json.loads(await get_page_text('m', USERS_PAGE)))
+
+async def update_users(action: Literal['add', 'remove'], user: str, admin: str) -> None:
+    """Обновление списка доверенных участников во внешних источниках."""
+    token = (await api_request('m', 'GET', action='query', meta='tokens', type='csrf'))['query']['tokens']['csrftoken']
+    summary = UPDATE_USERS_SUMMARY[action].format(get_globuser_link(user), get_globuser_link(admin))
+    r = await api_request('m', action='edit', title=USERS_PAGE, text=json.dumps(sorted(USERS)), summary=summary, token=token)
+    if r.get('errors'):
+        raise Exception(r['errors'][0]['text'])
+
 async def check_rights(_: View, interaction: Interaction) -> bool:
     """Проверка, что пользователь может пользоваться ботом."""
-    if interaction.user.id not in USERS:
-        await interaction.response.send_message(ephemeral=True, content='К сожалению, у вас нет прав на использование бота. Обратитесь к участнику <@512545053223419924>, если желаете их получить.')
+    if await get_user(interaction.user.id) not in USERS:
+        await interaction.response.send_message(ephemeral=True, content=f'К сожалению, у вас нет прав на использование бота. Обратитесь к участнику <@{ADMINS[0]}>, если желаете их получить.')
         return False
     return True
 
@@ -92,46 +137,9 @@ def admin(func: Callable) -> Coroutine:
         await interaction.response.send_message(ephemeral=True, content='Для выполнения этой команды требуются права администратора бота.')
     return wrapper
 
-async def api_request(lang: str, method: Literal['GET', 'POST'] = 'POST', **kwargs) -> dict:
-    """Запрос к API раздела."""
-    url = f'{get_domain(lang)}/w/api.php'
-    params = {key: value for key, value in kwargs.items() if value is not None} | {'errorformat': 'plaintext', 'errorlang': 'ru', 'format': 'json', 'formatversion': 2}
-    for _ in range(5):
-        try:
-            if method == 'GET':
-                res = await api_session.get(url, params=params)
-            else:
-                res = await api_session.post(url, data=params)
-            if not res.ok:
-                raise Exception(str(res.status_code))
-            return await res.json()
-        except Exception as e:
-            if _ == 4:
-                raise e
-            await sleep(1)
-
-async def fetch_users() -> None:
-    """Получение списка доверенных участников из внешних источников."""
-    global USERS
-    all_users = await db_fetch_users()
-    r = await session.get(f'{get_domain("m")}/w/index.php', params={'title': USERS_PAGE, 'action': 'raw'})
-    users = json.loads(await r.text())
-    USERS = {discord_id: wiki_name for discord_id, wiki_name in all_users.items() if wiki_name in users}
-
-async def update_users(action: Literal['add', 'remove'], user: str, admin: str) -> None:
-    """Обновление списка доверенных участников во внешних источниках."""
-    users = list(USERS.values())
-    await db_update_users(action, list(USERS.keys())[users.index(user)] if action == 'add' else None, user)
-    token = (await api_request('m', 'GET', action='query', meta='tokens', type='csrf'))['query']['tokens']['csrftoken']
-    summary = UPDATE_USERS_SUMMARY[action].format(get_user_link(user), get_user_link(admin))
-    r = await api_request('m', action='edit', title=USERS_PAGE, text=json.dumps(sorted(users)), summary=summary, token=token)
-    if r.get('errors'):
-        raise Exception(r['errors'][0]['text'])
-
 async def check_edit(embed: Embed) -> str | None:
     """Проверка, не была ли правка уже обработана."""
     lang, title, author, rev_id = get_embed_data(embed)
-    logging.error(f'{lang}, {title}, {author}, {rev_id}')
     if not lang:
         return
 
@@ -180,14 +188,12 @@ async def check_edit(embed: Embed) -> str | None:
     if any(revision.get('sha1') == sha1 for revision in page['revisions']):
         return 'Правка уже была отменена.'
 
-async def do_action(interaction: Interaction, action: Literal['rollback', 'rfd', 'undo'], reason: str | None = None) -> int | str:
-    """Выполнение действия с правкой."""
-    actor, _, embed = get_interaction_data(interaction)
-    lang, title, author, _ = get_embed_data(embed)
-
+async def do_wiki_action(embed: Embed, actor: str, action: Literal['rollback', 'rfd', 'undo'], reason: str | None = None) -> int | str:
+    """Обработка правки внутри Википедии."""
     if result := await check_edit(embed):
         return result
 
+    lang, title, author, _ = get_embed_data(embed)
     summary = SUMMARY[action][lang].format(get_contribs_link(author), get_user_link(actor), reason.replace('$1', title) if reason else None)
     timestamp = str(now()).replace('+00:00', 'Z')
 
@@ -237,6 +243,8 @@ async def do_action(interaction: Interaction, action: Literal['rollback', 'rfd',
 
     error = r['errors'][0]
     code = error['code']
+    if code == 'assertnameduser':
+        return 'Действие невозможно — ошибка при аутентификации бота. Обратитесь к участнику Well very well.'
     if code in ['readonly', 'noapiwrite']:
         return 'Действие невозможно — правки в разделе отключены.'
     if code in ['hookaborted', 'spamdetected'] or 'abusefilter' in code:
@@ -270,34 +278,31 @@ class MainView(View):
     """Главная панель управления."""
     interaction_check = check_rights
 
-    def __init__(self, embed: Embed = None, disable: bool = False):
+    def __init__(self, embed: Embed = None):
         super().__init__(timeout=None)
-        self.rollback.disabled = self.undo.disabled = (embed and 'ilu=' not in embed.url) or disable
-        self.rfd.disabled = self.good.disabled = self.bad.disabled = disable
+        self.rollback.disabled = self.undo.disabled = embed and 'ilu=' not in embed.url
 
     @button(emoji='⏮️', style=ButtonStyle.danger, custom_id='btn_rollback')
     async def rollback(self, interaction: Interaction, _: Button):
-        await interaction.response.defer(ephemeral=True)
-        r = await do_action(interaction, action='rollback')
-        await result_handler(r, interaction, 'rollback')
+        await do_action(interaction, 'rollback')
 
     @button(emoji='🗑️', style=ButtonStyle.danger, custom_id='btn_rfd')
     async def rfd(self, interaction: Interaction, _: Button):
-        await interaction.response.defer(ephemeral=True) # TODO: почему если это убрать, то вызываемая панель сначала отключена?
-        await interaction.message.edit(view=ReasonSelectView(type='rfd'))
+        await interaction.response.defer() # TODO: почему если это убрать, то вызываемая панель сначала отключена?
+        await interaction.message.edit(view=ReasonSelectView('rfd'))
 
     @button(emoji='↪️', style=ButtonStyle.blurple, custom_id='btn_undo')
     async def undo(self, interaction: Interaction, _: Button):
-        await interaction.response.defer(ephemeral=True) # TODO: почему если это убрать, то вызываемая панель сначала отключена?
-        await interaction.message.edit(view=ReasonSelectView(type='undo'))
+        await interaction.response.defer() # TODO: почему если это убрать, то вызываемая панель сначала отключена?
+        await interaction.message.edit(view=ReasonSelectView('undo'))
 
     @button(emoji='👍🏻', style=ButtonStyle.green, custom_id='btn_good')
     async def good(self, interaction: Interaction, _: Button):
-        await result_handler(0, interaction, 'good')
+        await do_action(interaction, 'good')
 
     @button(emoji='💩', style=ButtonStyle.green, custom_id='btn_bad')
     async def bad(self, interaction: Interaction, _: Button):
-        await result_handler(0, interaction, 'bad')
+        await do_action(interaction, 'bad')
 
 class ReasonSelectView(View):
     """Панель выбора причины отмены или номинации на КБУ."""
@@ -313,60 +318,57 @@ class ReasonSelectView(View):
     async def select(self, interaction: Interaction, _: Select):
         embed = interaction.message.embeds[0]
         selected = list(interaction.data.values())[0][0]
-
-        await interaction.message.edit(view=MainView(embed=embed, disable=True))
-
         reason = REASONS[self.type][selected].get(get_lang(embed.url), '')
 
+        await interaction.message.edit(view=MainView(embed))
+
         if selected == 'своя причина' or selected == 'Форк':
-            modal = CustomReasonModal(type=self.type, template=reason if self.type == 'rfd' else None)
+            modal = CustomReasonModal(self.type, reason if self.type == 'rfd' else None)
             await interaction.response.send_modal(modal)
-            await sleep(1)
-            await interaction.message.edit(view=MainView(embed=embed))
             return
-
-        await interaction.response.defer(ephemeral=True)
-
         if selected == 'закрыть':
-            await interaction.message.edit(view=MainView(embed=embed))
+            await interaction.response.defer()
             return
 
-        r = await do_action(interaction, action=self.type, reason=reason)
-        await result_handler(r, interaction, self.type)
+        await do_action(interaction, self.type, reason)
 
 class CustomReasonModal(Modal, title='Причина'):
     """Поле ввода причины отмены или номинации на КБУ."""
-    reason = TextInput(placeholder='Причина...', label='Причина', min_length=2, max_length=100)
+    reason = TextInput(placeholder='Причина...', label='Причина', min_length=0, max_length=1000)
 
-    def __init__(self, type: Literal['rfd', 'undo'], template: str | None = None):
-        super().__init__(timeout=60)
+    def __init__(self, type: Literal['rfd', 'undo'], template: str | None):
+        super().__init__(timeout=300)
         self.type = type
-        self.template = template
+        self.template = template or '$1'
 
     async def on_submit(self, interaction: Interaction):
-        await interaction.response.defer(ephemeral=True)
-        reason = str(self.reason)
-        if self.template:
-            reason = self.template.replace('$1', reason)
-        r = await do_action(interaction, action=self.type, reason=reason)
-        await result_handler(r, interaction, self.type)
+        await do_action(interaction, self.type, self.template.replace('$1', str(self.reason)))
 
-async def result_handler(result: int | str, interaction: Interaction, action: Literal['rollback', 'rfd', 'undo', 'good', 'bad']) -> None:
-    """Обработчик результата действия через бота."""
-    actor, msg, embed = get_interaction_data(interaction)
+async def do_action(interaction: Interaction, action: Literal['rollback', 'rfd', 'undo', 'good', 'bad'], reason: str | None = None) -> None:
+    """Действие через бота."""
+    await interaction.response.defer()
+
+    actor = await get_user(interaction.user.id)
+    msg = interaction.message
+    embed = msg.embeds[0]
+
+    result = 0 if action in ['good', 'bad'] else await do_wiki_action(embed, actor, action, reason)
+
+    if isinstance(result, str):
+        if 'невозмож' in result:
+            await msg.edit(embed=embed.set_footer(text=result), view=MainView(embed))
+        else:
+            await msg.edit(embed=Embed(color=embed.color, title=result), view=None, delete_after=5)
+        return
+    
     log = client.get_channel(SOURCE_CHANNEL)
-    if isinstance(result, int):
-        await log.send(content=LOG_TEMPLATES[action].format(actor, get_page_link(embed, result)))
-        await db_record_action(actor, action if action == 'rfd' else 'approves' if action in ['good', 'bad'] else action + 's', embed, bad=action == 'good')
-        await msg.delete()
-    elif 'невозмож' in result:
-        await msg.edit(embed=embed.set_footer(text=result), view=MainView(embed=embed))
-    else:
-        await msg.edit(embed=Embed(color=embed.color, title=result), view=None, delete_after=5)
+    await log.send(content=LOG_TEMPLATES[action].format(actor, get_page_link(embed, result)))
+    await db_record_action(actor, action if action == 'rfd' else 'approves' if action in ['good', 'bad'] else action + 's', embed, bad=action == 'good')
+    await msg.delete()
 
 async def wiki_name(interaction: Interaction, current: str) -> list[Choice[str]]:
     """Автокомплит возможных имён участников."""
-    return [Choice(name=user, value=user) for user in USERS.values() if user.lower().startswith(current.lower())][:25]
+    return [Choice(name=user, value=user) for user in USERS if user.lower().startswith(current.lower())][:25]
 
 @tree.error
 async def on_error(interaction: Interaction, error: Exception) -> None:
@@ -381,26 +383,27 @@ async def help(interaction: Interaction) -> None:
         '</help:1388457659484733501> — список команд бота.\n'
         '</clear_feed:1388459883858493526> — очистка каналов от всех сообщений бота.\n'
         '</last_metro:1320698385241739311> — время последнего запуска бота <#1220480407796187330>.\n\n'
-        '</users:1388459883858493527> — список участников, кому разрешены действия через бота.\n'
-        '</users_add:1388459883858493528> — разрешить участнику действия через бота.\n'
-        '</users_remove:1388459883858493529> — запретить участнику действия через бота.\n\n'
-        '</stats:1388459883858493523> — статистика всех действий через бота.\n'
-        '</stats_user:1388459883858493524> — статистика действий участника через бота.\n'
-        '</stats_user_remove:1388459883858493525> — удалить статистику действий участника.\n\n'
-        'По вопросам работы бота обращайтесь к <@512545053223419924>.')
+        '</users list:1388459883858493527> — список участников, кому разрешены действия через бота.\n'
+        '</users add:1388459883858493527> — разрешить участнику действия через бота.\n'
+        '</users remove:1388459883858493527> — запретить участнику действия через бота.\n\n'
+        '</stats list:1388459883858493523> — статистика действий через бота.\n'
+        '</stats remove:1388459883858493523> — удалить статистику действий участника.\n\n'
+        f'По вопросам работы бота обращайтесь к <@{ADMINS[0]}>.')
 
 @stats.command(name='list')
 @autocomplete(wiki_name=wiki_name)
-async def stats_list(interaction: Interaction, wiki_name: str | None = None) -> None:
+async def stats_list(interaction: Interaction, wiki_name: str | None = None, limit: int = 5) -> None:
     """Просмотреть статистику действий через бота.
 
     Parameters
     -----------
     wiki_name: str | None
-        Имя участника в Википедии
+        Имя участника в Википедии. Если не указано, выдаётся общая статистика
+    limit: int | None
+        Размер топа участников (по умолчанию 5, 0 = все)
     """
     await interaction.response.defer(ephemeral=True)
-    r = await db_get_stats(actor=wiki_name)
+    r = await db_get_stats(wiki_name, limit)
     if len(r) == 0:
         return
     if not wiki_name:
@@ -416,7 +419,7 @@ async def stats_list(interaction: Interaction, wiki_name: str | None = None) -> 
             f'Наибольшее количество действий совершили:\n{total}\n'
             f'Действий по типам причин: паттерны — {r["patterns"]}, ORES — {r["ORES"]}, LW — {r["LW"]}, теги — {r["tags"]}, замены — {r["replaces"]}.\n'
             f'Ложные триггеры, c 21.07.2024: паттерны — {false_triggers[0]} ({patterns} %), LW — {false_triggers[1]} ({lw} %), ORES — {false_triggers[2]} ({ores} %), теги — {false_triggers[3]} ({tags} %), замены — {false_triggers[4]} ({replaces} %).')
-    elif r['rollbacks'] > 0:
+    elif r['rollbacks'] + r['undos'] + r['rfd'] + r['approves'] > 0:
         await interaction.followup.send(ephemeral=True, content=
             f'Через бота участник {wiki_name} совершил действий: {r["rollbacks"] + r["undos"] + r["rfd"] + r["approves"]},\n'
             f'из них: откатов — {r["rollbacks"]}, отмен — {r["undos"]}, одобрений/отклонений правок — {r["approves"]}, номинаций на КБУ — {r["rfd"]}.\n'
@@ -459,35 +462,31 @@ async def clear_feed(interaction: Interaction) -> None:
             if msg.author.id not in [BOT, SOURCE_BOT] or len(msg.embeds) == 0:
                 continue
             await msg.delete()
-            await sleep(2)
 
 @users.command(name='list')
 async def users_list(interaction: Interaction) -> None:
     """Просмотр списка участников, которые могут использовать бота."""
-    rights_content = ', '.join(f'<@{discord_id}> ({wiki_name})' for discord_id, wiki_name in USERS.items())
-    await interaction.response.send_message(ephemeral=True, content=f'Действия через бота разрешены участникам {rights_content}.\nДля запроса права или отказа от него обратитесь к участнику <@512545053223419924>.')
+    await interaction.response.send_message(ephemeral=True, content=f'Действия через бота разрешены участникам {", ".join(USERS)}.\nДля запроса права или отказа от него обратитесь к участнику <@{ADMINS[0]}>.')
 
 @users.command(name='add')
 @admin
-async def users_add(interaction: Interaction, user: User, wiki_name: str) -> None:
+async def users_add(interaction: Interaction, user: User) -> None:
     """Добавление участника в список тех, кто может использовать бота.
 
     Parameters
     -----------
     user: User
-        Аккаунт в Discord
-    wiki_name: str
-        Имя участника в Википедии
+        Участник
     """
     if interaction.user.id == user.id:
         return
     await interaction.response.defer(ephemeral=True)
-    global USERS
-    if user.id in USERS:
+    wiki_name = await get_user(user.id)
+    if wiki_name in USERS:
         await interaction.followup.send(ephemeral=True, content=f'Участник {wiki_name} уже присутствует в списке доверенных.')
         return
-    USERS[user.id] = wiki_name
-    admin_name = USERS.get(interaction.user.id, '')
+    USERS.append(wiki_name)
+    admin_name = await get_user(interaction.user.id)
     await update_users('add', wiki_name, admin_name)
     await interaction.followup.send(ephemeral=True, content=f'Участник {wiki_name} добавлен в список доверенных.')
 
@@ -499,31 +498,29 @@ async def users_remove(interaction: Interaction, wiki_name: str) -> None:
 
     Parameters
     -----------
-    wiki_name: str
+    wiki_name: str | None
         Имя участника в Википедии
     """
     await interaction.response.defer(ephemeral=True)
-    global USERS
-    discord_ids = [key for key, value in USERS.items() if value == wiki_name]
-    if len(discord_ids) == 0:
+    if wiki_name not in USERS:
         await interaction.followup.send(ephemeral=True, content=f'Участника {wiki_name} не было в списке доверенных.')
         return
-    admin_name = USERS.get(interaction.user.id, '')
-    for discord_id in discord_ids:
-        del USERS[discord_id]
+    USERS.remove(wiki_name)
+    admin_name = await get_user(interaction.user.id)
     await update_users('remove', wiki_name, admin_name)
     await interaction.followup.send(ephemeral=True, content=f'Участник {wiki_name} убран из списка доверенных.')
 
-@tasks.loop(seconds=30.0)
+@tasks.loop(seconds=15.0)
 async def loop(client: Client) -> None:
     """Фоновый цикл."""
+    start = now()
+
     await fetch_users()
 
     ads = await db_get_expired_ads()
     for ad in ads:
         msg = await client.get_channel(ad['channel_id']).fetch_message(ad['message_id'])
         await msg.delete()
-        await sleep(3.0)
 
     for channel_id in STREAM_CHANNELS.values():
         messages = client.get_channel(channel_id).history(limit=20)
@@ -532,19 +529,22 @@ async def loop(client: Client) -> None:
                 continue
             if await check_edit(msg.embeds[0]):
                 await msg.delete()
-                await sleep(3.0)
+
+    end = now()
+    if start.timestamp() % 3600 < 15: # first iteration in an hour
+        print(f'{start.strftime(time_format)} - loop iteration {loop.current_loop:04} finished in {min(round((end - start).seconds), 99):02} seconds - {end.strftime(time_format)}', flush=True)
+
+@loop.after_loop
+async def loop_error() -> None:
+    loop._task.add_done_callback(lambda _: loop._task.exception()) # just ignore exception
+    loop.restart(client)
 
 async def ad_message(msg: Message) -> None:
     """Обработка автоудаляемого сообщения."""
-    for webhook in await msg.channel.webhooks():
-        if webhook.name != 'ADMessages':
-            continue
-        attachments = []
-        for attachment in msg.attachments:
-            attachments.append(attachment.proxy_url)
-        attachments = '\n' + '\n'.join(attachments) if len(attachments) > 0 else ''
-        new_msg_wh = await webhook.send(content=f'{msg.content[4:] + attachments}', username=msg.author.display_name, avatar_url=msg.author.avatar.url, wait=True)
-        await db_store_ad_message(f'{new_msg_wh.channel.id}|{new_msg_wh.id}')
+    webhook = [w for w in await msg.channel.webhooks() if w.name == 'ADMessages'][0]
+    attachments = '\n'.join(attachment.proxy_url for attachment in msg.attachments) if len(msg.attachments) > 0 else ''
+    new_msg = await webhook.send(content=msg.content[4:] + '\n' + attachments, username=msg.author.display_name, avatar_url=msg.author.avatar.url, wait=True)
+    await db_store_ad_message(f'{new_msg.channel.id}|{new_msg.id}')
     await msg.delete()
 
 @client.event
@@ -556,14 +556,14 @@ async def on_message(msg: Message) -> None:
     if len(msg.embeds) == 0 or msg.author.id != SOURCE_BOT or msg.channel.id != SOURCE_CHANNEL:
         return
     embed = msg.embeds[0]
+    if embed.url is None:
+        return
     if await check_edit(embed):
         await msg.delete()
         return
     stream = client.get_channel(STREAM_CHANNELS[get_lang(embed.url)])
-    new_message = await stream.send(embed=embed, view=MainView(embed=embed, disable=True))
+    await stream.send(embed=embed, view=MainView(embed))
     await msg.delete()
-    await sleep(3)
-    await new_message.edit(view=MainView(embed=embed))
 
 @client.event
 async def on_ready() -> None:
@@ -579,25 +579,15 @@ async def on_ready() -> None:
 
     await client.change_presence(status=Status.online, activity=Game('pyCharm'))
 
-    global session, api_session
+    global session, api_session, wab2_session
+    session = ClientSession(headers={key: value for key, value in HEADERS.items() if key != 'Authorization'})
     api_session = ClientSession(headers=HEADERS)
-    del HEADERS['Authorization']
-    session = ClientSession(headers=HEADERS)
+    wab2_session = ClientSession(headers=WAB2_HEADERS)
 
     await fetch_users()
 
     logging.warning('Запуск фоновых задач')
     loop.start(client)
-
-    logging.warning('Включение ошибочно отключённых панелей')
-    for channel_id in STREAM_CHANNELS.values():
-        messages = client.get_channel(channel_id).history(limit=100)
-        async for msg in messages:
-            if msg.author.id != BOT or len(msg.embeds) == 0:
-                continue
-            view = View.from_message(msg)
-            if len(view.children) == 5 and view.children[4].disabled:
-                await msg.edit(view=MainView(embed=msg.embeds[0]))
 
     logging.warning('Просмотр пропущенных записей лога')
     messages = client.get_channel(SOURCE_CHANNEL).history(limit=500)
@@ -626,4 +616,6 @@ async def on_guild_join(guild: Guild) -> None:
     if guild.id not in SERVERS:
         await guild.leave()
 
-client.run(token=DISCORD_TOKEN, log_formatter=logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s'), log_level=logging.WARNING, root_logger=True)
+formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s')
+time_format = formatter.default_time_format
+client.run(token=DISCORD_TOKEN, log_formatter=formatter, log_level=logging.WARNING, root_logger=True)
