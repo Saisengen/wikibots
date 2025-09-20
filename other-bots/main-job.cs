@@ -9,7 +9,6 @@ using System.Globalization;
 using System.Linq;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
-using System.Threading;
 using System.Web.UI;
 class most_edits_record
 {
@@ -130,12 +129,10 @@ class Program
         {
             apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&gcmcontinue=" + e(cont)).Result);
             var r = new XmlTextReader(new StringReader(apiout)); r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("gcmcontinue"); string file = "";
-            while (r.Read())
-            {
+            while (r.Read()) {
                 if (r.Name == "page")
                     file = r.GetAttribute("title");
-                if (r.Name == "fu" && r.GetAttribute("ns") != "0" && r.GetAttribute("ns") != "102")
-                {
+                if (r.Name == "fu" && r.GetAttribute("ns") != "0" && r.GetAttribute("ns") != "102") {
                     string title = r.GetAttribute("title"); if (title == "Википедия:Форум/Авторское право/Файлы Инкубатора") continue;
                     string text = readpage(title); string initialtext = text; string filename = file.Substring(5);
                     filename = "(" + Regex.Escape(filename) + "|" + Regex.Escape(e(filename)) + ")"; filename = filename.Replace(@"\ ", "[ _]+");
@@ -149,8 +146,7 @@ class Program
                     var r8 = new Regex(@"([=|]\s*)(file|image|файл|изображение):\s*" + filename, RegexOptions.IgnoreCase);
                     var r9 = new Regex(@"([=|]\s*)" + filename, RegexOptions.IgnoreCase); text = r1.Replace(text, ""); text = r2.Replace(text, ""); text = r3.Replace(text, ""); text = r4.Replace(text, "$1");
                     text = r5.Replace(text, "$1"); text = r6.Replace(text, ""); text = r7.Replace(text, ""); text = r8.Replace(text, "$1"); text = r9.Replace(text, "$1");
-                    if (text != initialtext)
-                    {
+                    if (text != initialtext) {
                         save("ru", title, text, "удаление несвободного файла из служебных пространств");
                         if (r.GetAttribute("ns") == "10") {
                             string tracktext = readpage("u:MBH/Шаблоны с удалёнными файлами"); rsave("u:MBH/Шаблоны с удалёнными файлами", tracktext + "\n* [[" + title + "]]"); }
@@ -166,10 +162,8 @@ class Program
         foreach (string cat in new string[] { "Категория:Википедия:Статьи с просроченным шаблоном текущих событий", "Категория:Википедия:Просроченные статьи, редактируемые прямо сейчас" })
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=" + cat + "&cmlimit=max").Result)))
                 while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "cm")
-                    {
-                        string text = readpage(r.GetAttribute("title"));
-                        save("ru", r.GetAttribute("title"), rgx.Replace(text, ""), "удалены просроченные шаблоны");
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
+                        string text = readpage(r.GetAttribute("title")); save("ru", r.GetAttribute("title"), rgx.Replace(text, ""), "удалены просроченные шаблоны");
                     }
     }
     static void unlicensed_files()
@@ -509,70 +503,46 @@ class Program
     }
     static void little_flags()
     {
-        var ru = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
-        var global = new MySqlConnection(creds[2].Replace("%project%", "centralauth"));
-        ru.Open();
-        global.Open();
-        MySqlCommand command;
-        MySqlDataReader rdr;
-        var pats = new HashSet<string>();
-        var rolls = new HashSet<string>();
-        var apats = new HashSet<string>();
-        var fmovers = new HashSet<string>();
+        var ru = new MySqlConnection(creds[2].Replace("%project%", "ruwiki")); var global = new MySqlConnection(creds[2].Replace("%project%", "centralauth")); ru.Open(); global.Open();
+        MySqlCommand command; MySqlDataReader rdr; var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
 
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\";", ru);
-        rdr = command.ExecuteReader();
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\";", ru); rdr = command.ExecuteReader();
         while (rdr.Read())
             pats.Add(rdr.GetString(0));
         rdr.Close();
 
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"rollbacker\";";
-        rdr = command.ExecuteReader();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"rollbacker\";"; rdr = command.ExecuteReader();
         while (rdr.Read())
             rolls.Add(rdr.GetString(0));
-        rdr.Close();
-        rolls.Remove("Железный капут");
+        rdr.Close(); rolls.Remove("Железный капут");
 
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"autoreview\";";
-        rdr = command.ExecuteReader();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"autoreview\";"; rdr = command.ExecuteReader();
         while (rdr.Read())
             apats.Add(rdr.GetString(0));
         rdr.Close();
 
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";";
-        rdr = command.ExecuteReader();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";"; rdr = command.ExecuteReader();
         while (rdr.Read())
             fmovers.Add(rdr.GetString(0));
         rdr.Close();
 
-        foreach (string flag in new string[] { "sysop", "closer", "engineer" })
-        {
+        foreach (string flag in new string[] { "sysop", "closer", "engineer" }) {
             command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"" + flag + "\";";
             rdr = command.ExecuteReader();
-            while (rdr.Read())
-            {
+            while (rdr.Read()) {
                 string user = rdr.GetString(0);
                 if (!highflags.Contains(user))
                     highflags.Add(user);
             }
             rdr.Close();
         }
-
-        command = new MySqlCommand("SELECT cast(gu_name as char) user FROM global_user_groups JOIN globaluser ON gu_id=gug_user WHERE gug_group=\"global-rollbacker\"", global);
-        rdr = command.ExecuteReader();
+        command = new MySqlCommand("SELECT cast(gu_name as char) user FROM global_user_groups JOIN globaluser ON gu_id=gug_user WHERE gug_group=\"global-rollbacker\"", global); rdr = command.ExecuteReader();
         while (rdr.Read())
             if (!rolls.Contains(rdr.GetString(0)))
                 rolls.Add(rdr.GetString(0));
 
-        var patnotrolls = new HashSet<string>(pats);
-        patnotrolls.ExceptWith(rolls);
-
-        var rollnotpats = new HashSet<string>(rolls);
-        rollnotpats.ExceptWith(pats);
-
-        var patrolls = new HashSet<string>(pats);
-        patrolls.IntersectWith(rolls);
-
+        var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
+        var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
         string result = "{\"userSet\":{\"p,r\":" + serialize(patrolls) + ",\"ap\":" + serialize(apats) + ",\"p\":" + serialize(patnotrolls) + ",\"r\":" + serialize(rollnotpats) + "," + "\"f\":" + serialize(fmovers) + "}}";
         rsave("MediaWiki:Gadget-markothers.json", result);
     }
@@ -685,18 +655,16 @@ class Program
     }
     static void dm89_stats()
     {        
-        var cats = new Dictionary<string, string>() { {"Википедия:Статьи для срочного улучшения","0" },{ "Википедия:Незакрытые обсуждения переименования страниц","0" },{ "Википедия:Незакрытые обсуждения " +
-                "статей для улучшения", "0" },{ "Википедия:Кандидаты на удаление", "0" },{ "Википедия:Незакрытые обсуждения удаления страниц", "0" },{ "Википедия:Статьи для переименования", "0" },
-            { "Википедия:Кандидаты на объединение", "0" },{ "Википедия:Незакрытые обсуждения объединения страниц", "0" },{ "Википедия:Статьи для разделения", "0" },{ "Википедия:Незакрытые обсуждения разделения " +
-            "страниц", "0" },{ "Википедия:Незакрытые обсуждения восстановления страниц", "0" },{ "Инкубатор:Все статьи", "0" },{ "Инкубатор:Запросы помощи/проверки", "0" }};
-        foreach (var cat in cats.Keys.ToList())
-        {
+        var cats = new Dictionary<string, int>() { {"Википедия:Статьи для срочного улучшения",0 },{ "Википедия:Незакрытые обсуждения переименования страниц",0 },{ "Википедия:Незакрытые обсуждения статей для" +
+                " улучшения", 0 },{ "Википедия:Кандидаты на удаление", 0 },{ "Википедия:Незакрытые обсуждения удаления страниц", 0 },{ "Википедия:Статьи для переименования", 0 }, { "Википедия:Кандидаты на " +
+                "объединение", 0 },{ "Википедия:Незакрытые обсуждения объединения страниц", 0 },{ "Википедия:Статьи для разделения", 0 },{ "Википедия:Незакрытые обсуждения разделения страниц", 0 },
+            { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0} };
+        foreach (var cat in cats.Keys.ToList()) {
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
             while (rdr.Read())
                 if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
-                    cats[cat] = rdr.GetAttribute("pages");
+                    cats[cat] = Convert.ToInt32(rdr.GetAttribute("pages"));
         }
-
         string vus_text = readpage("Википедия:К восстановлению");
         var non_summaried_vus = new Regex(@"[^>]\[\[([^\]]*)\]\][^<]");
 
@@ -705,24 +673,17 @@ class Program
             "Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения " +
             "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
             "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" +
-            cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"];
+            cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
         rsave("u:MBH/Завалы", stat_text + result);
     }
     static void inc_check_help_requests_img()
     {
-        string result = "";
-        var processed = new HashSet<string>();
+        string result = ""; var processed = new HashSet<string>() { "Шаблон:Инкубатор, помочь/проверить" };
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:Инкубатор:Запросы помощи/проверки").Result));
         while (r.Read())
-            if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10"))
-            {
-                string title = r.GetAttribute("title");
-                string shorttitle = title.Substring(title.IndexOf(':') + 1);
-                if (!processed.Contains(shorttitle))
-                {
-                    processed.Add(shorttitle);
-                    result += ", [[" + title + "|" + shorttitle + "]]";
-                }
+            if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10")) {
+                string title = r.GetAttribute("title"); string shorttitle = title.Substring(title.IndexOf(':') + 1);
+                if (!processed.Contains(shorttitle)) { processed.Add(shorttitle); result += ", [[" + title + "|" + shorttitle + "]]"; }
             }
         rsave("ВП:Форум/Общий/Запросы помощи в Инкубаторе", result.Substring(2));
         result = "<gallery mode=packed heights=75px>";
@@ -730,8 +691,7 @@ class Program
         foreach (Page page in inc_images_json.query.pages)
         {
             string pagetext = readpage(page.title);
-            foreach (var img in page.images)
-            {
+            foreach (var img in page.images) {
                 var rgx = new Regex(Regex.Escape(img.title).Replace("\\ ", "[ _]"), RegexOptions.IgnoreCase);
                 if (rgx.IsMatch(pagetext))
                     result += "\n" + img.title + "|[[" + page.title + "|" + page.title.Substring(10) + "]]";
@@ -874,19 +834,16 @@ class Program
         var thankingusers = new Dictionary<string, int>();
         var ratio = new Dictionary<string, double>();
         string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp&letype=thanks&lelimit=max";
-        while (cont != null)
-        {
+        while (cont != null) {
             if (cont == "") apiout = site.GetStringAsync(query).Result; else apiout = site.GetStringAsync(query + "&lecontinue=" + cont).Result;
-            using (var rdr = new XmlTextReader(new StringReader(apiout)))
-            {
+            using (var rdr = new XmlTextReader(new StringReader(apiout))) {
                 rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("lecontinue");
                 while (rdr.Read())
                     if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "item")
                     {
                         string source = rdr.GetAttribute("user");
                         string target = rdr.GetAttribute("title");
-                        if (target != null && source != null)
-                        {
+                        if (target != null && source != null) {
                             if (thankingusers.ContainsKey(source))
                                 thankingusers[source]++;
                             else
@@ -977,8 +934,7 @@ class Program
         while (r.Read())
             if (r.GetString("log_type") == "review")
                 statstable[r.GetString("user")]["review"] += r.GetInt32("count");
-            else
-            {
+            else {
                 statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
                 statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
             }
@@ -987,11 +943,9 @@ class Program
         command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN " +
             "('sysop', 'closer') AND rev_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 GROUP BY actor_name, page_namespace;";
         r = command.ExecuteReader();
-        while (r.Read())
-        {
+        while (r.Read()) {
             statstable[r.GetString("user")]["totaledits"] += r.GetInt32("count");
-            switch (r.GetString("page_namespace"))
-            {
+            switch (r.GetString("page_namespace")) {
                 case "0":
                 case "6":
                 case "10":
@@ -1015,8 +969,7 @@ class Program
         foreach (var t in discussiontypes)
             using (var xr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "/&apnamespace=4&aplimit=max").Result)))
                 while (xr.Read())
-                    if (xr.Name == "p")
-                    {
+                    if (xr.Name == "p") {
                         string page = xr.GetAttribute("title");
                         int year;
                         try
@@ -1026,13 +979,9 @@ class Program
                         if (year >= 2018)
                         {
                             string pagetext;
-                            try
-                            { pagetext = readpage(page); }
-                            catch
-                            { continue; }
+                            try { pagetext = readpage(page); } catch { continue; }
                             var results = summaryrgx.Matches(pagetext);
-                            foreach (Match m in results)
-                            {
+                            foreach (Match m in results) {
                                 string user = m.Groups[3].ToString().Replace('_', ' ');
                                 if (!statstable.ContainsKey(user))
                                     continue;
@@ -1048,8 +997,7 @@ class Program
         string cutext = readpage("u:BotDR/CU_stats");
         var custats = cutext.Split('\n');
         foreach (var s in custats)
-            if (s.Contains('='))
-            {
+            if (s.Contains('=')) {
                 var data = s.Split('=');
                 statstable[data[0]]["checkuser"] += Convert.ToInt32(data[1]);
                 statstable[data[0]]["totalactions"] += Convert.ToInt32(data[1]);
@@ -1065,15 +1013,13 @@ class Program
             "восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)" +
             "стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров " +
             "правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
-        foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
-        {
+        foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"])) {
             bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
             bool lessactions = u.Value["closer"] == 0 && u.Value["totalactions"] < 25;
             bool lesscontent = u.Value["closer"] == 0 && u.Value["contentedits"] + u.Value["review"] < 50;
             bool lesstotal = u.Value["closer"] == 0 && u.Value["totaledits"] + u.Value["review"] < 100;
             string color = "";
-            if (!bots.Contains(u.Key))
-            {
+            if (!bots.Contains(u.Key)) {
                 if (inactivecloser || lessactions || lesscontent || lesstotal)
                     color = "style=\"background-color:#fcc\"";
             }
@@ -1225,8 +1171,7 @@ class Program
                 { "Избранные статьи/Кандидаты", 0 }, { "Запросы к ботоводам", 0 }, { "Запросы к патрулирующим", 0 },{ "Технические запросы",0},{ "Запросы к патрулирующим от автоподтверждённых участников",0},
                 { "Избранные статьи/Кандидаты в устаревшие", 0 },{ "Добротные статьи/К лишению статуса", 0 }, { "Хорошие статьи/К лишению статуса", 0 },{ "Избранные списки и порталы/К лишению статуса", 0 },
                 { "Запросы на переименование учётных записей", 0},{ "Форум/Архив/Авторское право", 0 } });
-        stats[type][user]["sum"]++;
-        stats[type][user][pagetype]++;
+        stats[type][user]["sum"]++; stats[type][user][pagetype]++;
     }
     static void summary_stats()
     {
@@ -1317,31 +1262,24 @@ class Program
     static void popular_wd_items_without_ru()
     {
         int numofitemstoanalyze = 150000; //100k is okay, 1m isn't
-        var allitems = new Dictionary<string, int>();
-        var nonruitems = new Dictionary<string, int>();
-        string result = "<center>\n{|class=\"standard\"\n!Страница!!Кол-во интервик";
-        var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki"));
-        connect.Open();
-        var query = new MySqlCommand("select ips_item_id, count(*) cnt from wb_items_per_site group by ips_item_id order by cnt desc limit " + numofitemstoanalyze + ";", connect);
-        query.CommandTimeout = 99999;
+        var allitems = new Dictionary<string, int>(); var nonruitems = new Dictionary<string, int>(); string result = "<center>\n{|class=\"standard\"\n!Страница!!Кол-во интервик";
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "wikidatawiki")); connect.Open();
+        var query = new MySqlCommand("select ips_item_id, count(*) cnt from wb_items_per_site group by ips_item_id order by cnt desc limit " + numofitemstoanalyze + ";", connect); query.CommandTimeout = 99999;
         MySqlDataReader r = query.ExecuteReader();
         while (r.Read())
             allitems.Add(r.GetString("ips_item_id"), r.GetInt16("cnt"));
         r.Close();
-        foreach (var i in allitems)
-        {
+        foreach (var i in allitems) {
             query = new MySqlCommand("select ips_site_page from wb_items_per_site where ips_site_id=\"ruwiki\" and ips_item_id=" + i.Key + ";", connect);
             r = query.ExecuteReader();
             if (!r.Read())
                 nonruitems.Add(i.Key, i.Value);
             r.Close();
         }
-        foreach (var n in nonruitems)
-        {
+        foreach (var n in nonruitems) {
             query = new MySqlCommand("select cast(ips_site_page as char) title from wb_items_per_site where ips_site_id=\"enwiki\" and ips_item_id=" + n.Key + ";", connect);
             r = query.ExecuteReader();
-            if (r.Read())
-            {
+            if (r.Read()) {
                 string title = r.GetString(0);
                 if (!title.StartsWith("Template:") && !title.StartsWith("Category:") && !title.StartsWith("Module:") && !title.StartsWith("Wikipedia:") && !title.StartsWith("Help:") && !title.StartsWith("Portal:"))
                     result += "\n|-\n|[[:en:" + title + "]]||" + n.Value;
@@ -1380,55 +1318,41 @@ class Program
             connect.Open();
             var command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
+            while (reader.Read()) {
                 string bot = reader.GetString("bot").Replace("_", " ");
                 if (!falsebots[lang].Contains(bot))
                     bots.Add(bot, new most_edits_record() { globalbot = false });
             }
             reader.Close();
 
-            command.CommandText = "select cast(user_name as char) user from user where user_editcount >= " + min_num_of_edits[lang] + ";";
-            reader = command.ExecuteReader();
-            while (reader.Read())
-            {
+            command.CommandText = "select cast(user_name as char) user from user where user_editcount >= " + min_num_of_edits[lang] + ";"; reader = command.ExecuteReader();
+            while (reader.Read()) {
                 string user = reader.GetString("user");
                 if (!bots.ContainsKey(user))
                     users.Add(user, new most_edits_record());
             }
-            reader.Close();
-            connect.Close();
+            reader.Close(); connect.Close();
 
-            connect = new MySqlConnection(creds[2].Replace("%project%", "metawiki"));
-            connect.Open();
+            connect = new MySqlConnection(creds[2].Replace("%project%", "metawiki")); connect.Open();
             command = new MySqlCommand("select distinct cast(log_title as char) bot from logging where log_type='gblrights' and (log_params like '%lobal-bot%' or log_params like '%lobal_bot%');", connect) { CommandTimeout = 9999 };
             reader = command.ExecuteReader();
-            while (reader.Read())
-            {
+            while (reader.Read()) {
                 string bot = reader.GetString("bot").Replace("_", " ");
-                if (!bots.ContainsKey(bot))
-                {
+                if (!bots.ContainsKey(bot)) {
                     bots.Add(bot, new most_edits_record() { globalbot = true });
                     users.Remove(bot);
                 }
             }
-            reader.Close();
-            connect.Close();
+            reader.Close(); connect.Close();
             foreach (var type in new Dictionary<string, most_edits_record>[] { users, bots })
-            {
-                foreach (var k in type.Keys)
-                {
+                foreach (var k in type.Keys) {
                     string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucprop=title&ucuser=" + e(k);
-                    while (cont != null)
-                    {
+                    while (cont != null) {
                         string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&uccontinue=" + e(cont)).Result);
-                        using (var r = new XmlTextReader(new StringReader(apiout)))
-                        {
-                            r.WhitespaceHandling = WhitespaceHandling.None;
+                        using (var r = new XmlTextReader(new StringReader(apiout))) {
                             r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("uccontinue");
                             while (r.Read())
-                                if (r.Name == "item")
-                                {
+                                if (r.Name == "item") {
                                     int ns = Convert.ToInt16(r.GetAttribute("ns"));
                                     type[k].all++;
                                     if (ns == 0 || ns == 1)
@@ -1451,13 +1375,11 @@ class Program
                         }
                     }
                 }
-            }
 
             string result = headers[lang].Replace("%specific_text%", hdr_modifications[lang].First.ToString()).Replace("%shortcut%", "{{shortcut|" + shortcuts[lang].First + "}}");
 
             int main_edits_index = 0;
-            foreach (var bot in bots.OrderByDescending(bot => bot.Value.main))
-            {
+            foreach (var bot in bots.OrderByDescending(bot => bot.Value.main)) {
                 if (bot.Value.all == 0)
                     bots.Remove(bot.Key);
                 else bot.Value.main_edits_index = ++main_edits_index;
@@ -1467,12 +1389,12 @@ class Program
                 user.Value.main_edits_index = ++main_edits_index;
 
             int all_edits_index = 0;
-            foreach (var s in bots.OrderByDescending(s => s.Value.all))
-            {
+            foreach (var s in bots.OrderByDescending(s => s.Value.all)) {
                 string color = "";
                 if (s.Value.globalbot)
                     color = "style=\"background-color:#ccf\"";
-                result += "\n|-" + color + "\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + s.Value.file + "||" + s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
+                result += "\n|-" + color + "\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + 
+                    s.Value.file + "||" + s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
             }
             result += "\n|}" + footers[lang].First;
             save(lang, resultpages[lang].First.ToString(), result, "");
@@ -1480,15 +1402,15 @@ class Program
             all_edits_index = 0;
             result = headers[lang].Replace("%specific_text%", hdr_modifications[lang].Second.ToString()).Replace("%shortcut%", "{{shortcut|" + shortcuts[lang].Second + "}}");
             foreach (var s in users.OrderByDescending(s => s.Value.all))
-                result += "\n|-\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + s.Value.file + "||" + s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
+                result += "\n|-\n|" + ++all_edits_index + "||" + s.Value.main_edits_index + "||{{u|" + s.Key + "}}||" + s.Value.all + "||" + s.Value.main + "||" + s.Value.templ + "||" + s.Value.file + "||" + 
+                    s.Value.cat + "||" + s.Value.portproj + "||" + s.Value.tech + "||" + s.Value.user + "||" + s.Value.meta;
             result += "\n|}" + footers[lang].Second;
             save(lang, resultpages[lang].Second.ToString(), result, "");
         }
     }
     static void most_watched_pages()
     {
-        int limit = 30;
-        var nss = new Dictionary<int, string>();
+        int limit = 30; var nss = new Dictionary<int, string>();
         string cont, query, apiout, result = "<center>Отсортировано сперва по числу активных следящих, когда их меньше " + limit + " - по числу следящих в целом.\n";
 
         apiout = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&meta=siteinfo&format=xml&siprop=namespaces").Result;
@@ -1496,31 +1418,20 @@ class Program
         {
             r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
-                if (r.NodeType == XmlNodeType.Element && r.Name == "ns")
-                {
-                    int ns = Convert.ToInt16(r.GetAttribute("id"));
-                    if (ns % 2 == 0 || ns == 3)
-                    {
-                        r.Read();
-                        nss.Add(ns, r.Value);
-                    }
+                if (r.NodeType == XmlNodeType.Element && r.Name == "ns") {
+                    int ns = Convert.ToInt16(r.GetAttribute("id")); if (ns % 2 == 0 || ns == 3) { r.Read(); nss.Add(ns, r.Value); }
                 }
         }
-        nss.Remove(2);
-        nss.Remove(-2);
+        nss.Remove(2); nss.Remove(-2);
 
         foreach (var n in nss.Keys)
         {
-            var pageids = new HashSet<string>();
-            var pagecountswithactive = new Dictionary<string, Pair>();
-            var pagecountswoactive = new Dictionary<string, int>();
+            var pageids = new HashSet<string>(); var pagecountswithactive = new Dictionary<string, Pair>(); var pagecountswoactive = new Dictionary<string, int>();
             cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&aplimit=max&apfilterredir=nonredirects&apnamespace=";
             while (cont != null)
             {
                 apiout = (cont == "" ? site.GetStringAsync(query + n).Result : site.GetStringAsync(query + n + "&apcontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
-                {
-                    r.WhitespaceHandling = WhitespaceHandling.None;
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
                     while (r.Read())
                         if (r.Name == "p")
@@ -1530,14 +1441,9 @@ class Program
 
             var requeststrings = new HashSet<string>();
             string idset = ""; int c = 0;
-            foreach (var p in pageids)
-            {
+            foreach (var p in pageids) {
                 idset += "|" + p;
-                if (++c % 500 == 0)
-                {
-                    requeststrings.Add(idset.Substring(1));
-                    idset = "";
-                }
+                if (++c % 500 == 0) { requeststrings.Add(idset.Substring(1)); idset = ""; }
             }
             if (idset.Length != 0)
                 requeststrings.Add(idset.Substring(1));
@@ -1547,18 +1453,15 @@ class Program
                 {
                     r.WhitespaceHandling = WhitespaceHandling.None;
                     while (r.Read())
-                        if (r.GetAttribute("watchers") != null)
-                        {
+                        if (r.GetAttribute("watchers") != null) {
                             string title = r.GetAttribute("title");
-                            if (n == 3)
-                            {
+                            if (n == 3) {
                                 if (title.Contains("/Архив"))
                                     continue;
                                 title = title.Replace("Обсуждение участника:", "Участник:").Replace("Обсуждение участницы:", "Участница:");
                             }
                             int watchers = Convert.ToInt16(r.GetAttribute("watchers"));
-                            if (n == 0 && watchers >= 60 || n != 0)
-                            {
+                            if (n == 0 && watchers >= 60 || n != 0) {
                                 if (r.GetAttribute("visitingwatchers") != null)
                                     pagecountswithactive.Add(title, new Pair() { First = watchers, Second = r.GetAttribute("visitingwatchers") });
                                 else
@@ -1567,8 +1470,7 @@ class Program
                         }
                 }
 
-            if (pagecountswoactive.Count != 0)
-            {
+            if (pagecountswoactive.Count != 0) {
                 result += "==" + (nss[n] == "" ? "Статьи" : (nss[n] == "Обсуждение участника" ? "Участник" : nss[n])) + "==\n{|class=\"standard sortable\"\n!Страница!!Всего следящих!!Активных\n";
                 foreach (var p in pagecountswithactive.OrderByDescending(p => Convert.ToInt16(p.Value.Second)))
                     result += "|-\n|[[:" + p.Key + "]]||" + p.Value.First + "||" + p.Value.Second + "\n";
@@ -1588,12 +1490,9 @@ class Program
         foreach (string skin in new string[] { "common", "monobook", "vector", "cologneblue", "minerva", "timeless", "simple", "myskin", "modern" })
         {
             string offset = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=search&srsearch=" + skin + ".js&srnamespace=2&srlimit=max&srprop=";
-            while (offset != null)
-            {
+            while (offset != null) {
                 string apiout = (offset == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&sroffset=" + e(offset)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
-                {
-                    r.WhitespaceHandling = WhitespaceHandling.None;
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); offset = r.GetAttribute("sroffset");
                     while (r.Read())
                         if (r.Name == "p" && r.GetAttribute("title").EndsWith(skin + ".js") && !invoking_pages.Contains(r.GetAttribute("title")))
@@ -1602,27 +1501,22 @@ class Program
             }
         }
 
-        foreach (var invoking_page in invoking_pages)
-        {
-            username = invoking_page.Substring(invoking_page.IndexOf(':') + 1, invoking_page.IndexOf('/') - 1 - invoking_page.IndexOf(':'));
-            Program.invoking_page = invoking_page;
+        foreach (var invoking_page in invoking_pages) {
+            username = invoking_page.Substring(invoking_page.IndexOf(':') + 1, invoking_page.IndexOf('/') - 1 - invoking_page.IndexOf(':')); Program.invoking_page = invoking_page;
             process_site("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=" + e(invoking_page));
             if (!script_users.Contains(username))
                 script_users.Add(username);
         }
 
-        foreach (var username in script_users)
-        {
-            Program.username = username;
-            invoking_page = "meta:" + username + "/global.js";
+        foreach (var username in script_users) {
+            Program.username = username; invoking_page = "meta:" + username + "/global.js";
             process_site("https://meta.wikimedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=user:" + e(username) + "/global.js");
         }
 
         foreach (var s in scripts.OrderByDescending(s => s.Value.active))
             if ((s.Value.active + s.Value.inactive) > 1)
                 result += "\n|-\n|[[:" + s.Key + "]]||" + s.Value.active + "||" + s.Value.inactive + "||" + (s.Value.active + s.Value.inactive);
-        rsave("ВП:Самые используемые скрипты", result + "\n|}");
-        rsave("ВП:Самые используемые скрипты/details", debug_result + "\n|}");
+        rsave("ВП:Самые используемые скрипты", result + "\n|}"); rsave("ВП:Самые используемые скрипты/details", debug_result + "\n|}");
     }
     static bool user_is_active()
     {
@@ -1633,27 +1527,20 @@ class Program
             DateTime edit_ts = new DateTime(), log_ts = new DateTime();
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucprop=timestamp&ucuser=" + e(username)).Result)))
                 while (r.Read())
-                    if (r.Name == "item")
-                    {
+                    if (r.Name == "item") {
                         string raw_ts = r.GetAttribute("timestamp");
                         edit_ts = new DateTime(Convert.ToInt16(raw_ts.Substring(0, 4)), Convert.ToInt16(raw_ts.Substring(5, 2)), Convert.ToInt16(raw_ts.Substring(8, 2)));
                     }
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=timestamp&lelimit=1&leuser=" + e(username)).Result)))
                 while (r.Read())
-                    if (r.Name == "item")
-                    {
+                    if (r.Name == "item") {
                         string raw_ts = r.GetAttribute("timestamp");
                         log_ts = new DateTime(Convert.ToInt16(raw_ts.Substring(0, 4)), Convert.ToInt16(raw_ts.Substring(5, 2)), Convert.ToInt16(raw_ts.Substring(8, 2)));
                     }
 
             if (edit_ts < now.AddMonths(-1) && log_ts < now.AddMonths(-1))
-            {
-                users_activity.Add(username, false); return false;
-            }
-            else
-            {
-                users_activity.Add(username, true); return true;
-            }
+            { users_activity.Add(username, false); return false; }
+            else { users_activity.Add(username, true); return true; }
 
         }
     }
@@ -1686,14 +1573,10 @@ class Program
         string content = "";
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync(url).Result)))
             while (r.Read())
-                if (r.Name == "page" && r.GetAttribute("_idx") != "-1")
-                {
-                    r.Read(); r.Read(); r.Read(); content = r.Value; break;
-                }
+                if (r.Name == "page" && r.GetAttribute("_idx") != "-1") { r.Read(); r.Read(); r.Read(); content = r.Value; break; }
         content = e(multiline_comment.Replace(content, "")).Replace("(\n", "(").Replace("{\n", "{");
         foreach (var s in content.Split('\n'))
-            if (!s.TrimStart(' ').StartsWith("//"))
-            {
+            if (!s.TrimStart(' ').StartsWith("//")) {
                 //if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
                 //e.WriteLine(s);
                 //if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
@@ -1701,8 +1584,7 @@ class Program
                 if (is_foreign_rgx.IsMatch(s))
                     foreach (Match m in is_foreign_rgx.Matches(s))
                         add_script(m.Groups[2].Value + ":" + m.Groups[1].Value);
-                else
-                {
+                else {
                     foreach (Match m in is_rgx.Matches(s))
                         add_script(m.Groups[1].Value);
                     foreach (Match m in is2_rgx.Matches(s))
@@ -1748,10 +1630,8 @@ class Program
                 "все страницы основного пространства, включая редиректы, и для каждой смотрит имя первого правщика. Таким образом бот не засчитывает создание удалённых статей и статей, авторство в " +
                 "которых скрыто. Обновлено " + now.ToString("d.M.yyyy") + ".\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Статьи!!Редиректы!!Дизамбиги!!Шаблоны!!Категории!!Файлы" },
             { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
-        var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } };
-        var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
-        foreach (var lang in new string[] { "kk", "ru" })
-        {
+        var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } }; var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
+        foreach (var lang in new string[] { "kk", "ru" }) {
             users.Clear();
             Dictionary<string, Dictionary<string, int>> bestusers = new Dictionary<string, Dictionary<string, int>>();
             HashSet<string> bots = new HashSet<string>(), disambs = new HashSet<string>();
@@ -1759,8 +1639,7 @@ class Program
             connect.Open();
             command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type=\"rights\" and log_params like \"%bot%\";", connect) { CommandTimeout = 9999 };
             rdr = command.ExecuteReader();
-            while (rdr.Read())
-            {
+            while (rdr.Read()) {
                 string bot = rdr.GetString("title");
                 if (!falsebots[lang].Contains(bot) && !bots.Contains(bot))
                     bots.Add(bot.Replace("_", " "));
@@ -1768,27 +1647,21 @@ class Program
             rdr.Close();
             connect.Close();
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=category:" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
-            while (cont != null)
-            {
+            while (cont != null) {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
-                {
-                    r.WhitespaceHandling = WhitespaceHandling.None;
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
                     while (r.Read())
                         if (r.Name == "cm")
                             disambs.Add(r.GetAttribute("pageid"));
                 }
             }
-            foreach (var ns in new string[] { "14", "10", "6", "0" })
-            {
+            foreach (var ns in new string[] { "14", "10", "6", "0" }) {
                 cont = ""; query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&aplimit=max&apfilterredir=nonredirects&apnamespace=" + ns;
-                while (cont != "-")
-                {
+                while (cont != "-") {
                     Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                     cont = response.@continue == null ? "-" : response.@continue.apcontinue;
-                    foreach (var pageinfo in response.query.allpages)
-                    {
+                    foreach (var pageinfo in response.query.allpages) {
                         int id = pageinfo.pageid;
                         if (ns != "0")
                             get_page_author(id, ns, lang);
@@ -1812,8 +1685,7 @@ class Program
                     bestusers.Add(u.Key, u.Value);
             string result = headers[lang];
             int c = 0;
-            foreach (var u in bestusers.OrderByDescending(u => u.Value["0"]))
-            {
+            foreach (var u in bestusers.OrderByDescending(u => u.Value["0"])) {
                 bool bot = bots.Contains(u.Key);
                 string color = (bot ? "style=\"background-color:#ddf\"" : "");
                 string number = (bot ? "" : (++c).ToString());
@@ -1825,14 +1697,11 @@ class Program
     }
     static void get_page_author(int id, string ns, string lang)
     {
-        try
-        {
-            connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
-            connect.Open();
+        try {
+            connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki")); connect.Open();
             command = new MySqlCommand("SELECT cast(actor_name as char) user FROM revision JOIN actor ON rev_actor = actor_id where rev_page=" + id + " order by rev_timestamp asc limit 1;", connect);
             rdr = command.ExecuteReader();
-            while (rdr.Read())
-            {
+            while (rdr.Read()) {
                 string user = rdr.GetString("user");
                 if (!users.ContainsKey(user))
                     users.Add(user, new Dictionary<string, int>() { { "0", 0 }, { "6", 0 }, { "10", 0 }, { "14", 0 }, { "r", 0 }, { "d", 0 } });
@@ -1840,8 +1709,7 @@ class Program
             }
             rdr.Close();
             connect.Close();
-        }
-        catch { }
+        } catch { }
     }
     static void Main()
     {
