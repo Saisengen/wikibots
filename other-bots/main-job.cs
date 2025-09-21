@@ -95,6 +95,7 @@ class Program
     r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase);
     static Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(); static bool legit_link_found; static int position_number = 0;
     static string e(string input) { return Uri.EscapeDataString(input); }
+    static int i(string input) { return Convert.ToInt32(input); }
     static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
     static string serialize(HashSet<string> list) { list.ExceptWith(highflags); return JsonConvert.SerializeObject(list); }
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
@@ -273,7 +274,7 @@ class Program
                 while (r.Read())
                     if (r.Name == "rev")
                         uploaddate = r.GetAttribute("timestamp").Substring(0, 10);
-            if (DateTime.Now - DateTime.ParseExact(uploaddate, "yyyy-MM-dd", CultureInfo.InvariantCulture) > new TimeSpan(0, 1, 0, 0))
+            if (now - DateTime.ParseExact(uploaddate, "yyyy-MM-dd", CultureInfo.InvariantCulture) > new TimeSpan(0, 1, 0, 0))
                 save("ru", file, "{{subst:ofud}}\n" + file_descr, "вынос на КБУ неиспользуемого в статьях несвободного файла");
         }
     }
@@ -367,23 +368,20 @@ class Program
     }
     static void user_activity_stats_template()
     {
-        var days = new Dictionary<string, int>();
-        var edits = new Dictionary<string, int>();
-        var itemrgx = new Regex("<item");
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=sysop&aulimit=max").Result)))
-            while (r.Read())
-                if (r.Name == "u")
-                    days.Add(r.GetAttribute("name"), 1);
+        var days = new Dictionary<string, int>(); var edits = new Dictionary<string, int>(); var itemrgx = new Regex("<item");
+        foreach (string group in new string[] { "sysop", "bot" })
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&aulimit=max&augroup=" + group).Result)))
+                while (r.Read())
+                    if (r.Name == "u" && !days.ContainsKey(r.GetAttribute("name")))
+                        days.Add(r.GetAttribute("name"), 1);
         var initialusers = readpage("Ш:User activity stats/users").Split('\n');
         foreach (var user in initialusers)
             if (!days.ContainsKey(user))
                 days.Add(user, 1);
-
-        foreach (string tmplt in new string[] { "Шаблон:Участник покинул проект", "Шаблон:Вики-отпуск" })
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=" + tmplt + "&einamespace=2|3&eilimit=max").Result)))
+        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск" })
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result)))
                 while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei")
-                    {
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
                         string user = r.GetAttribute("title");
                         if (!user.Contains("/"))
                             user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
@@ -392,22 +390,14 @@ class Program
                         if (!edits.ContainsKey(user))
                             edits.Add(user, 0);
                     }
-
         foreach (var u in days.Keys.ToList())
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + e(u)).Result)))
                 while (r.Read())
-                    if (r.Name == "item")
-                    {
-                        string ts = r.GetAttribute("timestamp");
-                        int y = Convert.ToInt32(ts.Substring(0, 4));
-                        int m = Convert.ToInt32(ts.Substring(5, 2));
-                        int d = Convert.ToInt32(ts.Substring(8, 2));
-                        days[u] = (DateTime.Now - new DateTime(y, m, d)).Days;
+                    if (r.Name == "item") {
+                        string ts = r.GetAttribute("timestamp"); int y = i(ts.Substring(0, 4)); int m = i(ts.Substring(5, 2)); int d = i(ts.Substring(8, 2)); days[u] = (now - new DateTime(y, m, d)).Days;
                     }
-
-        foreach (var v in edits.Keys.ToList())
-        {
-            var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + DateTime.Now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") +
+        foreach (var v in edits.Keys.ToList()) {
+            var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") +
                 "&ucprop=&ucuser=" + e(v)).Result;
             edits[v] = itemrgx.Matches(res).Count;
         }
@@ -446,7 +436,7 @@ class Program
     }
     static void zsf_archiving()
     {
-        var year = DateTime.Now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
+        var year = now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
         var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж|АИ|бот)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
         var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)"); var threads = threadrgx.Matches(zsftext);
         foreach (Match thread in threads)
@@ -454,10 +444,10 @@ class Program
             string archivepage = ""; string threadtext = thread.Groups[0].Value; var summary = signature.Matches(thread.Groups[1].Value); var summary_discuss = signature.Matches(thread.Groups[4].Value);
             bool outdated = true;
             foreach (Match s in summary)
-                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
                     outdated = false;
             foreach (Match s in summary_discuss)
-                if (DateTime.Now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
                     outdated = false;
             if (!outdated) continue;
             switch (thread.Groups[2].Value)
@@ -663,7 +653,7 @@ class Program
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
             while (rdr.Read())
                 if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
-                    cats[cat] = Convert.ToInt32(rdr.GetAttribute("pages"));
+                    cats[cat] = i(rdr.GetAttribute("pages"));
         }
         string vus_text = readpage("Википедия:К восстановлению");
         var non_summaried_vus = new Regex(@"[^>]\[\[([^\]]*)\]\][^<]");
@@ -952,12 +942,9 @@ class Program
                 case "14":
                 case "100":
                 case "102":
-                    statstable[r.GetString("user")]["contentedits"] += r.GetInt32("count");
-                    break;
+                    statstable[r.GetString("user")]["contentedits"] += r.GetInt32("count"); break;
                 case "8":
-                    statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
-                    statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count");
-                    break;
+                    statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count"); statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count"); break;
             }
         }
         r.Close();
@@ -970,14 +957,8 @@ class Program
             using (var xr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "/&apnamespace=4&aplimit=max").Result)))
                 while (xr.Read())
                     if (xr.Name == "p") {
-                        string page = xr.GetAttribute("title");
-                        int year;
-                        try
-                        { year = Convert.ToInt16(page.Substring(page.Length - 4)); }
-                        catch
-                        { continue; }
-                        if (year >= 2018)
-                        {
+                        string page = xr.GetAttribute("title"); int year; try { year = i(page.Substring(page.Length - 4)); } catch { continue; }
+                        if (year >= 2018) {
                             string pagetext;
                             try { pagetext = readpage(page); } catch { continue; }
                             var results = summaryrgx.Matches(pagetext);
@@ -998,9 +979,7 @@ class Program
         var custats = cutext.Split('\n');
         foreach (var s in custats)
             if (s.Contains('=')) {
-                var data = s.Split('=');
-                statstable[data[0]]["checkuser"] += Convert.ToInt32(data[1]);
-                statstable[data[0]]["totalactions"] += Convert.ToInt32(data[1]);
+                var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]);
             }
 
         string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика активности " +
@@ -1026,8 +1005,7 @@ class Program
             else
                 color = "style=\"background-color:#ccf\"";
             string deletetext = u.Value["delete"] + u.Value["delsum"] == 0 ? "" : inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")";
-            string restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")";
-            //пробелы после ''' нужны чтоб не было висящих '
+            string restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")"; //пробелы после ''' нужны чтоб не было висящих '
             result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "''' " + cell(u.Value["totaledits"]) +
                 "'''" : cell(u.Value["totaledits"])) + "||" + (lesscontent ? "''' " + cell(u.Value["contentedits"]) + "'''" : cell(u.Value["contentedits"])) + "||" + cell(u.Value["review"]) + "||" +
                 (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + deletetext + "||" + restoretext + "||" + cell(u.Value["del_rev_log"]) + "||" +
@@ -1066,7 +1044,7 @@ class Program
                     rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("arcontinue");
                     while (rdr.Read())
                         if (rdr.Name == "r") {
-                            idset += '|' + rdr.GetAttribute("fromid"); temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = Convert.ToInt16(rdr.GetAttribute("ns")) });
+                            idset += '|' + rdr.GetAttribute("fromid"); temp.Add(rdr.GetAttribute("fromid"), new redir() { dest_title = rdr.GetAttribute("title"), dest_ns = i(rdr.GetAttribute("ns")) });
                         }
                 } if (idset.Length != 0)
                     idset = idset.Substring(1);
@@ -1075,7 +1053,7 @@ class Program
                     while (rdr.Read())
                         if (rdr.Name == "page") {
                             var id = rdr.GetAttribute("pageid");
-                            int src_ns = Convert.ToInt16(rdr.GetAttribute("ns"));
+                            int src_ns = i(rdr.GetAttribute("ns"));
                             if (temp[id].dest_ns != src_ns || temp[id].dest_ns == 6 || temp[id].dest_ns == 14)
                                 if (!(sameuser(rdr.GetAttribute("title"), temp[id].dest_title) && ((temp[id].dest_ns == 3 && src_ns == 2) || (temp[id].dest_ns == 2 && src_ns == 3))))
                                     redirs.Add(id, new redir() { src_ns = src_ns, src_title = rdr.GetAttribute("title"), dest_ns = temp[id].dest_ns, dest_title = temp[id].dest_title });
@@ -1116,7 +1094,7 @@ class Program
 
         globalusers.ExceptWith(apats);
 
-        var lastmonth = DateTime.Now.AddMonths(-1);
+        var lastmonth = now.AddMonths(-1);
         foreach (var mover in globalusers)
             using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString
                 ("yyyy-MM-dd") + "T00:00:00&ucprop=comment&ucuser=" + e(mover)).Result)))
@@ -1211,7 +1189,7 @@ class Program
                     if (pagetitle.Contains("Избранные"))
                         correctpage = true;
                     else if (yearrgx.IsMatch(pagetitle))
-                        if (Convert.ToInt16(yearrgx.Match(pagetitle).Value) >= startyear)
+                        if (i(yearrgx.Match(pagetitle).Value) >= startyear)
                             correctpage = true;
                         else if (pagetitle.IndexOf('/') == -1)
                             correctpage = true;
@@ -1222,8 +1200,7 @@ class Program
                             rdb_zkp_summary_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
                         foreach (Match summary in summaries)
                         {
-                            int signature_year = Convert.ToInt16(summary.Groups[7].Value);
-                            int signature_month = monthnumbers[summary.Groups[6].Value];
+                            int signature_year = i(summary.Groups[7].Value); int signature_month = monthnumbers[summary.Groups[6].Value];
                             user = summary.Groups[4].ToString().Replace('_', ' ');
                             if (user.Contains("/"))
                                 user = user.Substring(0, user.IndexOf("/"));
@@ -1353,7 +1330,7 @@ class Program
                             r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("uccontinue");
                             while (r.Read())
                                 if (r.Name == "item") {
-                                    int ns = Convert.ToInt16(r.GetAttribute("ns"));
+                                    int ns = i(r.GetAttribute("ns"));
                                     type[k].all++;
                                     if (ns == 0 || ns == 1)
                                         type[k].main++;
@@ -1419,7 +1396,7 @@ class Program
             r.WhitespaceHandling = WhitespaceHandling.None;
             while (r.Read())
                 if (r.NodeType == XmlNodeType.Element && r.Name == "ns") {
-                    int ns = Convert.ToInt16(r.GetAttribute("id")); if (ns % 2 == 0 || ns == 3) { r.Read(); nss.Add(ns, r.Value); }
+                    int ns = i(r.GetAttribute("id")); if (ns % 2 == 0 || ns == 3) { r.Read(); nss.Add(ns, r.Value); }
                 }
         }
         nss.Remove(2); nss.Remove(-2);
@@ -1460,7 +1437,7 @@ class Program
                                     continue;
                                 title = title.Replace("Обсуждение участника:", "Участник:").Replace("Обсуждение участницы:", "Участница:");
                             }
-                            int watchers = Convert.ToInt16(r.GetAttribute("watchers"));
+                            int watchers = i(r.GetAttribute("watchers"));
                             if (n == 0 && watchers >= 60 || n != 0) {
                                 if (r.GetAttribute("visitingwatchers") != null)
                                     pagecountswithactive.Add(title, new Pair() { First = watchers, Second = r.GetAttribute("visitingwatchers") });
@@ -1528,14 +1505,12 @@ class Program
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucprop=timestamp&ucuser=" + e(username)).Result)))
                 while (r.Read())
                     if (r.Name == "item") {
-                        string raw_ts = r.GetAttribute("timestamp");
-                        edit_ts = new DateTime(Convert.ToInt16(raw_ts.Substring(0, 4)), Convert.ToInt16(raw_ts.Substring(5, 2)), Convert.ToInt16(raw_ts.Substring(8, 2)));
+                        string raw_ts = r.GetAttribute("timestamp"); edit_ts = new DateTime(i(raw_ts.Substring(0, 4)), i(raw_ts.Substring(5, 2)), i(raw_ts.Substring(8, 2)));
                     }
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=timestamp&lelimit=1&leuser=" + e(username)).Result)))
                 while (r.Read())
                     if (r.Name == "item") {
-                        string raw_ts = r.GetAttribute("timestamp");
-                        log_ts = new DateTime(Convert.ToInt16(raw_ts.Substring(0, 4)), Convert.ToInt16(raw_ts.Substring(5, 2)), Convert.ToInt16(raw_ts.Substring(8, 2)));
+                        string raw_ts = r.GetAttribute("timestamp"); log_ts = new DateTime(i(raw_ts.Substring(0, 4)), i(raw_ts.Substring(5, 2)), i(raw_ts.Substring(8, 2)));
                     }
 
             if (edit_ts < now.AddMonths(-1) && log_ts < now.AddMonths(-1))
@@ -1716,6 +1691,7 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1724,7 +1700,6 @@ class Program
         try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
