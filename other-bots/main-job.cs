@@ -10,77 +10,30 @@ using System.Linq;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using System.Web.UI;
-class most_edits_record
-{
-    public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index;
-    public bool globalbot;
-}
-class redir
-{
-    public string src_title, dest_title; public int src_ns, dest_ns;
-    public override string ToString()
-    {
-        return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title;
-    }
-}
-class script_usages
-{
-    public int active, inactive;
-}
-public class Image
-{
-    public int ns;
-    public string title;
-}
-public class Limits
-{
-    public int allpages, images, revisions;
-}
-public class Page
-{
-    public int pageid, ns;
-    public string title;
-    public List<Image> images;
-    public List<Revision> revisions;
-}
-public class Query
-{
-    public List<Page> pages;
-    public List<Allpage> allpages;
-}
-public class Root
-{
-    public bool batchcomplete;
-    public Limits limits;
-    public Query query;
-    public Continue @continue;
-}
-public class Revision
-{
-    public DateTime timestamp;
-}
-public class Allpage
-{
-    public int pageid;
-    public int ns;
-    public string title;
-}
-public class Continue
-{
-    public string apcontinue;
-    public string @continue;
-}
+class most_edits_record { public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index; public bool globalbot; }
+class redir { public string src_title, dest_title; public int src_ns, dest_ns; public override string ToString() { return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title; } }
+class script_usages { public int active, inactive;}
+class pair { public string page, file; public logrecord deletion_data; }
+class logrecord { public string deleter, comment; }
+public class Image { public int ns; public string title; }
+public class Limits { public int allpages, images, revisions; }
+public class Page { public int pageid, ns; public string title; public List<Image> images; public List<Revision> revisions; }
+public class Query { public List<Page> pages; public List<Allpage> allpages; }
+public class Root { public bool batchcomplete; public Limits limits; public Query query; public Continue @continue; }
+public class Revision { public DateTime timestamp; }
+public class Allpage { public int pageid; public int ns; public string title; }
+public class Continue { public string apcontinue; public string @continue; }
 class Program
 {
-    static DateTime now; static string[] monthname, prepositional, creds; static HashSet<string> highflags = new HashSet<string>();
+    static DateTime now; static string[] monthname, prepositional, creds; static HashSet<string> highflags = new HashSet<string>(); static HttpClient site;
     static string resulttext_per_year, resulttext_per_month, resulttext_alltime, user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика" +
         " по числу итогов, подведённых %type%.\n\nСтатистика собирается поиском по тексту страниц обсуждений и потому верна лишь приближённо, нестандартный синтаксис итога или подписи итогоподводящего " +
         "может привести к тому, что такой итог не будет засчитан. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ и ЗКП(АУ).\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!" +
         "Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|]]}}!!{{vh|[[ВП:КУЛ|]]}}!!{{vh|[[ВП:ЗКА|]]}}!!" +
         "{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!{{vh|[[ВП:ЗСПИ|]]}}!!{{vh|[[ВП:ЗСФ|]]}}!!{{vh|[[ВП:КОИ|]]}}!!{{vh|[[ВП:ИСЛ|]]}}!!" +
         "{{vh|[[ВП:ЗКП|]][[ВП:ЗКПАУ|(АУ)]]}}!!{{vh|[[ВП:КИС|]]}}!!{{vh|[[ВП:КИСЛ|]]}}!!{{vh|[[ВП:КХС|]]}}!!{{vh|[[ВП:КЛСХС|]]}}!!{{vh|[[ВП:КДС|]]}}!!{{vh|[[ВП:КЛСДС|]]}}!!{{vh|[[ВП:КИСП|]]}}!!{{vh|[[ВП:" +
-        "КЛСИСП|]]}}!!{{vh|[[ВП:РДБ|]]}}!!{{vh|[[ВП:ФТ|]]+[[ВП:ТЗ|]]}}!!{{vh|[[ВП:Ф-АП|АП]]}}", debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт",
-        orphan_article, username, invoking_page; static HttpClient site;
+        "КЛСИСП|]]}}!!{{vh|[[ВП:РДБ|]]}}!!{{vh|[[ВП:ФТ|]]+[[ВП:ТЗ|]]}}!!{{vh|[[ВП:Ф-АП|АП]]}}", debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт", orphan_article, username,
+        invoking_page, file_exclusion_query;
     static Dictionary<string, Dictionary<string, Dictionary<string, int>>> stats = new Dictionary<string, Dictionary<string, Dictionary<string, int>>>
     { { "month", new Dictionary<string, Dictionary<string, int>>() }, { "year", new Dictionary<string, Dictionary<string, int>>() }, { "alltime", new Dictionary<string, Dictionary<string, int>>() } };
     static HashSet<string> invoking_pages = new HashSet<string>(), script_users = new HashSet<string>(); static MySqlCommand command; static MySqlDataReader rdr; static MySqlConnection connect;
@@ -1686,11 +1639,122 @@ class Program
             connect.Close();
         } catch { }
     }
+    static void exclude_deleted_files()
+    {
+        file_exclusion_query = "https://{domain}.org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|comment&leaction=delete/delete&lenamespace=6&lelimit=max&leend=" + now.AddDays(-1)
+            .ToString("yyyy-MM-ddTHH:mm:ss"); run_ru(); run_commons();
+    }
+    static void delete_transclusion(pair dp, bool isCommons)
+    {
+        string initial_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(dp.page) + "?action=raw").Result; string new_page_text = initial_text;
+        string filename = dp.file[4] == ':' ? dp.file.Substring(5) : dp.file; string rgxtext = filename.Replace(" ", "[ _]+"); rgxtext = "(" + rgxtext + "|" + e(filename) + ")";
+        var r1 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
+        var r2 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
+        var r3 = new Regex(@" *<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var r4 = new Regex(@" *(<\s*gallery[^>]*>.*)(file|image|файл|изображение):\s*" + rgxtext + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var r5 = new Regex(@" *(<\s*gallery[^>]*>.*)" + rgxtext + @"[^\n]*", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var r6 = new Regex(@" *<\s*gallery[^>]*>\s*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var r7 = new Regex(@" *\{\{\s*(flagicon image|audio)[^|}]*\|\s*" + rgxtext + @"[^}]*\}\}");
+        var r8 = new Regex(@" *([=|]\s*)(file|image|файл|изображение):\s*" + rgxtext, RegexOptions.IgnoreCase);
+        var r9 = new Regex(@" *([=|]\s*)" + rgxtext, RegexOptions.IgnoreCase); new_page_text = r1.Replace(new_page_text, "");
+        new_page_text = r2.Replace(new_page_text, ""); new_page_text = r3.Replace(new_page_text, ""); new_page_text = r4.Replace(new_page_text, "$1"); new_page_text = r5.Replace(new_page_text, "$1");
+        new_page_text = r6.Replace(new_page_text, ""); new_page_text = r7.Replace(new_page_text, ""); new_page_text = r8.Replace(new_page_text, "$1"); new_page_text = r9.Replace(new_page_text, "$1");
+        if (new_page_text != initial_text)
+            try
+            {
+                string comment = "[[file:" + filename + "]] удалён [[user:" + dp.deletion_data.deleter + "]] по причине " + dp.deletion_data.comment;
+                save("ru", dp.page, new_page_text, isCommons ? comment.Replace("[[", "[[c:") : comment);
+                if (dp.page.StartsWith("Шаблон:")) {
+                    string logpage_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/u:MBH/Шаблоны с удалёнными файлами?action=raw").Result;
+                    rsave("u:MBH/Шаблоны с удалёнными файлами", logpage_text + "\n* [[" + dp.page + "]]");
+                }
+            }
+            catch (Exception e) { Console.WriteLine(e.ToString()); }
+    }
+    static void find_and_delete_usages(Dictionary<string, logrecord> deletedfiles, bool iscommons)
+    {
+        foreach (var df in deletedfiles.Keys.ToList()) {
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(df)).Result)))
+                while (r.Read())
+                    if (r.Name == "page" && r.GetAttribute("_idx")[0] != '-')
+                        deletedfiles.Remove(r.GetAttribute("title"));
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + e(df)).Result))) {
+                bool file_is_used = true; string ru_filename = ""; while (r.Read()) {
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "page") { ru_filename = r.GetAttribute("title"); file_is_used = r.GetAttribute("_idx")[0] != '-'; }
+                    if (r.Name == "fu" && !file_is_used) { int ns = Convert.ToInt16(r.GetAttribute("ns"));
+                        if (ns % 2 == 0 && ns != 4 && ns != 104 && ns != 106)
+                            try { delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename.Replace("Файл:", "File:")], page = r.GetAttribute("title") }, iscommons); }
+                            catch { try { delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename], page = r.GetAttribute("title") }, iscommons); } catch { } }
+                    }
+                }
+            }
+        }
+    }
+    static void run_commons()
+    {
+        var deletedfiles = new Dictionary<string, logrecord>(); string cont = "", query = file_exclusion_query.Replace("{domain}", "commons.wikimedia");
+        var invalid_reasons_for_deletion = new Regex("temporary|maintenance|old revision|redirect", RegexOptions.IgnoreCase);
+        while (cont != null)
+            using (var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result))) {
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue"); while (r.Read())
+                    if (r.Name == "item") {
+                        string title = r.GetAttribute("title");
+                        if (title == null) continue;
+                        string comment = r.GetAttribute("comment") ?? "";
+                        if (!deletedfiles.ContainsKey(title) && !invalid_reasons_for_deletion.IsMatch(comment))
+                            deletedfiles.Add(title, new logrecord { deleter = r.GetAttribute("user"), comment = comment });
+                    }
+            }
+        find_and_delete_usages(deletedfiles, true);
+    }
+    static void run_ru()
+    {
+        var deletedfiles = new Dictionary<string, logrecord>(); var replacedfiles = new Dictionary<string, logrecord>(); var usages_for_deletion = new HashSet<pair>(); var replacingpairs = new HashSet<pair>();
+        string cont = "", query = file_exclusion_query.Replace("{domain}", "ru.wikipedia"); var commons_importer_link = new Regex(@"commons.wikimedia.org/wiki/File:([^ ])", RegexOptions.IgnoreCase);
+        var file_is_replaced_rgx = new Regex("КБУ#Ф[178]|икисклад|ommons", RegexOptions.IgnoreCase); var inner_link_to_replacement_file = new Regex(@"\[\[(:?c:|:?commons:|)(File|Файл):([^\]]*)\]\]", RegexOptions.IgnoreCase);
+        while (cont != null) {
+            using (var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result))) {
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue"); while (r.Read())
+                    if (r.Name == "item" && r.GetAttribute("title") != null) {
+                        string comm = r.GetAttribute("comment") ?? ""; string filename = r.GetAttribute("title"); bool same_name_on_commons_exist = false;
+                        using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=file:" +
+                            e(filename.Substring(5))).Result)))
+                            while (rr.Read())
+                                if (rr.Name == "page" && rr.GetAttribute("_idx")[0] != '-')
+                                    same_name_on_commons_exist = true;
+                        if (!same_name_on_commons_exist)
+                            if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
+                            filename.Substring(5)) || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
+                                replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
+                            else if (!deletedfiles.ContainsKey(filename))
+                                deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
+                    }
+            }
+        }
+        foreach (var rf in replacedfiles.Keys.ToList())
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + e(rf)).Result))) {
+                bool file_exists = true; string filename = "";
+                while (r.Read()) {
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "page") { filename = r.GetAttribute("title").Substring(5); file_exists = r.GetAttribute("_idx")[0] != '-'; }
+                    if (r.Name == "fu" && !file_exists && i(r.GetAttribute("ns")) % 2 == 0) {
+                        var page = r.GetAttribute("title"); string initial_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(page) + "?action=raw").Result; string newname;
+                        try { newname = inner_link_to_replacement_file.Match(replacedfiles[rf].comment).Groups[3].Value; } catch { newname = commons_importer_link.Match(replacedfiles[rf].comment).Groups[1].Value; }
+                        string rgxtext = filename.Replace(" ", "[ _]"); rgxtext = "(" + rgxtext + "|" + e(filename) + ")"; var rgx = new Regex(rgxtext, RegexOptions.IgnoreCase);
+                        string new_page_text = rgx.Replace(initial_text, newname);
+                        if (new_page_text != initial_text)
+                            try { save("ru", page, new_page_text, "[[" + rf + "]] удалён [[u:" + replacedfiles[rf].deleter + "]] по причине " + replacedfiles[rf].comment); }
+                            catch (Exception e) { Console.WriteLine(e.ToString()); }
+                    }
+                }
+            }
+        find_and_delete_usages(deletedfiles, false);
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
