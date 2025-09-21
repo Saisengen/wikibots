@@ -1,19 +1,13 @@
-- name: hourly
-  command: mono /data/project/mbh/bots/exclude-deleted-files.exe
-  image: tf-mono68
-  schedule: "3 * * * *"
-  emails: onfailure
-
 - name: daily
   command: mono /data/project/mbh/bots/everyday_job.exe
   image: tf-mono68
-  schedule: "05 23 * * *"
+  schedule: "3 0 * * *"
   emails: onfailure
 
 - name: monthly
   command: mono /data/project/mbh/bots/monthly_job.exe
   image: tf-mono68
-  schedule: "41 0 1 * *"
+  schedule: "5 0 1 * *"
   emails: onfailure
 
 #- name: sparql-sync
