@@ -24,7 +24,7 @@ def posting(title: str) -> None:
 
 while True:
     # На Тулфорже невозможно простым способом записать переменные окружерния из процесса
-    f = open('py/other/newbie_help_current.txt', 'r+')
+    f = open('py/newbie_help_current.txt', 'r+')
     TIMESTAMP, PAGE_ID = f.readlines()[0].split('|')
     f.close()
     print(PAGE_ID)
@@ -44,7 +44,7 @@ while True:
             if str(page['pageid']) == PAGE_ID and page["timestamp"] == TIMESTAMP:
                 continue
 
-            f = open('py/other/newbie_help_current.txt', 'w+')
+            f = open('py/newbie_help_current.txt', 'w+')
             f.write(f'{page["timestamp"]}|{page["pageid"]}')
             f.close()
 
