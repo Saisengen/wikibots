@@ -1,0 +1,375 @@
+"""Настройки и полезные функции."""
+
+import asyncio
+from os import environ
+from pymysql.cursors import Cursor
+from toolforge import toolsdb
+from functools import wraps
+from contextlib import contextmanager
+from threading import Lock
+from typing import Callable, Coroutine, Generator
+from datetime import datetime, timezone
+from aiohttp import ClientSession
+from discord import Interaction
+
+BOT_NAME = 'Железный капут'
+
+DB = f'{environ['TOOL_TOOLSDB_USER']}__rv'
+
+HEADERS = {'Authorization': f'Bearer {environ['BEARER_TOKEN']}', 'User-Agent': f'{BOT_NAME} (tools.rv@tools.wmflabs.org; maintainer Well very well; Discord @tsap_wl); python3.11'}
+WAB2_HEADERS = HEADERS | {'Authorization': environ['WAB2_API_KEY']}
+
+DISCORD_TOKEN = environ['DISCORD_BOT_TOKEN']
+
+DOMAINS = {
+    'ru': 'ru.wikipedia',
+    'uk': 'uk.wikipedia',
+    'be': 'be.wikipedia',
+    'wd': 'www.wikidata',
+    'c':  'commons.wikimedia',
+    'm':  'meta.wikimedia'
+}
+
+SERVERS = [1044474820089368666]
+
+SOURCE_CHANNEL = 1237345566950948867
+STREAM_CHANNELS = {
+    'ru': 1212498198200062014,
+    'uk': 1219273496371396681,
+    'be': 1342471984671625226,
+    'wd': 1348216089825509450,
+    'c' : 1348216377789382656
+}
+
+ADMINS = [512545053223419924, 352826965494988822, 223219998745821194, 404697139034456090]
+
+BOT = 1225008116048072754
+SOURCE_BOT = 1237362558046830662
+
+USERS_PAGE = f'User:{BOT_NAME}/users.json'
+
+UPDATE_USERS_SUMMARY = {
+    'add':    'Bot: add user {} to trusted by request of {}',
+    'remove': 'Bot: remove user {} from trusted by request of {}'
+}
+
+LOG_TEMPLATES = {
+    'rollback': '{} выполнил откат на странице {}.',
+    'rfd':      '{} номинировал {} на быстрое удаление.',
+    'undo':     '{} выполнил отмену на странице {}.',
+    'good':     '{} одобрил правку на странице {}.',
+    'bad':      '{} отметил правку на странице {} как неконструктивную, но уже отменённую.'
+}
+
+SUMMARY = {
+    'rollback': {
+        'ru': 'Бот: откат правок {} по запросу {}',
+        'uk': 'Бот: відкинуто редагування {} за запитом {}',
+        'be': 'Бот: хуткі адкат правак {} па запыце {}',
+        'wd': 'Bot: rollback of {}\'s edits by request of {}',
+        'c' : 'Bot: rollback of {}\'s edits by request of {}'
+    },
+    'rfd': {
+        'ru': 'Бот: номинация на КБУ по запросу {1}. См. [[ВП:ЧДКУ|что делать, если ваша статья стала кандидатом на удаление]]',
+        'uk': 'Бот: номінація на швидке вилучення за запитом {1}',
+        'be': 'Бот: намінацыя на хуткае выдаленне па запыце {1}',
+        'wd': 'Bot: nomination for deletion by request of {1}',
+        'c' : 'Bot: nomination for speedy deletion by request of {1}'
+    },
+    'undo': {
+        'ru': 'Бот: отмена правки {} по запросу {}: {}. См. [[ВП:ЧДОТМ|что делать, если вашу правку отменили]]',
+        'uk': 'Бот: скасування редагування {} за запитом {}: {}',
+        'be': 'Бот: адкат праўкі {} па запыце {}: {}',
+        'wd': 'Bot: undo of {}\'s edit by request of {}: {}',
+        'c' : 'Bot: undo of {}\'s edit by request of {}: {}'
+    }
+}
+
+# менять пункты/добавлять новые можно, ПЕРЕИМЕНОВЫВАТЬ БЕЗ СОГЛАСОВАНИЯ С ВЕЛЛОМ НЕЛЬЗЯ. допустимо не больше 25 пунктов
+REASONS = {
+    'rfd': {
+        'Бессвязное содержимое': {
+            'ru': '{{уд-бессвязно}}',
+            'uk': '{{db-nonsense}}',
+            'be': '{{хв|Бессэнсоўнае змесціва}}',
+            'wd': '{{delete|Non-meaningful content}}',
+            'c' : '{{SD|G1}}'
+        },
+        'Вандализм': {
+            'ru': '{{уд-ванд}}',
+            'uk': '{{db-vand}}',
+            'be': '{{хв|Вандалізм}}',
+            'wd': '{{delete|Vandalism}}',
+            'c' : '{{SD|G3}}'
+        },
+        'Тестовая страница': {
+            'ru': '{{уд-тест}}',
+            'uk': '{{db-test}}',
+            'be': '{{хв|Тэставая старонка}}',
+            'wd': '{{delete|Test page}}',
+            'c' : '{{SD|G1}}'
+        },
+        'Реклама / спам': {
+            'ru': '{{уд-реклама}}',
+            'uk': '{{db-spam}}',
+            'be': '{{хв|Рэклама або спам}}',
+            'wd': '{{delete|Advertisement or spam}}',
+            'c' : '{{SD|G10}}'
+        },
+        'Пустая статья': {
+            'ru': '{{уд-пусто}}',
+            'uk': '{{db-nocontext}}',
+            'be': '{{хв|Пустая старонка}}',
+            'wd': '{{delete|Empty element}}',
+            'c' : '{{SD|G1}}'
+        },
+        'На иностранном языке': {
+            'ru': '{{уд-иностр}}',
+            'uk': '{{db-lang}}',
+            'be': '{{хв|На замежнай мове}}'
+        },
+        'Нет значимости': {
+            'ru': '{{уд-нз}}',
+            'uk': '{{db-nn}}',
+            'be': '{{хв|Няма значнасці}}',
+            'wd': '{{delete|Not notable}}',
+            'c' : '{{speedydelete|Not notable}}'
+        },
+        'Форк': {
+            'ru': '{{db-fork|$1}}',
+            'uk': '{{db-duplicate|$1}}',
+            'be': '{{хв|Дублікат артыкула [[$1]]}}',
+            'wd': '{{merge|$1}}',
+            'c' : '{{SD|F8|$1}}'
+        },
+        'Репост': {
+            'ru': '{{db-repost}}',
+            'uk': '{{db-repost}}',
+            'be': '{{хв|Рэпост / аднаўленне старонкі ў абыход працэдуры [[ВП:АВС|]]}}',
+            'wd': '{{delete|Deleted item recreation}}',
+            'c' : '{{SD|G4}}'
+        },
+        'Нецелевое использование СО': {
+            'ru': '{{db-badtalk}}',
+            'uk': '{{db-reason|Нецільове використання або порожня сторінка обговорення}}',
+            'be': '{{хв|Нямэтавае выкарыстанне або пустая старонка размоў}}',
+            'wd': '{{delete|Questionable use of talk page or an empty one}}',
+            'c' : '{{SD|G1}}'
+        },
+        'Явное нарушение файлом АП': {
+            'ru': '{{subst:dd}}',
+            'uk': '{{db-filecopyvio}}',
+            'be': '{{хв|Відавочнае парушэнне файлам аўтарскіх правоў}}',
+            'c' : '{{SD|F1}}'
+        },
+        'Файл без источника': {
+            'ru': '{{subst:nsd}}',
+            'uk': '{{subst:nsd}}',
+            'be': '{{хв|Файл без крыніцы}}',
+            'c' : '{{subst:nsd}}'
+        },
+        'Файл без лицензии': {
+            'ru': '{{subst:nld}}',
+            'uk': '{{subst:nld}}',
+            'be': '{{хв|Файл без ліцэнзіі}}',
+            'c' : '{{subst:nld}}'
+        },
+        'Файл без разрешения': {
+            'ru': '{{subst:npd}}',
+            'uk': '{{subst:npd}}',
+            'be': '{{хв|Файл без дазволу}}',
+            'c' : '{{subst:npd}}'
+        },
+        'Не будущий использоваться файл': {
+            'ru': '{{subst:nothost}}',
+            'uk': '{{subst:nothost}}',
+            'be': '{{хв|Файл без выкарыстання}}',
+            'c' : '{{speedydelete|[[COM:HOST]]}}'
+        },
+        'Повреждённый или пустой файл': {
+            'ru': '{{db-badimage}}',
+            'uk': '{{db-corruptfile}}',
+            'be': '{{хв|Пашкоджаны ці пусты файл}}',
+            'c' : '{{SD|F7}}'
+        },
+        'своя причина': {
+            'ru': '{{delete|$1}}',
+            'uk': '{{db-reason|$1}}',
+            'be': '{{хв|$1}}',
+            'wd': '{{delete|$1}}',
+            'c' : '{{speedydelete|$1}}'
+        },
+        'закрыть': {}
+    },
+    'undo': {
+        'Нарушение АП': {
+            'ru': '[[ВП:КОПИВИО|копирование текста из несвободных источников]]',
+            'uk': '[[ВП:АП|копіювання тексту з невільних джерел]]',
+            'be': '[[ВП:КОПІВІА|капіраванне тэксту з несвабодных крыніц]]',
+            'wd': 'copyright violation',
+            'c' : '[[Commons:Licensing|copyright violation]]'
+        },
+        'Нет АИ': {
+            'ru': 'добавление сомнительного содержимого [[ВП:ПРОВ|без источников]] или [[ВП:ОРИСС|оригинального исследования]]',
+            'uk': 'додавання сумнівної інформації [[ВП:В|без джерел]] або [[ВП:ОД|оригінального дослідження]]',
+            'be': 'дабаўленне сумніўнай інфармацыі [[ВП:ПРАВ|без крыніц]] або [[ВП:НУДА|ўласнага даследвання]]',
+            'wd': 'adding an original research or dubious information [[WD:V|without sources]]',
+            'c' : 'adding an original research of dubious information [[Commons:Verifiability|without sources]]'
+        },
+        'Порча вики-разметки': {
+            'ru': 'порча [[ВП:Викиразметка|викиразметки]] статьи',
+            'uk': 'псування [[Вікірозмітка|вікірозмітки]] статті',
+            'be': 'псаванне [[Вікіпедыя:Вікіразметка|вікіразметкі]] артыкула',
+            'wd': 'breaking page\'s markup',
+            'c' : 'breaking page\'s markup'
+        },
+        'Спам': {
+            'ru': 'добавление [[ВП:ВС|ненужных / излишних ссылок]] или спам',
+            'uk': 'додавання [[ВП:УНИКАТИПОС|непотрібних / зайвих посилань]] або спам',
+            'be': 'дабаўленне непатрэбных / залішніх спасылак або спам',
+            'wd': 'adding unneeded / redundant links or spam',
+            'c' : 'adding unneeded / redundant links or [[COM:SPAM|spam]]'
+        },
+        'Незначимый факт': {
+            'ru': 'отсутствует [[ВП:Значимость факта|энциклопедическая значимость]] факта',
+            'uk': 'відсутня [[ВП:ЗВ|значущість]] факту',
+            'be': 'адсутнічае [[ВП:КЗ|значнасць]] факта',
+            'wd': '[[WD:N|non-notable fact or item]]',
+            'c' : 'non-notable fact or [[COM:EV|non-useful image]]'
+        },
+        'Сомнительное переименование': {
+            'ru': 'попытка переименования объекта по тексту без [[ВП:ПЕРЕ|переименования страницы]] или иное сомнит. переименование. Воспользуйтесь [[ВП:КПМ|специальной процедурой]]',
+            'uk': 'перейменування по тексту без перейменування сторінки',
+            'be': 'перайменаванне ў тэксце без перайменавання артыкула. Карыстайцесь [[ВП:Да перайменавання|адмысловай старонкай]]',
+            'wd': 'questionable rename',
+            'c' : 'questionable rename'
+        },
+        'Подлог источника': {
+            'ru': '[[ВП:ПОДИСТ|изменение информации, подтверждённой источником, без его изменения]]',
+            'uk': '[[ВП:ВАНД|заміна інформації, підтвердженої джерелом, без зміни джерела]]',
+            'be': '[[ВП:ПРАВ|змяненне пацверджанай інфармацыі без замены крыніцы]]',
+            'wd': '[[WD:V|changing information with a source without changing it]]',
+            'c' : '[[Commons:Verifiability|changing information with a source without changing it]]'
+        },
+        'Удаление содержимого': {
+            'ru': 'необъяснённое удаление содержимого страницы',
+            'uk': 'видалення вмісту сторінки',
+            'be': 'выдаленне змесціва старонкі без тлумачэння',
+            'wd': 'unexplained removal of information',
+            'c' : 'unexplained removal of information'
+        },
+        'Орфография, пунктуация': {
+            'ru': 'добавление орфографических или пунктуационных ошибок',
+            'uk': 'додавання орфографічних або пунктуаційних помилок',
+            'be': 'дабаўленне арфаграфічных або пунктуацыйных памылак',
+            'wd': 'adding typos or grammatical mistakes',
+            'c' : 'adding typos or grammatical mistakes'
+        },
+        'На другом языке': {
+            'ru': 'добавление содержимого не на русском языке',
+            'uk': 'додавання вмісту не українською мовою',
+            'be': 'дабаўленне змесціва не на беларускай мове',
+            'wd': 'content in different language',
+            'c' : 'content in different language'
+        },
+        'Удаление шаблонов': {
+            'ru': 'попытка необоснованного удаления служебных или номинационных шаблонов',
+            'uk': 'спроба необґрунтованого видалення службових або номінаційних шаблонів',
+            'be': 'спроба неабгрунтаванага выдалення службовых або намінацыйных шаблонаў',
+            'wd': 'removal of problem templates',
+            'c' : 'removal of problem templates'
+        },
+        'Личное мнение': {
+            'ru': '[[ВП:НЕФОРУМ|изложение личного мнения]] об объекте статьи. Википедия не является [[ВП:НЕФОРУМ|форумом]] или [[ВП:НЕТРИБУНА|трибуной]]',
+            'uk': 'виклад особистої думки про об\'єкт статті. [[ВП:НЕТРИБУНА|Вікіпедія — не трибуна]]',
+            'be': 'выказванне асабістага меркавання аб аб\'екце артыкула. [[ВП:ЧНЗВ|Вікіпедыя не з\'яўляецца форумам або трыбунай]]',
+            'wd': 'sharing personal opinion on page',
+            'c' : 'sharing personal opinion on page'
+        },
+        'Комментарии в статье': {
+            'ru': 'добавление комментариев в статью. Комментарии и пометки оставляйте на [[Talk:$1|странице обсуждения]] статьи',
+            'uk': 'додавання коментарів до статті. Коментарі та позначки залишайте на [[Talk:$1|сторінці обговорення]] статті',
+            'be': 'дабаўленне каментароў у артыкул. Каментары і паметкі пакідайце на адмысловай [[Talk:$1|старонцы размоў]]',
+            'wd': 'adding comments to a page. Use [[Talk:$1|talk page]] for that',
+            'c' : 'adding comments to a page. Use [[Talk:$1|talk page]] for that'
+        },
+        'Ненейтральный стиль': {
+            'ru': 'добавление текста в [[ВП:НТЗ|ненейтральном]] или [[ВП:СТИЛЬ|рекламном]] стиле',
+            'uk': 'додавання тексту в [[ВП:НТЗ|ненейтральному]] або [[ВП:СТИЛЬ|рекламному]] стилі',
+            'be': 'дабаўленне тэксту ў [[ВП:НПГ|ненейтральным]] або [[Вікіпедыя:Чым не з’яўляецца Вікіпедыя#Вікіпедыя — не трыбуна|рэкламным]] стылі',
+            'wd': 'adding non-neutral or advertising text',
+            'c' : 'adding [[COM:POV|non-neutral]] or [[COM:SPAM|advertising]] text'
+        },
+        'НЕГУЩА': {
+            'ru': '[[ВП:НЕГУЩА|описание ещё не случившихся возможных событий]]',
+            'uk': '[[ВП:ПРОРОК|опис можливих подій, які ще не відбулися]]',
+            'be': '[[Вікіпедыя:Чым не з’яўляецца Вікіпедыя#Вікіпедыя — не кававая гушча|апісанне падзей, якія яшчэ не здарыліся]]',
+            'wd': 'description of probable events that didn\'t happen yet',
+            'c' : 'description of probable events that didn\'t happen yet'
+        },
+        'Троллинг': {
+            'ru': 'троллинг',
+            'uk': 'тролінг',
+            'be': 'тролінг',
+            'wd': 'trolling',
+            'c' : 'trolling'
+        },
+        'Не относится к Википедии': {
+            'ru': 'не относится к Википедии',
+            'uk': 'не стосується Вікіпедії',
+            'be': 'не датычыцца Вікіпедыі',
+            'wd': 'not related to Wikidata',
+            'c' : 'not related to Commons'
+        },
+        'Удаление сообщений с СО': {
+            'ru': '[[ВП:СОУ|запрещено удалять сообщения]] со своей страницы обсуждения; воспользуйтесь [[ВП:АСО|архивацией]]',
+            'be': 'не выдаляйце паведамленні са сваёй старонкі размоў; лепш карыстайцеся [[Вікіпедыя:Архівацыя|архівацыяй]]',
+            'wd': 'please don\'t delete messages from talk page, use archiving instead',
+            'c' : '[[COM:CIDWIW|please don\'t delete messages]] from talk page, use [[COM:ARCHIVE|archiving]] instead'
+        },
+        'своя причина': {},
+        'закрыть': {}
+    }
+}
+
+lock = Lock()
+conn = toolsdb(DB)
+
+def now() -> datetime:
+    """Получение текущего времени."""
+    return datetime.now(timezone.utc)
+
+@contextmanager
+def get_cursor() -> Generator[Cursor, None, None]:
+    """Получение курсора БД и перезапуск соединения, если требуется."""
+    try:
+        lock.acquire()
+        conn.ping()
+        yield conn.cursor()
+        conn.commit()
+    finally:
+        lock.release()
+
+def to_thread(func: Callable) -> Coroutine:
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        return await asyncio.to_thread(func, *args, **kwargs)
+    return wrapper
+
+session = None
+
+async def set_session(s: ClientSession) -> None:
+    global session
+    session = s
+
+def get_session() -> ClientSession:
+    return session
+
+def admin(func: Callable) -> Coroutine:
+    """Декоратор проверки, что пользователь является администратором бота."""
+    @wraps(func)
+    async def wrapper(interaction: Interaction, *args, **kwargs):
+        if interaction.user.id in ADMINS:
+            return await func(interaction, *args, **kwargs)
+        await interaction.response.send_message(ephemeral=True, content='Для выполнения этой команды требуются права администратора бота.')
+    return wrapper
