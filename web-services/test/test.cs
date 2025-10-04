@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 internal class Program
 {
     static void Main()
     {
+        Thread.Sleep(6*60*1000);
         Console.WriteLine("Content-type: text/html\n");
         var allvars = Environment.GetEnvironmentVariables();
         var dict = new Dictionary<string, string>();
@@ -12,8 +14,8 @@ internal class Program
         foreach (var v in allvars.Keys)
             dict.Add(v.ToString(), allvars[v].ToString());
 
-        foreach (var key in dict.Keys.OrderBy(d => d))
-            Console.WriteLine("<tr><td>" + key + "</td><td>" + ((key.Contains("PASS") || key == "CONN_STRING") ? "" : dict[key]) + "</td></tr>\n");
+        foreach (var record in dict.OrderBy(d => d.Key))
+            Console.WriteLine("<tr><td>" + record.Key + "</td><td>" + ((record.Key.Contains("PASS") || record.Key.Contains("CRED")) ? "" : record.Value) + "</td></tr>\n");
         Console.WriteLine("</table></body>");
     }
 }
