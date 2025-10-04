@@ -1,34 +1,22 @@
-"""Анти-вандальный бот"""
+"""Модуль антивандальной системы."""
 
 import json
 import re
 import logging
 from asyncio import sleep
 from urllib.parse import unquote
-from functools import wraps
 from aiohttp import ClientSession
-from typing import Literal, Callable, Coroutine
-
-from discord import SelectOption, Client, Embed, Message, Interaction, User, Intents, AllowedMentions, ButtonStyle, Status, Game, ChannelType, TextChannel, Guild
+from typing import Literal, Coroutine
+from discord import SelectOption, Client, Embed, Message, Interaction, User, ButtonStyle, ChannelType, TextChannel
 from discord.app_commands import CommandTree, Group, Choice, autocomplete
-from discord.ext import tasks
 from discord.ui import Button, button, View, Select, select, TextInput, Modal
-
-from antivand_config import BOT_NAME, HEADERS, WAB2_HEADERS, DOMAINS, DISCORD_TOKEN, SERVERS, SOURCE_CHANNEL, STREAM_CHANNELS, ADMINS, BOT, SOURCE_BOT, USERS_PAGE, UPDATE_USERS_SUMMARY, LOG_TEMPLATES, SUMMARY, REASONS
-from antivand_db import now, db_record_action, db_get_stats, db_remove_user, db_store_ad_message, db_get_expired_ads, db_sort_users
+from antivand_utils import BOT_NAME, HEADERS, WAB2_HEADERS, DOMAINS, SOURCE_CHANNEL, STREAM_CHANNELS, ADMINS, BOT, SOURCE_BOT, USERS_PAGE, UPDATE_USERS_SUMMARY, LOG_TEMPLATES, SUMMARY, REASONS, now, get_cursor, to_thread, set_session, admin
 
 USERS = []
 DISCORD_TO_WIKI = {}
 
-intents = Intents.default()
-intents.message_content = True
-client = Client(intents=intents, allowed_mentions=AllowedMentions.none())
-
-tree = CommandTree(client)
 users = Group(name='users', description='Команды, затрагивающие список доверенных пользователей.')
-stats = Group(name='stats', description='Команды, затрагивающие статистику действий через бота')
-tree.add_command(users)
-tree.add_command(stats)
+stats = Group(name='stats', description='Команды, затрагивающие статистику действий через антивандальную систему')
 
 template_regexp = re.compile(r'{{(.+)\|(.+)}}')
 author_regexp = re.compile(r'https://\w+\.\w+\.org/wiki/special:contribs/(\S+)')
@@ -80,7 +68,7 @@ async def request(func: Coroutine, type: Literal['text', 'JSON'] = 'text'):
         try:
             res = await func()
             if not res.ok:
-                raise Exception(str(res.status_code))
+                raise Exception(str(res.status))
             return await (res.json() if type == 'JSON' else res.text())
         except Exception as e:
             if _ == 4:
@@ -121,21 +109,62 @@ async def update_users(action: Literal['add', 'remove'], user: str, admin: str) 
     if r.get('errors'):
         raise Exception(r['errors'][0]['text'])
 
+@to_thread
+def db_record_action(actor: str, action_type: str, embed: Embed, bad: bool = False) -> None:
+    """Запись действия в БД."""
+    triggers_dict = {'#ff0000': 'patterns', '#ffff00': 'LW', '#ff00ff': 'ORES', '#00ff00': 'tags', '#ffffff': 'replaces', '#ff8000': 'LW', '#00ffff': 'replaces'}
+    color = str(embed.color)
+    trigger = triggers_dict[color] if color in triggers_dict else 'unknown'
+    with get_cursor() as cur:
+        cur.execute('SELECT name FROM ds_antivandal WHERE name=%s', actor)
+        res = cur.fetchone()
+        if res:
+            cur.execute(f'UPDATE ds_antivandal SET {action_type} = {action_type}+1, {trigger} = {trigger}+1 WHERE name = %s', actor)
+        else:
+            cur.execute(f'INSERT INTO ds_antivandal (name, {action_type}, {trigger}) VALUES (%s, 1, 1)', actor)
+        if bad:
+            cur.execute(f'UPDATE ds_antivandal_false SET {trigger} = {trigger}+1 WHERE result = "stats"')
+
+@to_thread
+def db_get_stats(actor: str | None, limit: int) -> dict[Literal['rollbacks', 'undos', 'approves', 'rfd', 'total', 'patterns', 'LW', 'ORES', 'tags', 'replaces', 'false_triggers'], int | list[tuple[str, int]] | list[int]]:
+    """Получение статистики из БД."""
+    with get_cursor() as cur:
+        if not actor:
+            cur.execute('SELECT SUM(rollbacks), SUM(undos), SUM(approves), SUM(patterns), SUM(LW), SUM(ORES), SUM(tags), SUM(rfd), SUM(replaces) FROM ds_antivandal')
+            r = cur.fetchone()
+            cur.execute('SELECT name, rollbacks + undos + approves + rfd AS am FROM ds_antivandal WHERE name != "service_account" ORDER BY am DESC LIMIT %s', limit or 100)
+            total = cur.fetchall()
+            cur.execute('SELECT patterns, LW, ORES, tags, replaces FROM ds_antivandal_false WHERE result = "stats"')
+            false_triggers = cur.fetchone()
+        else:
+            cur.execute('SELECT rollbacks, undos, approves, patterns, LW, ORES, tags, rfd, replaces FROM ds_antivandal WHERE name=%s', actor)
+            r = cur.fetchone()
+            total = []
+            false_triggers = []
+    if r:
+        return {'rollbacks': r[0], 'undos': r[1], 'approves': r[2], 'rfd': r[7], 'total': total, 'patterns': r[3], 'LW': r[4], 'ORES': r[5], 'tags': r[6], 'replaces': r[8], 'false_triggers': false_triggers}
+    return {'rollbacks': 0, 'undos': 0, 'approves': 0, 'rfd': 0, 'patterns': 0, 'LW': 0, 'ORES': 0, 'tags': 0, 'replaces': 0}
+
+@to_thread
+def db_remove_user(actor: str) -> None:
+    """Удаление статистики пользователя из БД."""
+    with get_cursor() as cur:
+        cur.execute('DELETE FROM ds_antivandal WHERE name=%s', actor)
+
+@to_thread
+def db_sort_users(users: list[str]) -> dict[int, str]:
+    """Получение списка доверенных участников, отсортированного по количеству действий."""
+    with get_cursor() as cur:
+        cur.execute('SELECT name FROM ds_antivandal ORDER BY rollbacks + undos + approves + rfd DESC, name ASC')
+        sorted_users = [row[0] for row in cur.fetchall()]
+        return [user for user in sorted_users if user in users] + [user for user in users if not user in sorted_users]
+
 async def check_rights(_: View, interaction: Interaction) -> bool:
-    """Проверка, что пользователь может пользоваться ботом."""
+    """Проверка, что пользователь может пользоваться антивандальной системой."""
     if await get_user(interaction.user.id) not in USERS:
-        await interaction.response.send_message(ephemeral=True, content=f'К сожалению, у вас нет прав на использование бота. Обратитесь к участнику <@{ADMINS[0]}>, если желаете их получить.')
+        await interaction.response.send_message(ephemeral=True, content=f'К сожалению, у вас нет прав на использование антивандальной системы. Обратитесь к участнику <@{ADMINS[0]}>, если желаете их получить.')
         return False
     return True
-
-def admin(func: Callable) -> Coroutine:
-    """Декоратор проверки, что пользователь является администратором бота."""
-    @wraps(func)
-    async def wrapper(interaction: Interaction, *args, **kwargs):
-        if interaction.user.id in ADMINS:
-            return await func(interaction, *args, **kwargs)
-        await interaction.response.send_message(ephemeral=True, content='Для выполнения этой команды требуются права администратора бота.')
-    return wrapper
 
 async def check_edit(embed: Embed) -> str | None:
     """Проверка, не была ли правка уже обработана."""
@@ -248,7 +277,7 @@ async def do_wiki_action(embed: Embed, actor: str, action: Literal['rollback', '
     if code in ['readonly', 'noapiwrite']:
         return 'Действие невозможно — правки в разделе отключены.'
     if code in ['hookaborted', 'spamdetected'] or 'abusefilter' in code:
-        info = f': {error["abusefilter"]["description"]} (ID {error["abusefilter"]["id"]})' if 'abusefilter' in error else ''
+        info = f': {error['abusefilter']['description']} (ID {error['abusefilter']['id']})' if 'abusefilter' in error else ''
         return f'Действие невозможно — отклонено фильтром злоупотреблений или другим расширением{info}.'
     if code in ['noimageredirect', 'noedit'] or 'denied' in code:
         return 'Действие невозможно — у бота не хватает прав.'
@@ -334,10 +363,10 @@ class ReasonSelectView(View):
 
 class CustomReasonModal(Modal, title='Причина'):
     """Поле ввода причины отмены или номинации на КБУ."""
-    reason = TextInput(placeholder='Причина...', label='Причина', min_length=0, max_length=1000)
+    reason = TextInput(placeholder='Причина...', label='Причина', min_length=2, max_length=400)
 
     def __init__(self, type: Literal['rfd', 'undo'], template: str | None):
-        super().__init__(timeout=300)
+        super().__init__()
         self.type = type
         self.template = template or '$1'
 
@@ -345,12 +374,14 @@ class CustomReasonModal(Modal, title='Причина'):
         await do_action(interaction, self.type, self.template.replace('$1', str(self.reason)))
 
 async def do_action(interaction: Interaction, action: Literal['rollback', 'rfd', 'undo', 'good', 'bad'], reason: str | None = None) -> None:
-    """Действие через бота."""
+    """Действие через систему."""
     await interaction.response.defer()
 
     actor = await get_user(interaction.user.id)
     msg = interaction.message
     embed = msg.embeds[0]
+
+    await msg.edit(embed=embed.remove_footer(), view=MainView(embed))
 
     result = 0 if action in ['good', 'bad'] else await do_wiki_action(embed, actor, action, reason)
 
@@ -361,7 +392,7 @@ async def do_action(interaction: Interaction, action: Literal['rollback', 'rfd',
             await msg.edit(embed=Embed(color=embed.color, title=result), view=None, delete_after=5)
         return
     
-    log = client.get_channel(SOURCE_CHANNEL)
+    log = interaction.client.get_channel(SOURCE_CHANNEL)
     await log.send(content=LOG_TEMPLATES[action].format(actor, get_page_link(embed, result)))
     await db_record_action(actor, action if action == 'rfd' else 'approves' if action in ['good', 'bad'] else action + 's', embed, bad=action == 'good')
     await msg.delete()
@@ -370,30 +401,10 @@ async def wiki_name(interaction: Interaction, current: str) -> list[Choice[str]]
     """Автокомплит возможных имён участников."""
     return [Choice(name=user, value=user) for user in USERS if user.lower().startswith(current.lower())][:25]
 
-@tree.error
-async def on_error(interaction: Interaction, error: Exception) -> None:
-    """Обработчик ошибок в командах."""
-    if 'autocomplete' not in str(error):
-        raise error
-
-@tree.command(name='help')
-async def help(interaction: Interaction) -> None:
-    """Список команд бота."""
-    await interaction.response.send_message(ephemeral=True, content=
-        '</help:1388457659484733501> — список команд бота.\n'
-        '</clear_feed:1388459883858493526> — очистка каналов от всех сообщений бота.\n'
-        '</last_metro:1320698385241739311> — время последнего запуска бота <#1220480407796187330>.\n\n'
-        '</users list:1388459883858493527> — список участников, кому разрешены действия через бота.\n'
-        '</users add:1388459883858493527> — разрешить участнику действия через бота.\n'
-        '</users remove:1388459883858493527> — запретить участнику действия через бота.\n\n'
-        '</stats list:1388459883858493523> — статистика действий через бота.\n'
-        '</stats remove:1388459883858493523> — удалить статистику действий участника.\n\n'
-        f'По вопросам работы бота обращайтесь к <@{ADMINS[0]}>.')
-
 @stats.command(name='list')
 @autocomplete(wiki_name=wiki_name)
 async def stats_list(interaction: Interaction, wiki_name: str | None = None, limit: int = 5) -> None:
-    """Просмотреть статистику действий через бота.
+    """Просмотреть статистику действий через антивандальную систему.
 
     Parameters
     -----------
@@ -409,29 +420,29 @@ async def stats_list(interaction: Interaction, wiki_name: str | None = None, lim
     if not wiki_name:
         total = '\n'.join(f'{row[0]}: {row[1]}' for row in r['total'])
         false_triggers = r['false_triggers']
-        patterns = f'{false_triggers[0] / (r["patterns"] - 172) * 100:.3f}'
-        lw = f'{false_triggers[1] / (r["LW"] - 1061) * 100:.3f}'
-        ores = f'{false_triggers[2] / (r["ORES"] - 1431) * 100:.3f}'
-        tags = f'{false_triggers[3] / (r["tags"] - 63) * 100:.3f}'
-        replaces = f'{false_triggers[4] / r["replaces"] * 100:.3f}'
+        patterns = f'{false_triggers[0] / (r['patterns'] - 172) * 100:.3f}'
+        lw = f'{false_triggers[1] / (r['LW'] - 1061) * 100:.3f}'
+        ores = f'{false_triggers[2] / (r['ORES'] - 1431) * 100:.3f}'
+        tags = f'{false_triggers[3] / (r['tags'] - 63) * 100:.3f}'
+        replaces = f'{false_triggers[4] / r['replaces'] * 100:.3f}'
         await interaction.followup.send(ephemeral=True, content=
-            f'Через бота совершено действий: откатов — {r["rollbacks"]}, отмен — {r["undos"]}, одобрений/отклонений правок — {r["approves"]}, номинаций на КБУ — {r["rfd"]}.\n'
+            f'Через систему совершено действий: откатов — {r['rollbacks']}, отмен — {r['undos']}, одобрений/отклонений правок — {r['approves']}, номинаций на КБУ — {r['rfd']}.\n'
             f'Наибольшее количество действий совершили:\n{total}\n'
-            f'Действий по типам причин: паттерны — {r["patterns"]}, ORES — {r["ORES"]}, LW — {r["LW"]}, теги — {r["tags"]}, замены — {r["replaces"]}.\n'
+            f'Действий по типам причин: паттерны — {r['patterns']}, ORES — {r['ORES']}, LW — {r['LW']}, теги — {r['tags']}, замены — {r['replaces']}.\n'
             f'Ложные триггеры, c 21.07.2024: паттерны — {false_triggers[0]} ({patterns} %), LW — {false_triggers[1]} ({lw} %), ORES — {false_triggers[2]} ({ores} %), теги — {false_triggers[3]} ({tags} %), замены — {false_triggers[4]} ({replaces} %).')
     elif r['rollbacks'] + r['undos'] + r['rfd'] + r['approves'] > 0:
         await interaction.followup.send(ephemeral=True, content=
-            f'Через бота участник {wiki_name} совершил действий: {r["rollbacks"] + r["undos"] + r["rfd"] + r["approves"]},\n'
-            f'из них: откатов — {r["rollbacks"]}, отмен — {r["undos"]}, одобрений/отклонений правок — {r["approves"]}, номинаций на КБУ — {r["rfd"]}.\n'
-            f'Действий по типам причин, за всё время: паттерны — {r["patterns"]}, замены — {r["replaces"]}, ORES — {r["ORES"]}, LW — {r["LW"]}, теги — {r["tags"]}.')
+            f'Через систему участник {wiki_name} совершил действий: {r['rollbacks'] + r['undos'] + r['rfd'] + r['approves']},\n'
+            f'из них: откатов — {r['rollbacks']}, отмен — {r['undos']}, одобрений/отклонений правок — {r['approves']}, номинаций на КБУ — {r['rfd']}.\n'
+            f'Действий по типам причин, за всё время: паттерны — {r['patterns']}, замены — {r['replaces']}, ORES — {r['ORES']}, LW — {r['LW']}, теги — {r['tags']}.')
     else:
-        await interaction.followup.send(ephemeral=True, content='Данный участник не совершал действий через бота.')
+        await interaction.followup.send(ephemeral=True, content='Данный участник не совершал действий через систему.')
 
 @stats.command(name='remove')
 @autocomplete(wiki_name=wiki_name)
 @admin
-async def stats_user_remove(interaction: Interaction, wiki_name: str) -> None:
-    """Удалить статистку действий участника через бота.
+async def stats_remove(interaction: Interaction, wiki_name: str) -> None:
+    """Удалить статистку действий участника через антивандальную систему.
 
     Parameters
     -----------
@@ -440,20 +451,11 @@ async def stats_user_remove(interaction: Interaction, wiki_name: str) -> None:
     """
     await interaction.response.defer(ephemeral=True)
     await db_remove_user(wiki_name)
-    await interaction.followup.send(ephemeral=True, content='Статистика участника удалена.',)
+    await interaction.followup.send(ephemeral=True, content='Статистика участника удалена.')
 
-@tree.command(name='last_metro')
-async def last_metro(interaction: Interaction) -> None:
-    """Узнать время последнего запуска бота #metro."""
-    await interaction.response.defer(ephemeral=True)
-    r = await session.get(url='https://rv.toolforge.org/metro/')
-    r = await r.text()
-    await interaction.followup.send(ephemeral=True, content=r.split('<br>')[0].replace('Задание запущено', 'Последний запуск задания:'))
-
-@tree.command(name='clear_feed')
 @admin
 async def clear_feed(interaction: Interaction) -> None:
-    """Очистка каналов от сообщений бота."""
+    """Очистка эмбедов антивандальной системы."""
     await interaction.response.send_message(ephemeral=True, content='Очистка каналов начата.')
     for channel_id in [SOURCE_CHANNEL, *STREAM_CHANNELS.values()]:
         channel = client.get_channel(channel_id)
@@ -465,13 +467,13 @@ async def clear_feed(interaction: Interaction) -> None:
 
 @users.command(name='list')
 async def users_list(interaction: Interaction) -> None:
-    """Просмотр списка участников, которые могут использовать бота."""
-    await interaction.response.send_message(ephemeral=True, content=f'Действия через бота разрешены участникам {", ".join(USERS)}.\nДля запроса права или отказа от него обратитесь к участнику <@{ADMINS[0]}>.')
+    """Просмотр списка участников, которые могут использовать антивандальную систему."""
+    await interaction.response.send_message(ephemeral=True, content=f'Антивандальной системой могут пользоваться участники {', '.join(USERS)}.\nДля запроса права или отказа от него обратитесь к участнику <@{ADMINS[0]}>.')
 
 @users.command(name='add')
 @admin
 async def users_add(interaction: Interaction, user: User) -> None:
-    """Добавление участника в список тех, кто может использовать бота.
+    """Добавление участника в список тех, кто может использовать антивандальную систему.
 
     Parameters
     -----------
@@ -494,7 +496,7 @@ async def users_add(interaction: Interaction, user: User) -> None:
 @autocomplete(wiki_name=wiki_name)
 @admin
 async def users_remove(interaction: Interaction, wiki_name: str) -> None:
-    """Удаление участника из списка тех, кто может использовать бота.
+    """Удаление участника из списка тех, кто может использовать антивандальную систему.
 
     Parameters
     -----------
@@ -510,49 +512,17 @@ async def users_remove(interaction: Interaction, wiki_name: str) -> None:
     await update_users('remove', wiki_name, admin_name)
     await interaction.followup.send(ephemeral=True, content=f'Участник {wiki_name} убран из списка доверенных.')
 
-@tasks.loop(seconds=15.0)
 async def loop(client: Client) -> None:
-    """Фоновый цикл."""
-    start = now()
-
+    """Фоновый цикл антивандальной системы."""
     await fetch_users()
-
-    ads = await db_get_expired_ads()
-    for ad in ads:
-        msg = await client.get_channel(ad['channel_id']).fetch_message(ad['message_id'])
-        await msg.delete()
-
     for channel_id in STREAM_CHANNELS.values():
         messages = client.get_channel(channel_id).history(limit=20)
         async for msg in messages:
-            if msg.author.id != BOT or len(msg.embeds) == 0:
-                continue
-            if await check_edit(msg.embeds[0]):
+            if msg.author.id == BOT and len(msg.embeds) > 0 and await check_edit(msg.embeds[0]):
                 await msg.delete()
 
-    end = now()
-    if start.timestamp() % 3600 < 15: # first iteration in an hour
-        print(f'{start.strftime(time_format)} - loop iteration {loop.current_loop:04} finished in {min(round((end - start).seconds), 99):02} seconds - {end.strftime(time_format)}', flush=True)
-
-@loop.after_loop
-async def loop_error() -> None:
-    loop._task.add_done_callback(lambda _: loop._task.exception()) # just ignore exception
-    loop.restart(client)
-
-async def ad_message(msg: Message) -> None:
-    """Обработка автоудаляемого сообщения."""
-    webhook = [w for w in await msg.channel.webhooks() if w.name == 'ADMessages'][0]
-    attachments = '\n'.join(attachment.proxy_url for attachment in msg.attachments) if len(msg.attachments) > 0 else ''
-    new_msg = await webhook.send(content=msg.content[4:] + '\n' + attachments, username=msg.author.display_name, avatar_url=msg.author.avatar.url, wait=True)
-    await db_store_ad_message(f'{new_msg.channel.id}|{new_msg.id}')
-    await msg.delete()
-
-@client.event
-async def on_message(msg: Message) -> None:
-    """Получение нового сообщения."""
-    if msg.content.startswith('/ad ') or msg.content == '/ad':
-        await ad_message(msg)
-        return
+async def on_message(client: Client, msg: Message) -> None:
+    """Получение нового эмбеда."""
     if len(msg.embeds) == 0 or msg.author.id != SOURCE_BOT or msg.channel.id != SOURCE_CHANNEL:
         return
     embed = msg.embeds[0]
@@ -565,57 +535,26 @@ async def on_message(msg: Message) -> None:
     await stream.send(embed=embed, view=MainView(embed))
     await msg.delete()
 
-@client.event
-async def on_ready() -> None:
-    """Запуск бота."""
-    for guild in client.guilds:
-        if guild.id not in SERVERS:
-            await guild.leave()
-    await tree.sync()
+async def on_ready(client: Client, tree: CommandTree) -> None:
+    """Запуск модуля."""
+    tree.add_command(users)
+    tree.add_command(stats)
+    tree.command()(clear_feed)
 
     client.add_view(MainView())
     client.add_view(ReasonSelectView(type='rfd'))
     client.add_view(ReasonSelectView(type='undo'))
 
-    await client.change_presence(status=Status.online, activity=Game('pyCharm'))
-
     global session, api_session, wab2_session
     session = ClientSession(headers={key: value for key, value in HEADERS.items() if key != 'Authorization'})
     api_session = ClientSession(headers=HEADERS)
     wab2_session = ClientSession(headers=WAB2_HEADERS)
+    await set_session(session)
 
     await fetch_users()
-
-    logging.warning('Запуск фоновых задач')
-    loop.start(client)
 
     logging.warning('Просмотр пропущенных записей лога')
     messages = client.get_channel(SOURCE_CHANNEL).history(limit=500)
     async for msg in messages:
         if len(msg.embeds) > 0:
-            await on_message(msg)
-
-    logging.warning('Проверка наличия вебхуков')
-    # создание вебхуков (для авто-удаляемых сообщений) во всех текстовых каналов, где ещё не созданы
-    for wh_channel in client.get_all_channels():
-        if wh_channel.type == ChannelType.text:
-            webhooks = await wh_channel.webhooks()
-            wh_check = False
-            for webhook in webhooks:
-                if webhook.name == 'ADMessages':
-                    wh_check = True
-            if not wh_check:
-                wh = await wh_channel.create_webhook(name='ADMessages')
-                logging.warning(wh)
-
-    logging.warning('Бот запущен')
-
-@client.event
-async def on_guild_join(guild: Guild) -> None:
-    """Присоединение бота к новому серверу."""
-    if guild.id not in SERVERS:
-        await guild.leave()
-
-formatter = logging.Formatter(fmt='%(asctime)s - %(levelname)s - %(message)s')
-time_format = formatter.default_time_format
-client.run(token=DISCORD_TOKEN, log_formatter=formatter, log_level=logging.WARNING, root_logger=True)
+            await on_message(client, msg)
