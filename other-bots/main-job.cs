@@ -72,10 +72,7 @@ class Program
             { new StringContent(text), "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" } }).Result;
         if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
     }
-    static void rsave(string title, string text)
-    {
-        save("ru", title, text, "");
-    }
+    static void rsave(string title, string text) { save("ru", title, text, ""); }
     static void nonfree_files_in_nonmain_ns()
     {
         string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&generator=categorymembers&fuprop=title&fulimit=max&gcmtitle=К:Файлы:Несвободные&gcmtype=file&gcmlimit=1000";
@@ -531,14 +528,11 @@ class Program
     static void orphan_articles()
     {
         var nonlegit_link_pages = new List<string>();
-        foreach (string templatename in "Ш:Координационный список|Ш:Неоднозначность".Split('|'))
-        {
-            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eilimit=max&eititle=" + templatename;
-            while (cont != null)
-            {
+        foreach (string templatename in "Координационный список|Неоднозначность|Навигация для года|Шапка календарной даты".Split('|')) {
+            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eilimit=max&eititle=Ш:" + templatename;
+            while (cont != null) {
                 apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
-                {
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue");
                     while (r.Read())
                         if (r.Name == "ei" && !nonlegit_link_pages.Contains(r.GetAttribute("title")))
@@ -547,39 +541,31 @@ class Program
             }
         }
         string apiout1, cont1 = "", query1 = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eilimit=max&eititle=ш:изолированная статья";
-        while (cont1 != null)
-        {
+        while (cont1 != null) {
             apiout1 = (cont1 == "" ? site.GetStringAsync(query1).Result : site.GetStringAsync(query1 + "&eicontinue=" + e(cont1)).Result);
-            using (var r = new XmlTextReader(new StringReader(apiout1)))
-            {
+            using (var r = new XmlTextReader(new StringReader(apiout1))) {
                 r.Read(); r.Read(); r.Read(); cont1 = r.GetAttribute("eicontinue");
                 while (r.Read())
-                    if (r.Name == "ei")
-                    {
+                    if (r.Name == "ei") {
                         orphan_article = r.GetAttribute("title");
                         legit_link_found = false;
                         using (var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=nonredirects" +
                                 "&bllimit=max&bltitle=" + e(orphan_article)).Result)))
                             while (r2.Read())
-                                if (r2.Name == "bl" && r2.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r2.GetAttribute("title")))
-                                {
-                                    remove_template_from_non_orphan_page();
-                                    break;
+                                if (r2.Name == "bl" && r2.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r2.GetAttribute("title"))) {
+                                    remove_template_from_non_orphan_page(); break;
                                 }
                         if (!legit_link_found)
                             using (var r3 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=redirects" +
                                 "&bllimit=max&bltitle=" + e(orphan_article)).Result)))
                                 while (r3.Read())
-                                    if (r3.Name == "bl" && !legit_link_found)
-                                    {
+                                    if (r3.Name == "bl" && !legit_link_found) {
                                         string linked_redirect = r3.GetAttribute("title");
                                         using (var r4 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blfilterredir=redirects" +
                                 "&bllimit=max&bltitle=" + e(linked_redirect)).Result)))
                                             while (r4.Read())
-                                                if (r4.Name == "bl" && r4.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r4.GetAttribute("title")))
-                                                {
-                                                    remove_template_from_non_orphan_page();
-                                                    break;
+                                                if (r4.Name == "bl" && r4.GetAttribute("ns") == "0" && !nonlegit_link_pages.Contains(r4.GetAttribute("title"))) {
+                                                    remove_template_from_non_orphan_page(); break;
                                                 }
                                     }
                     }
@@ -651,16 +637,13 @@ class Program
         var unpatbot = login("ru", creds[3], creds[4]);
         var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml").Result));
         while (rdr.Read())
-            if (rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница")
-            {
+            if (rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница") {
                 string incname = rdr.GetAttribute("title"); string pagetext = readpage(incname);
-                if (!except_rgx.IsMatch(pagetext))
-                {
+                if (!except_rgx.IsMatch(pagetext)) {
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
                     "&rvlimit=max&titles=" + e(incname)).Result);
                     if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0) &&
-                        num_of_nominated_pages < 5)
-                    {
+                        num_of_nominated_pages < 5) {
                         string newname = incname.Substring(10); string article_exist = "";
                         var r1 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(newname)).Result));
                         while (r1.Read())
@@ -684,8 +667,7 @@ class Program
                             { new StringContent("1"), "noredirect" }, { new StringContent(unpat_token), "token" } };
                         unpatbot.PostAsync("https://ru.wikipedia.org/w/api.php", request);
                     }
-                    else
-                    {
+                    else {
                         if (!pagetext.Contains("{{В инкубаторе"))
                             pagetext = "{{В инкубаторе}}\n" + pagetext;
                         foreach (Match m in cats_rgx.Matches(pagetext))
@@ -698,8 +680,7 @@ class Program
             }
         if (num_of_nominated_pages > 0)
         {
-            string afd_text = "";
-            var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(afd_pagename)).Result));
+            string afd_text = ""; var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(afd_pagename)).Result));
             while (r2.Read())
                 if (r2.Name == "page" && r2.GetAttribute("_idx") == "-1")
                     afd_text = "{{КУ-Навигация}}\n\n";
@@ -741,9 +722,9 @@ class Program
         }
         string addition = "\n|-\n";
         if (lastmonth.Month == 1)
-            addition += "|rowspan=\"12\"|" + lastmonth.Year + "||" + prepositional[lastmonth.Month];
+            addition += "|rowspan=\"12\"|" + lastmonth.Year + "||" + monthname[lastmonth.Month];
         else
-            addition += "|" + prepositional[lastmonth.Month];
+            addition += "|" + monthname[lastmonth.Month];
         int c = 0;
         pats.Remove("MBHbot");
         foreach (var p in pats.OrderByDescending(p => p.Value.Count))
@@ -1768,9 +1749,9 @@ class Program
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
+            try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
