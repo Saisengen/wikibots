@@ -1,0 +1,45 @@
+SELECT ?line WITH {
+  SELECT ?catalog ?catalogLabel ?catalogRu ?type ?template {
+    hint:Query hint:optimizer "None" .
+    wd:{0} wdt:P1423 ?catalog; wdt:P1269 ?type. 
+    OPTIONAL { ?type wdt:P1424 ?main }
+    OPTIONAL { [] schema:about ?catalog; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?catalogRu }
+    BIND(IF(BOUND(?main), ?main, wd:Q42054995) AS ?infobox)
+    [] schema:about ?infobox; schema:isPartOf <https://ru.wikipedia.org/> ; schema:name ?ru_infobox.
+    BIND(REPLACE(?ru_infobox, ' ', '_') AS ?template)
+    ?catalog rdfs:label ?catalogLabel.
+	FILTER(LANG(?catalogLabel) = "ru")
+    SERVICE wikibase:label { bd:serviceParam wikibase:language 'ru' }
+  }
+} AS %Q
+{
+  {
+    INCLUDE %Q
+    ?item p:P528[pq:P972 ?catalog; ps:P528 ?code; wikibase:rank wikibase:NormalRank]
+    FILTER EXISTS { ?item wdt:P31/wdt:P279* ?type }
+    BIND(REPLACE(IF(CONTAINS(?code, '-'), STRAFTER(?code, '-'), STRAFTER(?code, ' ')), ' ', '') AS ?num)
+    OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+    SERVICE wikibase:label { bd:serviceParam wikibase:language 'ru' }
+    BIND(CONCAT('B', SUBSTR(CONCAT('00', STR(?num)), STRLEN(?num) - STRLEN(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
+            ?num, '0', ''), '1', ''), '2', ''), '3', ''), '4', ''), '5', ''), '6', ''), '7', ''), '8', ''), '9', '')))) AS ?row)
+    BIND(IF(BOUND(?ru), CONCAT('* [[', ?ru, '|', ?num, ']]'), 
+            CONCAT('* {{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?num, IF(BOUND(?template), CONCAT('|', STRAFTER(?template, ':')), ''), '}}')) AS ?line)
+  } UNION {
+    BIND('A4' AS ?row)
+    INCLUDE %Q
+    BIND(CONCAT(' |заголовок     = ', IF(BOUND(?catalogRu), CONCAT('[[', ?catalogRu, '|', ?catalogLabel, ']]'), 
+                                         CONCAT('{{нет статьи|', REPLACE(STR(?catalog), 'http://www.wikidata.org/entity/', ''), '|', ?catalogLabel, '}}'))) AS ?line)
+  } UNION {
+    VALUES (?row ?line) {
+      ('A1' '{{Навигационная таблица')
+      ('A2' ' |имя           = {{subst:PAGENAME}}')
+      ('A3' ' |state         = <includeonly>{{{state|autocollapse}}}</includeonly>')
+      ('A5' ' |класс_списков = hlist hlist-items-nowrap')
+      ('A6' ' |список1       =')
+      ('C1' '}}<noinclude>')
+      ('C2' '[[Категория:Навигационные шаблоны:Астрономические каталоги]]')
+      ('C3' '[[Категория:Википедия:Автоматически формируемые шаблоны по астрокаталогам]]')
+      ('C4' '</noinclude>')
+    }
+  }
+} ORDER BY (?row)
