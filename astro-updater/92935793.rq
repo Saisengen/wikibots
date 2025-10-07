@@ -1,0 +1,54 @@
+SELECT ?line {
+  { SELECT ?item ?itemLabel ?line ?ru ?row ?prefix ?postfix {
+    { 
+      wd:{0} wdt:P1423 ?item
+      FILTER NOT EXISTS {?item wdt:P527 []}
+      OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+      BIND('* ' AS ?prefix)
+      BIND('|Звезда}}' AS ?postfix)
+      BIND('B1' AS ?row)
+    } UNION {
+      wd:{0} wdt:P1423 ?parent.
+      ?parent p:P527[ps:P527 ?item; pq:P1545 ?num]
+      OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+      BIND('* ' AS ?prefix)
+      BIND('|Звезда}}' AS ?postfix)
+      BIND(CONCAT('B', ?num) AS ?row)
+   } UNION {
+      wd:{0} wdt:P1423 ?parent.
+      ?parent p:P398[ps:P398 ?item; pq:P1545 ?num]
+      OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+      BIND('* ' AS ?prefix)
+      BIND('|Экзопланета}}' AS ?postfix)
+      BIND(CONCAT('C', ?num) AS ?row)
+    } UNION {
+      VALUES (?row ?line) { 
+        ('A1' '{{Навигационная таблица')
+        ('A2' ' | имя         = {{subst:PAGENAME}}')
+        ('A3' ' | статус      = {{{state|collapsed}}}')
+        ('A5' ' | bodyclass   = hlist')
+        ('A6' ' | evenodd     = swap')
+        ('A7' '')
+        ('A8' ' | группа1 = Звёзды')
+        ('A9' ' | список1 =')
+        ('C1' '')
+        ('C2' ' | группа2 = Планеты')
+        ('C3' ' | список2 =')
+        ('D1' '') 
+        ('D2' '}}<noinclude>')
+        ('D3' '[[Категория:Навигационные шаблоны:Экзопланетные системы]]') 
+        ('D4' '[[Категория:Википедия:Автоматически формируемые шаблоны экзопланетных систем]]')
+        ('D5' '</noinclude>')
+      }     
+    } UNION {
+      wd:{0} wdt:P1423 ?item.
+      OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
+      BIND(' | заголовок   = Планетная система ' AS ?prefix)
+      BIND('|Звезда}}' AS ?postfix)
+      BIND ('A4' as ?row)
+    } 
+    SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,en". }
+  } }
+  BIND(IF(BOUND(?line), ?line, CONCAT(?prefix, IF(BOUND(?ru), CONCAT('[[', ?ru, ']]'),
+                                                  CONCAT('{{нет статьи|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '|', ?itemLabel, ?postfix)))) AS ?line)
+} ORDER BY ?row
