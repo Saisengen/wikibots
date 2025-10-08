@@ -10,12 +10,6 @@
   schedule: "5 0 1 * *"
   emails: onfailure
 
-#- name: sparql-sync
-#  command: /data/project/mbh/sparqlsync
-#  image: tf-mono68
-#  schedule: "58 3 * * *"
-#  emails: onfailure
-
 - name: file-renaming
   command: mono /data/project/mbh/bots/file-renaming.exe
   image: tf-mono68
