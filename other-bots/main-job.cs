@@ -1730,11 +1730,47 @@ class Program
             }
         find_and_delete_usages(deletedfiles, false);
     }
+    static void astro_update()
+    {
+        string github_base_url = "https://raw.githubusercontent.com/Saisengen/wikibots/refs/heads/main/astro-updater/";
+        var site = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
+        if (creds[0].Contains("@"))
+            site.DefaultRequestHeaders.Add("User-Agent", creds[0].Substring(0, creds[0].IndexOf('@')));
+        else
+            site.DefaultRequestHeaders.Add("User-Agent", creds[0]);
+        site.DefaultRequestHeaders.Add("Accept", "text/csv");
+        var requests = new Dictionary<string, string> { { "stars-by-constellation", "шаблоны по звёздам созвездий" }, { "stars-by-cluster", "списки звёзд по скоплениям" }, { "exoplanets-by-constellation",
+                "списки экзопланет по созвездиям" }, { "exoplanetary-systems", "шаблоны экзопланетных систем" }, { "astrocatalogs", "шаблоны по астрокаталогам" } };
+        foreach (var rq in "stars-by-constellation|stars-by-cluster|exoplanets-by-constellation|exoplanetary-systems|astrocatalogs".Split('|')) {
+            var query = new StreamReader(site.GetStreamAsync(github_base_url + rq + ".rq").Result).ReadToEnd().Replace("{", "{{").Replace("}", "}}").Replace("{{0}}", "{0}"); var pages = new List<string>();
+            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" +
+                "Автоматически формируемые " + requests[rq]).Result));
+            while (r.Read())
+                if (r.Name == "cm")
+                    pages.Add(r.GetAttribute("title"));
+
+            foreach (var title in pages) {
+                var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=pageprops&ppprop=wikibase_item&format=xml&titles=" + title).Result));
+                while (r2.Read())
+                    if (r2.Name == "pageprops") {
+                        var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
+                            r2.GetAttribute("wikibase_item")) } })).Result;
+                        var newtext = result.Content.ReadAsStringAsync().Result.Replace("line\r\n", "").Replace("\"", "");
+                        var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
+                        if (oldtext.Length - newtext.Length > 2048) {
+                            Console.WriteLine("https://ru.wikipedia.org/wiki/" + title + ": new content too short: " + oldtext.Length + " > " + newtext.Length); continue;
+                        }
+                        else rsave(title, newtext);
+                    }
+            }
+        }
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
