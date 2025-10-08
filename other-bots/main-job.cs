@@ -1,15 +1,16 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text.RegularExpressions;
-using System.Net;
-using System.Xml;
-using System.Net.Http;
-using System.Globalization;
-using System.Linq;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Web.UI;
+using System.Xml;
+using static System.Net.Mime.MediaTypeNames;
 class most_edits_record { public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index; public bool globalbot; }
 class redir { public string src_title, dest_title; public int src_ns, dest_ns; public override string ToString() { return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title; } }
 class script_usages { public int active, inactive;}
@@ -1733,41 +1734,37 @@ class Program
     static void astro_update()
     {
         string github_base_url = "https://raw.githubusercontent.com/Saisengen/wikibots/refs/heads/main/astro-updater/";
-        var site = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() });
-        if (creds[0].Contains("@"))
-            site.DefaultRequestHeaders.Add("User-Agent", creds[0].Substring(0, creds[0].IndexOf('@')));
-        else
-            site.DefaultRequestHeaders.Add("User-Agent", creds[0]);
-        site.DefaultRequestHeaders.Add("Accept", "text/csv");
-        var requests = new Dictionary<string, string> { { "stars-by-constellation", "шаблоны по звёздам созвездий" }, { "stars-by-cluster", "списки звёзд по скоплениям" }, { "exoplanets-by-constellation",
-                "списки экзопланет по созвездиям" }, { "exoplanetary-systems", "шаблоны экзопланетных систем" }, { "astrocatalogs", "шаблоны по астрокаталогам" } };
+        var requests = new Dictionary<string, string> { { "stars-by-cluster", "Википедия:Автоматически формируемые списки звёзд по скоплениям" }, { "exoplanets-by-constellation", "Википедия:Автоматически " +
+                "формируемые списки экзопланет по созвездиям" }, { "exoplanetary-systems", "Википедия:Автоматически формируемые шаблоны экзопланетных систем" }, { "astrocatalogs", "Википедия:Автоматически " +
+                "формируемые шаблоны по астрокаталогам" }, { "stars-by-constellation", "Навигационные шаблоны:Звёзды по созвездиям" } };
         foreach (var rq in "stars-by-constellation|stars-by-cluster|exoplanets-by-constellation|exoplanetary-systems|astrocatalogs".Split('|')) {
             var query = new StreamReader(site.GetStreamAsync(github_base_url + rq + ".rq").Result).ReadToEnd().Replace("{", "{{").Replace("}", "}}").Replace("{{0}}", "{0}"); var pages = new List<string>();
-            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" +
-                "Автоматически формируемые " + requests[rq]).Result));
+            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:" + requests[rq]).Result));
             while (r.Read())
                 if (r.Name == "cm")
                     pages.Add(r.GetAttribute("title"));
-
             foreach (var title in pages) {
                 var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=pageprops&ppprop=wikibase_item&format=xml&titles=" + title).Result));
                 while (r2.Read())
                     if (r2.Name == "pageprops") {
                         var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
                             r2.GetAttribute("wikibase_item")) } })).Result;
-                        var newtext = result.Content.ReadAsStringAsync().Result.Replace("line\r\n", "").Replace("\"", "");
-                        var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                        if (oldtext.Length - newtext.Length > 2048) {
-                            Console.WriteLine("https://ru.wikipedia.org/wiki/" + title + ": new content too short: " + oldtext.Length + " > " + newtext.Length); continue;
+                        var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
+                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям")
+                        {
+                            var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
+                            if (oldtext.Length - newtext.Length > 2048) {
+                                Console.WriteLine("https://ru.wikipedia.org/wiki/" + title + ": new content too short: " + oldtext.Length + " > " + newtext.Length + "\nnewtext=" + newtext); continue; }
+                            else rsave(title, newtext);
                         }
-                        else rsave(title, newtext);
                     }
             }
         }
     }
     static void Main()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); now = DateTime.Now; site = login("ru", creds[0], creds[1]);
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
