@@ -49,7 +49,7 @@ class Program
     r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase);
     static Dictionary<string, Dictionary<string, int>> users = new Dictionary<string, Dictionary<string, int>>(); static bool legit_link_found; static int position_number = 0;
     static string e(string input) { return Uri.EscapeDataString(input); }
-    static int i(string input) { return Convert.ToInt32(input); }
+    static int i(Object input) { return Convert.ToInt32(input); }
     static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
     static string serialize(HashSet<string> list) { list.ExceptWith(highflags); return JsonConvert.SerializeObject(list); }
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
@@ -492,13 +492,11 @@ class Program
         string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp%7Ccomment%7Cdetails&letype=move&lenamespace=14&lelimit=max").Result));
         while (r.Read())
-            if (r.NodeType == XmlNodeType.Element && r.Name == "item")
-            {
+            if (r.NodeType == XmlNodeType.Element && r.Name == "item") {
                 string oldtitle = r.GetAttribute("title");
                 var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(oldtitle)).Result));
                 while (rr.Read())
-                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
-                    {
+                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
                         string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
                         r.Read(); string newtitle = r.GetAttribute("target_title");
                         result += "\n|-\n|" + timestamp + "||[[:" + oldtitle + "]] ({{PAGESINCATEGORY:" + oldtitle.Substring(10) + "}})||[[:" + newtitle + "]] ({{PAGESINCATEGORY:" +
@@ -509,16 +507,13 @@ class Program
         result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
         r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp%7Ccomment%7Cdetails&leaction=delete/delete&lenamespace=14&lelimit=max").Result));
         while (r.Read())
-            if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null)
-            {
+            if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
                 string title = r.GetAttribute("title");
                 var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
                 while (rr.Read())
-                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null)
-                    {
+                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null) {
                         rr.Read();
-                        if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
-                        {
+                        if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
                             string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
                             result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
                         }
@@ -575,20 +570,19 @@ class Program
     }
     static void remove_template_from_non_orphan_page()
     {
-        try
-        {
+        try {
             string pagetext = readpage(orphan_article);
             save("ru", orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
             legit_link_found = true;
-        }
-        catch { }
+        } catch { }
     }
     static void dm89_stats()
     {        
         var cats = new Dictionary<string, int>() { {"Википедия:Статьи для срочного улучшения",0 },{ "Википедия:Незакрытые обсуждения переименования страниц",0 },{ "Википедия:Незакрытые обсуждения статей для" +
                 " улучшения", 0 },{ "Википедия:Кандидаты на удаление", 0 },{ "Википедия:Незакрытые обсуждения удаления страниц", 0 },{ "Википедия:Статьи для переименования", 0 }, { "Википедия:Кандидаты на " +
                 "объединение", 0 },{ "Википедия:Незакрытые обсуждения объединения страниц", 0 },{ "Википедия:Статьи для разделения", 0 },{ "Википедия:Незакрытые обсуждения разделения страниц", 0 },
-            { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0} };
+            { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0},
+            { "Википедия:Страницы на КУ более 5 лет", 0 } };
         foreach (var cat in cats.Keys.ToList()) {
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
             while (rdr.Read())
@@ -600,10 +594,10 @@ class Program
 
         string stat_text = readpage("u:MBH/Завалы");
         string result = "\n|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:" +
-            "Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения " +
-            "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
-            "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:Незакрытые обсуждения восстановления страниц"] + "||" +
-            cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
+            "Кандидаты на удаление"] + "||" + cats["Википедия:Страницы на КУ более 5 лет"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] +
+            "||" + cats["Википедия:Незакрытые обсуждения переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] +
+            "||" + cats["Википедия:Статьи для разделения"] + "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:" +
+            "Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
         rsave("u:MBH/Завалы", stat_text + result);
     }
     static void inc_check_help_requests_img()
@@ -1384,7 +1378,7 @@ class Program
 
             if (pagecountswoactive.Count != 0) {
                 result += "==" + (nss[n] == "" ? "Статьи" : (nss[n] == "Обсуждение участника" ? "Участник" : nss[n])) + "==\n{|class=\"standard sortable\"\n!Страница!!Всего следящих!!Активных\n";
-                foreach (var p in pagecountswithactive.OrderByDescending(p => Convert.ToInt16(p.Value.Second)))
+                foreach (var p in pagecountswithactive.OrderByDescending(p => i(p.Value.Second)))
                     result += "|-\n|[[:" + p.Key + "]]||" + p.Value.First + "||" + p.Value.Second + "\n";
                 foreach (var p in pagecountswoactive.OrderByDescending(p => p.Value))
                     result += "|-\n|[[:" + p.Key + "]]||" + p.Value + "||<" + limit + "\n";
@@ -1663,7 +1657,7 @@ class Program
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + e(df)).Result))) {
                 bool file_is_used = true; string ru_filename = ""; while (r.Read()) {
                     if (r.NodeType == XmlNodeType.Element && r.Name == "page") { ru_filename = r.GetAttribute("title"); file_is_used = r.GetAttribute("_idx")[0] != '-'; }
-                    if (r.Name == "fu" && !file_is_used) { int ns = Convert.ToInt16(r.GetAttribute("ns"));
+                    if (r.Name == "fu" && !file_is_used) { int ns = i(r.GetAttribute("ns"));
                         if (ns % 2 == 0 && ns != 4 && ns != 104 && ns != 106)
                             try { delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename.Replace("Файл:", "File:")], page = r.GetAttribute("title") }, iscommons); }
                             catch { try { delete_transclusion(new pair { file = ru_filename, deletion_data = deletedfiles[ru_filename], page = r.GetAttribute("title") }, iscommons); } catch { } }
@@ -1750,8 +1744,7 @@ class Program
                         var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
                             r2.GetAttribute("wikibase_item")) } })).Result;
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
-                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям")
-                        {
+                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
                             if (oldtext.Length - newtext.Length > 2048) {
                                 Console.WriteLine("https://ru.wikipedia.org/wiki/" + title + ": new content too short: " + oldtext.Length + " > " + newtext.Length + "\nnewtext=" + newtext); continue; }
@@ -1761,12 +1754,32 @@ class Program
             }
         }
     }
+    static void best_article_lists()
+    {
+        var pagetypes = new Dictionary<string, string>() { { "featured", "Избранные статьи" }, { "good", "Хорошие статьи" }, { "tier3", "Добротные статьи" }, { "lists", "Избранные списки" }, { "aoty", "Статьи года" } };
+        var result = new Dictionary<string, List<string>>() { { "featured", new List<string>() }, { "good", new List<string>() }, { "tier3", new List<string>() }, { "lists", new List<string>() }, { "aoty", new List<string>() }, };
+        foreach(var cat in pagetypes)
+        {
+            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" + cat.Value + " по алфавиту";
+            while (cont != null) {
+                apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
+                    while (r.Read())
+                        if (r.Name == "cm")
+                            result[cat.Key].Add(r.GetAttribute("title"));
+                }
+            }
+        }
+        rsave("MediaWiki:Gadget-navboxFeaturedArticles.json", JsonConvert.SerializeObject(result));
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
