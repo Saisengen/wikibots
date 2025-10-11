@@ -10,7 +10,6 @@ using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Web.UI;
 using System.Xml;
-using static System.Net.Mime.MediaTypeNames;
 class most_edits_record { public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index; public bool globalbot; }
 class redir { public string src_title, dest_title; public int src_ns, dest_ns; public override string ToString() { return src_ns + ' ' + src_title + ' ' + dest_ns + ' ' + dest_title; } }
 class script_usages { public int active, inactive;}
@@ -250,18 +249,14 @@ class Program
         while (r.Read())
             if (r.Name == "cm")
                 legal_redirs.Add(r.GetAttribute("pageid"));
-        foreach (int ns in new int[] { 1, 3, 5, 7, 9, 11, 13, 15, 101, 103, 105, 107, 829 })
-        {
+        foreach (int ns in new int[] { 3, 1, 5, 7, 9, 11, 13, 15, 101, 103, 105, 107, 829 }) {
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allredirects&arprop=title|ids&arnamespace=" + ns + "&arlimit=max";
-            while (cont != null)
-            {
+            while (cont != null) {
                 var r4 = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arcontinue=" + e(cont)).Result));
                 r4.Read(); r4.Read(); cont = r4.GetAttribute("arcontinue"); while (r4.Read())
-                    if (r4.Name == "r" && (ns != 3 || r4.GetAttribute("title").Contains("/")))
-                    {
+                    if (r4.Name == "r") {
                         string id = r4.GetAttribute("fromid");
-                        if (!legal_redirs.Contains(id) && always_redir(id, false))
-                        {
+                        if (!legal_redirs.Contains(id) && always_redir(id, false)) {
                             var r3 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result));
                             bool there_are_links = false;
                             while (r3.Read())
@@ -637,13 +632,14 @@ class Program
                 if (!except_rgx.IsMatch(pagetext)) {
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
                     "&rvlimit=max&titles=" + e(incname)).Result);
-                    if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0) &&
-                        num_of_nominated_pages < 5) {
+                    if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0)) {
                         string newname = incname.Substring(10); string article_exist = "";
                         var r1 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(newname)).Result));
                         while (r1.Read())
                             if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1") {
-                                article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] в ОП уже существует."; newname += " (из Инкубатора)"; }
+                                article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] уже существует."; newname += " (из Инкубатора)"; }
+                        if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&inprop=protection&titles=" + e(newname)).Result.Contains("level=\"sysop\"")) {
+                            article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] защищена от создания."; newname += " (из Инкубатора)"; }
                         string newtext = pagetext;
                         while (newtext.Contains("\n "))
                             newtext = newtext.Replace("\n ", "\n");
@@ -1779,6 +1775,7 @@ class Program
         site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         monthname = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
