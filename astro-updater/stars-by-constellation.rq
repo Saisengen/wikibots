@@ -45,21 +45,12 @@ SELECT ?line WITH {
     } UNION {
       SELECT ?item ?label ?itemLabel ?sort {
         { SELECT DISTINCT * { ?constellation ^wdt:P1423 wd:{0}; wdt:P1813 ?short } }
-        ?item wdt:P59 ?constellation; p:P528[pq:P972 wd:Q222662; wikibase:rank wikibase:NormalRank; ps:P528 ?code]; wikibase:sitelinks ?iw
-        MINUS { [] wdt:P59 ?constellation; p:P527[ps:P527 ?item; pq:P1545 []] }
+        ?item wdt:P59 ?constellation; ^schema:about/schema:isPartOf <https://ru.wikipedia.org/>;
+              p:P528[pq:P972 wd:Q222662; wikibase:rank wikibase:NormalRank; ps:P528 ?code]
         MINUS { ?item wdt:P59 ?constellation; p:P528/pq:P972 wd:Q222662; wdt:P31/wdt:P279* wd:Q42372 }
         MINUS { ?item wdt:P59 ?constellation; p:P528/pq:P972 wd:Q222662; wdt:P31 wd:Q3937 }
         BIND(REPLACE(?code, CONCAT(' ', STR(?short)), '') AS ?label)
-        FILTER(REGEX(?label, '[A-Z].*') && (?iw > 0))
-        BIND(REPLACE(CONCAT(IF(REGEX(?label, '^[R-Z]+$'), 'CC', 'CD'), STR(STRLEN(?label)), ?label), '[R-Z]?\\s', '֍') AS ?sort)
-        SERVICE wikibase:label { bd:serviceParam wikibase:language 'ru,mul,en' }
-      }
-    } UNION {
-      SELECT ?item ?label ?itemLabel ?sort {
-        { SELECT DISTINCT * { ?constellation ^wdt:P1423 wd:{0}; wdt:P1813 ?short } }
-        ?item wdt:P59 ?constellation; wikibase:sitelinks ?iw1; p:P527[pq:P1545 []; ps:P527[p:P528[pq:P972 wd:Q222662; wikibase:rank wikibase:NormalRank; ps:P528 ?code]; wikibase:sitelinks ?iw2]]
-        BIND(REPLACE(?code, CONCAT(' ', STR(?short)), '') AS ?label)
-        FILTER(REGEX(?label, '[A-Z].*') && (?iw1 + ?iw2 > 0))
+        FILTER(REGEX(?label, '[A-Z].*'))
         BIND(REPLACE(CONCAT(IF(REGEX(?label, '^[R-Z]+$'), 'CC', 'CD'), STR(STRLEN(?label)), ?label), '[R-Z]?\\s', '֍') AS ?sort)
         SERVICE wikibase:label { bd:serviceParam wikibase:language 'ru,mul,en' }
       }
@@ -176,6 +167,7 @@ SELECT ?line WITH {
         MINUS { ?item wdt:P31 wd:Q582000; wdt:P59 ?constellation }
         MINUS { ?item wdt:P31 wd:Q4188; wdt:P59 ?constellation }
         MINUS { ?item wdt:P31 wd:Q2035809; wdt:P59 ?constellation }
+        MINUS { ?item wdt:P527/^schema:about/schema:isPartOf <https://ru.wikipedia.org/>; wdt:P59 ?constellation }
     } }
     BIND(CONCAT('* [[', ?ru, ']]') AS ?line)
     BIND(CONCAT('FF', IF(STRSTARTS(?ru, 'HD '), CONCAT('HD', SUBSTR(REPLACE(?ru, 'HD ', '000000000'), STRLEN(?ru))), ?ru)) AS ?sortkey)
