@@ -595,29 +595,6 @@ class Program
             "Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
         rsave("u:MBH/Завалы", stat_text + result);
     }
-    static void inc_check_help_requests_img()
-    {
-        string result = ""; var processed = new HashSet<string>() { "Шаблон:Инкубатор, помочь/проверить" };
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmprop=title&cmtitle=К:Инкубатор:Запросы помощи/проверки").Result));
-        while (r.Read())
-            if (r.Name == "cm" && r.GetAttribute("ns").StartsWith("10")) {
-                string title = r.GetAttribute("title"); string shorttitle = title.Substring(title.IndexOf(':') + 1);
-                if (!processed.Contains(shorttitle)) { processed.Add(shorttitle); result += ", [[" + title + "|" + shorttitle + "]]"; }
-            }
-        rsave("ВП:Форум/Общий/Запросы помощи в Инкубаторе", result.Substring(2));
-        result = "<gallery mode=packed heights=75px>";
-        Root inc_images_json = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=images&generator=allpages&formatversion=2&imlimit=max&gapnamespace=102&gapfilterredir=nonredirects&gaplimit=max").Result);
-        foreach (Page page in inc_images_json.query.pages)
-        {
-            string pagetext = readpage(page.title);
-            foreach (var img in page.images) {
-                var rgx = new Regex(Regex.Escape(img.title).Replace("\\ ", "[ _]"), RegexOptions.IgnoreCase);
-                if (rgx.IsMatch(pagetext))
-                    result += "\n" + img.title + "|[[" + page.title + "|" + page.title.Substring(10) + "]]";
-            }
-        }
-        rsave("ВП:Форум/Авторское право/Файлы Инкубатора", result + "\n</gallery>");
-    }
     static void main_inc_bot()
     {
         var except_rgx = new Regex(@"#(REDIRECT|перенаправление) \[\[|\{\{ *db-|\{\{ *к удалению|инкубатор, (на доработке|черновик ВУС)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
@@ -743,12 +720,8 @@ class Program
     }
     static void likes_stats()
     {
-        int num_of_rows_in_output_table = 2000;
-        var pairs = new Dictionary<string, int>();
-        var thankedusers = new Dictionary<string, int>();
-        var thankingusers = new Dictionary<string, int>();
-        var ratio = new Dictionary<string, double>();
-        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp&letype=thanks&lelimit=max";
+        int num_of_rows_in_output_table = 2500; var pairs = new Dictionary<string, int>(); var thankedusers = new Dictionary<string, int>(); var thankingusers = new Dictionary<string, int>();
+        string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user&letype=thanks&lelimit=max";
         while (cont != null) {
             if (cont == "") apiout = site.GetStringAsync(query).Result; else apiout = site.GetStringAsync(query + "&lecontinue=" + cont).Result;
             using (var rdr = new XmlTextReader(new StringReader(apiout))) {
@@ -756,14 +729,13 @@ class Program
                 while (rdr.Read())
                     if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "item")
                     {
-                        string source = rdr.GetAttribute("user");
-                        string target = rdr.GetAttribute("title");
+                        string source = rdr.GetAttribute("user"); string target = rdr.GetAttribute("title"); if (source == "Le Loy") source = "Ле Лой";
                         if (target != null && source != null) {
                             if (thankingusers.ContainsKey(source))
                                 thankingusers[source]++;
                             else
                                 thankingusers.Add(source, 1);
-                            target = target.Substring(target.IndexOf(":") + 1);
+                            target = target.Substring(target.IndexOf(":") + 1); if (target == "Le Loy") target = "Ле Лой";
                             if (thankedusers.ContainsKey(target))
                                 thankedusers[target]++;
                             else
@@ -1742,8 +1714,7 @@ class Program
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (oldtext.Length - newtext.Length > 2048) {
-                                Console.WriteLine("https://ru.wikipedia.org/wiki/" + title + ": new content too short: " + oldtext.Length + " > " + newtext.Length + "\nnewtext=" + newtext); continue; }
+                            if (oldtext.Length - newtext.Length > 2048) { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
                             else rsave(title, newtext);
                         }
                     }
@@ -1782,7 +1753,6 @@ class Program
         try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { inc_check_help_requests_img(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
