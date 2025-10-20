@@ -24,7 +24,7 @@ public class Recentchange { public string type, title, user, comment; public Int
 public class rchanges { public bool batchcomplete; public Continue @continue; public Query query; }
 public class replace_pair { public Regex one, two; public string replacement; }
 public class langdata_element { public string last_checked_edit_time, notifying_page_name, domain; public Int64 last_checked_id; }
-public class pattern_info { public Regex regex; public bool only_content, not_uk; public int line; }
+public class pattern_info { public Regex regex, whitelist; public bool only_content, not_uk; public int line; }
 class Program
 {
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, wiki_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
@@ -35,8 +35,8 @@ class Program
     static Regex lw_rgx = new Regex(@"""true"":(0.\d+)"), reportedusers_rgx = new Regex(@"\| вопрос = u/(.*)"), ins_del_rgx = new Regex(@"<(ins|del)[^>]*>(.*?)<[^>]*>"), ins_rgx = new Regex
         (@"<ins[^>]*>(.*?)</ins>"), del_rgx = new Regex(@"<del[^>]*>(.*?)</del>"), editcount_rgx = new Regex(@"editcount=""(\d*)"""), rev_rgx = new Regex(@"<rev "), revid_rgx = new Regex
         (@"revid=""(\d*)"""), damage_rgx = new Regex(@"damaging"":\s*\{\s*""true"":\s*(0.\d{3})", RegexOptions.Singleline), empty_ins_rgx = new Regex(@"<ins[^>]*>\s*</ins>"), empty_del_rgx = new Regex
-        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_text_rgx, whitelist_title_rgx, talk_ns_rgx = 
-        new Regex("2|4|100|104|106"), wd_label_rgx = new Regex("<label language=\"([^\"]*)\" value=\"([^\"]*)\"");
+        (@"<del[^>]*>\s*</del>"), trash_tags_rgx = new Regex(@"</?(a|b|span|div|table|th|tr|td)[^>]*>"), suspicious_tags_rgx, deletions_rgx, whitelist_title_rgx, wd_label_rgx = 
+        new Regex("<label language=\"([^\"]*)\" value=\"([^\"]*)\"");
     static Dictionary<lang, langdata_element> langdata = new Dictionary<lang, langdata_element>() {
         { global::lang.ru, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Проблемные_правки", domain = "ru.wikipedia" } },
         { global::lang.uk, new langdata_element() { last_checked_edit_time = default_time, last_checked_id = 0, notifying_page_name = "user:Рейму_Хакурей/Підозрілі_редагування", domain = "uk.wikipedia" } },
@@ -105,23 +105,27 @@ class Program
         if (!trusted_users.Contains(settings[6].Split(':')[1])) trusted_users.Add(settings[6].Split(':')[1]);
         suspicious_tags_rgx = new Regex(settings[7].Split(':')[1], RegexOptions.IgnoreCase);
         deletions_rgx = new Regex(settings[8].Split(':')[1], RegexOptions.IgnoreCase);
-        whitelist_text_rgx = new Regex(settings[9].Split(':')[1], RegexOptions.IgnoreCase);
-        whitelist_title_rgx = new Regex(settings[10].Split(':')[1], RegexOptions.IgnoreCase);
+        whitelist_title_rgx = new Regex(settings[9].Split(':')[1], RegexOptions.IgnoreCase);
         replaces.Clear();
-        var pairs_list = settings[11].Split(':')[1].Split('|');
+        var pairs_list = settings[10].Split(':')[1].Split('|');
         foreach (var pair in pairs_list) { var components = pair.Split('/');
             replaces.Add(new replace_pair() { one = new Regex(components[0], RegexOptions.IgnoreCase), two = new Regex(components[1], RegexOptions.IgnoreCase), replacement = pair }); }
     }
     static void read_patterns()
     {
-        patterns.Clear(); var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Split('\n'); int c = 0;
-        foreach (var pattern in patterns_list) { if (pattern == "") continue; else try { if (pattern.Contains('☯')) {
-                        string pattern_body = pattern.Split('☯')[0]; string flags = pattern.Split('☯')[1]; bool ignorecase = flags[0] == '0'; bool not_uk = flags[1] == '1'; bool only_content = flags[2] == '1';
-                        patterns.Add(new pattern_info() { regex = ignorecase ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body), only_content = only_content, not_uk = not_uk, line = ++c });
+        patterns.Clear(); var patterns_list = new StreamReader("./reimu/patterns.txt").ReadToEnd().Replace("\r", "").Split('\n'); int c = 0;
+        foreach (var pattern in patterns_list) {
+            if (pattern == "") continue;
+            else try { if (pattern.Contains('☯')) {
+                        string pattern_body = pattern.Split('☯')[0]; string flags = pattern.Split('☯')[1]; bool not_uk = flags[1] == '1'; bool only_content = flags[2] == '1';
+                        var regex = flags[0] == '0' ? new Regex(pattern_body, RegexOptions.IgnoreCase) : new Regex(pattern_body);
+                        Regex whitelist = null;
+                        if (flags.Length > 3)
+                            whitelist = new Regex(flags.Substring(3));
+                        patterns.Add(new pattern_info() { regex = regex, only_content = only_content, not_uk = not_uk, line = ++c, whitelist = whitelist });
                     }
-                    else patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, line = ++c });
-                }
-                catch { }
+                    else patterns.Add(new pattern_info() { regex = new Regex(pattern, RegexOptions.IgnoreCase), only_content = false, not_uk = false, line = ++c, whitelist = null });
+                } catch { }
         }   
     }
     static void check(lang lang)
@@ -208,11 +212,11 @@ class Program
     }
     static bool addition_is_triggered(string text)
     {
-        if (text == null) return false;
+        if (text == null) return false; var talk_ns_rgx = new Regex("2|4|100|104|106");
         foreach (var pattern in patterns) {
             bool edit_is_on_the_discussion_page = ns % 2 == 1 || talk_ns_rgx.IsMatch(ns.ToString());
             if ((pattern.not_uk && lang == lang.uk) || (pattern.only_content && edit_is_on_the_discussion_page)) continue;
-            else if (pattern.regex.IsMatch(text) && !whitelist_text_rgx.IsMatch(pattern.regex.Match(text).Value)) {
+            else if (pattern.regex.IsMatch(text) && (pattern.whitelist == null || !pattern.whitelist.IsMatch(pattern.regex.Match(text).Value))) {
                 post_suspicious_edit(pattern.regex.Match(text).Value + ", line" + pattern.line, type.addition); return true;
             }
         } return false;
@@ -271,11 +275,11 @@ class Program
         string revisions_info = num_of_revs == num_of_revs_to_check ? "" : ", revs: " + num_of_revs; reason += ", dsize:" + diff_size + revisions_info;
         if (num_of_revs == 1) {
             diff = site.GetStringAsync("https://" + langdata[lang].domain + ".org/wiki/" + e(title) + "?action=raw").Result;
-            if (diff.Substring(0,10) == comment.Substring(0,10)) comment = "";
+            if (comment.Contains(diff.Substring(0,20))) comment = "";
         }
         diff = diff.Replace("&lt;", "<").Replace("&gt;", ">");
-        string diff_escaped_for_discord = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*");
-        wiki_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(diff_escaped_for_discord, "~~$1~~ "), "`$1` ");
+        string diff_escaped_for_discord = diff.Replace("`", "\\`").Replace("~", "\\~").Replace("_", "\\_").Replace("*", "\\*").Replace("|", "\\|");
+        wiki_diff = ins_rgx.Replace(del_rgx.Replace(diff, "-$1 "), "+$1 "); discord_diff = ins_rgx.Replace(del_rgx.Replace(diff_escaped_for_discord, "~~$1~~ "), "**$1** ");
     }
     static void post_edit_to_discord(type type)
     {
