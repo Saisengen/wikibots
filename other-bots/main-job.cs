@@ -38,7 +38,7 @@ class Program
     { { "month", new Dictionary<string, Dictionary<string, int>>() }, { "year", new Dictionary<string, Dictionary<string, int>>() }, { "alltime", new Dictionary<string, Dictionary<string, int>>() } };
     static HashSet<string> invoking_pages = new HashSet<string>(), script_users = new HashSet<string>(); static MySqlCommand command; static MySqlDataReader rdr; static MySqlConnection connect;
     static Dictionary<string, bool> users_activity = new Dictionary<string, bool>(); static Dictionary<string, script_usages> scripts = new Dictionary<string, script_usages>();
-    static Regex is_rgx = new Regex(@"importscript\s*\(\s*['""]([^h/].*?)\s*['""]\s*\)", RegexOptions.IgnoreCase),
+    static Regex is_rgx = new Regex(@"importscript\s*\(\s*['""]([^h/].*?)\s*['""]\s*\)", RegexOptions.IgnoreCase), redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[ *([^]]*) *\]\]"),
     is2_rgx = new Regex(@"importscript\s*\(\s*['""]/wiki/(.*?)\s*['""]\s*\)", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline),
     is_foreign_rgx = new Regex(@"importscript\s*\(\s*['""]([^h].*?)\s*['""],\s*['""]([^""']*)\s*['""]", RegexOptions.IgnoreCase),
     is_ext_rgx = new Regex(@"importscript\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/(.*?\.js)", RegexOptions.IgnoreCase),
@@ -50,6 +50,7 @@ class Program
     static string e(string input) { return Uri.EscapeDataString(input); }
     static int i(Object input) { return Convert.ToInt32(input); }
     static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
+    static bool page_exists(string domain, string pagename) { return !site.GetStringAsync("https://" + domain + ".org/w/api.php?action=query&format=xml&prop=info&titles=" + e(pagename)).Result.Contains("page _idx=\"-1\""); }
     static string serialize(HashSet<string> list) { list.ExceptWith(highflags); return JsonConvert.SerializeObject(list); }
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static string escape_comment(string comment)
@@ -230,7 +231,6 @@ class Program
     }
     static bool always_redir(string page, bool title)
     {
-        var redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[");
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=ids|content&rvlimit=max&" + (title ? "titles=" :
             "pageids=") + page).Result));
         while (r.Read())
@@ -244,8 +244,8 @@ class Program
     static void redirs_deletion()
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; doc.LoadXml(result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var legal_redirs = new List<string>();
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=К:Википедия:Намеренные перенаправления между СО&cmlimit=max").Result));
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var legal_redirs = new List<string>(); var r = new XmlTextReader(new StringReader(site.GetStringAsync(
+            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=К:Википедия:Намеренные перенаправления между СО&cmlimit=max").Result));
         while (r.Read())
             if (r.Name == "cm")
                 legal_redirs.Add(r.GetAttribute("pageid"));
@@ -260,7 +260,7 @@ class Program
                             var r3 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=backlinks&blpageid=" + id).Result));
                             bool there_are_links = false;
                             while (r3.Read())
-                                if (r3.Name == "bl" && !r3.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями") && !r3.GetAttribute("title").StartsWith("Участник:DvoreBot/Оставленные перенаправления"))
+                                if (r3.Name == "bl" && !r3.GetAttribute("title").StartsWith("Википедия:Страницы с похожими названиями"))
                                     there_are_links = true;
                             if (!there_are_links)
                                 result = site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(id), "pageid" },
@@ -271,17 +271,10 @@ class Program
         }
         var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=querypage&qppage=BrokenRedirects&qplimit=max").Result));
         while (r2.Read())
-            if (r2.Name == "page")
-            {
-                string title = r2.GetAttribute("title");
-                string ns = r2.GetAttribute("ns");
-                if (ns != "2" || (ns == "2" && title.Contains("/")))//ЛС с меты?
-                {
-                    var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=" + title + "&rvprop=ids&rvlimit=max").Result));
-                    if (always_redir(title, true))
-                        result = site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(title), "title" },
-                            { new StringContent(token), "token" } }).Result;
-                }
+            if (r2.Name == "page") {
+                string title = r2.GetAttribute("title"); string target = redir_rgx.Match(readpage(title)).Groups[1].Value;
+                if (always_redir(title, true) && !page_exists("ru.wikipedia", target))
+                    site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(title), "title" }, { new StringContent(token), "token" } });
             }
     }
     static void unreviewed_in_nonmain_ns()
@@ -610,13 +603,10 @@ class Program
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
                     "&rvlimit=max&titles=" + e(incname)).Result);
                     if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0)) {
-                        string newname = incname.Substring(10); string article_exist = "";
-                        var r1 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(newname)).Result));
-                        while (r1.Read())
-                            if (r1.Name == "page" && r1.GetAttribute("_idx") != "-1") {
-                                article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] уже существует."; newname += " (из Инкубатора)"; }
+                        string newname = incname.Substring(10); string warning_text = ""; if (page_exists("ru.wikipedia", newname)) {
+                                warning_text = " ВНИМАНИЕ: статья [[:" + newname + "]] уже существует."; newname += " (из Инкубатора)"; }
                         if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&inprop=protection&titles=" + e(newname)).Result.Contains("level=\"sysop\"")) {
-                            article_exist = " ВНИМАНИЕ: статья [[:" + newname + "]] защищена от создания."; newname += " (из Инкубатора)"; }
+                            warning_text = " ВНИМАНИЕ: статья [[:" + newname + "]] защищена от создания."; newname += " (из Инкубатора)"; }
                         string newtext = pagetext;
                         while (newtext.Contains("\n "))
                             newtext = newtext.Replace("\n ", "\n");
@@ -627,7 +617,7 @@ class Program
                             newname + "|вынос на КУ]]");
                         num_of_nominated_pages++;
                         afd_addition += "\n\n==[[" + newname + "]]==\n[[file:Songbird-egg.svg|20px]] Исчерпало срок нахождения в [[ВП:Инкубатор|]]е, нужно оценить допустимость нахождения статьи в основном " +
-                            "пространстве." + article_exist + " [[u:MBHbot]] " + ts.ToString("HH:mm, d MMMM yyyy", new CultureInfo("ru-RU")) + " (UTC)"; ts = ts.AddMinutes(1);
+                            "пространстве." + warning_text + " [[u:MBHbot]] " + ts.ToString("HH:mm, d MMMM yyyy", new CultureInfo("ru-RU")) + " (UTC)"; ts = ts.AddMinutes(1);
 
                         var doc = new XmlDocument(); var result = unpatbot.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
                         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var unpat_token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent
@@ -648,12 +638,8 @@ class Program
             }
         if (num_of_nominated_pages > 0)
         {
-            string afd_text = ""; var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(afd_pagename)).Result));
-            while (r2.Read())
-                if (r2.Name == "page" && r2.GetAttribute("_idx") == "-1")
-                    afd_text = "{{КУ-Навигация}}\n\n";
-                else
-                    afd_text = readpage(afd_pagename);
+            string afd_text = "";
+            afd_text = page_exists("ru.wikipedia", afd_pagename) ? readpage(afd_pagename) : "{{КУ-Навигация}}\n\n";
             rsave(afd_pagename, afd_text + afd_addition);
         }
     }
@@ -1448,7 +1434,8 @@ class Program
                 if (r.Name == "page" && r.GetAttribute("_idx") != "-1") { r.Read(); r.Read(); r.Read(); content = r.Value; break; }
         content = e(multiline_comment.Replace(content, "")).Replace("(\n", "(").Replace("{\n", "{");
         foreach (var s in content.Split('\n'))
-            if (!s.TrimStart(' ').StartsWith("//")) {
+            if (!s.TrimStart(' ').StartsWith("//"))
+            {
                 //if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
                 //e.WriteLine(s);
                 //if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
@@ -1456,7 +1443,8 @@ class Program
                 if (is_foreign_rgx.IsMatch(s))
                     foreach (Match m in is_foreign_rgx.Matches(s))
                         add_script(m.Groups[2].Value + ":" + m.Groups[1].Value);
-                else {
+                else
+                {
                     foreach (Match m in is_rgx.Matches(s))
                         add_script(m.Groups[1].Value);
                     foreach (Match m in is2_rgx.Matches(s))
@@ -1618,10 +1606,8 @@ class Program
     static void find_and_delete_usages(Dictionary<string, logrecord> deletedfiles, bool iscommons)
     {
         foreach (var df in deletedfiles.Keys.ToList()) {
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=" + e(df)).Result)))
-                while (r.Read())
-                    if (r.Name == "page" && r.GetAttribute("_idx")[0] != '-')
-                        deletedfiles.Remove(r.GetAttribute("title"));
+            if (page_exists("ru.wikipedia", df))
+                deletedfiles.Remove(df);
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&fuprop=title&fulimit=max&titles=" + e(df)).Result))) {
                 bool file_is_used = true; string ru_filename = ""; while (r.Read()) {
                     if (r.NodeType == XmlNodeType.Element && r.Name == "page") { ru_filename = r.GetAttribute("title"); file_is_used = r.GetAttribute("_idx")[0] != '-'; }
@@ -1660,13 +1646,8 @@ class Program
             using (var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + cont).Result))) {
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue"); while (r.Read())
                     if (r.Name == "item" && r.GetAttribute("title") != null) {
-                        string comm = r.GetAttribute("comment") ?? ""; string filename = r.GetAttribute("title"); bool same_name_on_commons_exist = false;
-                        using (var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://commons.wikimedia.org/w/api.php?action=query&format=xml&prop=info&titles=file:" +
-                            e(filename.Substring(5))).Result)))
-                            while (rr.Read())
-                                if (rr.Name == "page" && rr.GetAttribute("_idx")[0] != '-')
-                                    same_name_on_commons_exist = true;
-                        if (!same_name_on_commons_exist)
+                        string comm = r.GetAttribute("comment") ?? ""; string filename = r.GetAttribute("title");
+                        if (!page_exists("commons.wikimedia", filename.Substring(5)))
                             if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
                             filename.Substring(5)) || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
                                 replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
@@ -1699,7 +1680,7 @@ class Program
         var requests = new Dictionary<string, string> { { "stars-by-cluster", "Википедия:Автоматически формируемые списки звёзд по скоплениям" }, { "exoplanets-by-constellation", "Википедия:Автоматически " +
                 "формируемые списки экзопланет по созвездиям" }, { "exoplanetary-systems", "Википедия:Автоматически формируемые шаблоны экзопланетных систем" }, { "astrocatalogs", "Википедия:Автоматически " +
                 "формируемые шаблоны по астрокаталогам" }, { "stars-by-constellation", "Навигационные шаблоны:Звёзды по созвездиям" } };
-        foreach (var rq in "stars-by-constellation|stars-by-cluster|exoplanets-by-constellation|exoplanetary-systems|astrocatalogs".Split('|')) {
+        foreach (var rq in requests.Keys) {
             var query = new StreamReader(site.GetStreamAsync(github_base_url + rq + ".rq").Result).ReadToEnd().Replace("{", "{{").Replace("}", "}}").Replace("{{0}}", "{0}"); var pages = new List<string>();
             var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:" + requests[rq]).Result));
             while (r.Read())
@@ -1714,7 +1695,7 @@ class Program
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (oldtext.Length - newtext.Length > 2048) { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
+                            if (oldtext.Length - newtext.Length > 2048 && newtext != "upstream request timeout") { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
                             else rsave(title, newtext);
                         }
                     }
