@@ -1714,20 +1714,59 @@ class Program
     }
     static void afd_summarizing()
     {
-        string result = "[[К:Википедия:Удаление страниц]]\n"; var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase);
+        string result = "{{shortcut|ВП:ЧК}}[[К:Википедия:Удаление страниц]]\n"; var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase);
         var w = new StreamWriter("afd_summar_errors.txt"); using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
-            "&format=xml&cmtitle=К:Википедия:Страницы на КУ более 5 лет&cmprop=title&cmlimit=max").Result)))
+            "&format=xml&cmtitle=К:Википедия:Самые просроченные КУ&cmprop=title&cmlimit=max").Result)))
             while (r.Read())
                 if (r.Name == "cm") {
                     string nominated_page = r.GetAttribute("title"); string pagetext = readpage(nominated_page); string date = afd_template.Match(pagetext).Groups[2].Value;
-                    if (iso_to_ru_date(date) != "error")
-                    {
+                    if (iso_to_ru_date(date) != "error") {
                         string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page;
                         result += "==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]<center>\n{|class=standard\n!Оставить!!Удалить\n|-\n|\n|\n|}</center>\n\n";
                     }
                     else w.WriteLine(nominated_page);
                 }
         rsave("ВП:Чрезвычайная комиссия", result); w.Close();
+    }
+    static void extlinks_counter()
+    {
+        var links = new Dictionary<string, int>(); var shortenedlinks = new Dictionary<string, int>(); string elcont = null, gapcont = null, query =
+            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=extlinks&generator=allpages&ellimit=max&gapfilterredir=nonredirects&gaplimit=max";
+        do
+        {
+            string finalquery = query + (elcont == null ? "" : "&elcontinue=" + e(elcont)) + (gapcont == null ? "" : "&gapcontinue=" + e(gapcont));
+            string apiout = site.GetStringAsync(finalquery).Result;
+            using (var r = new XmlTextReader(new StringReader(apiout))) {
+                r.Read(); r.Read(); r.Read(); elcont = r.GetAttribute("elcontinue"); if (r.GetAttribute("gapcontinue") != null) gapcont = r.GetAttribute("gapcontinue");
+                if (elcont == null && r.GetAttribute("gapcontinue") == null) goto end;
+                while (r.Read())
+                    if (r.Name == "el" && r.NodeType == XmlNodeType.Element) {
+                        r.Read(); string link = r.Value; link = link.Substring(link.IndexOf("//") + 2); if (link.EndsWith("/")) link = link.Substring(0, link.Length - 1);
+                        link = link.IndexOf("/") == -1 ? link : link.Substring(0, link.LastIndexOf("/"));
+                        if (!links.ContainsKey(link))
+                            links.Add(link, 1);
+                        else
+                            links[link]++;
+                    }
+            }
+        } while (elcont != null || gapcont != null);
+    end:;
+
+        foreach (var l in links.OrderByDescending(l => l.Value).ToArray()) {
+            string testurl = (l.Key.StartsWith("www.") ? l.Key.Substring(4) : "www." + l.Key);
+            if (shortenedlinks.ContainsKey(testurl))
+                shortenedlinks[testurl] += l.Value;
+            else
+                shortenedlinks.Add(l.Key, l.Value);
+        }
+        string result = "\n{|class=\"standard\"\n!Место!!Число&nbsp;ссылок&nbsp;из&nbsp;рувики&nbsp;на!!style=\"text-align:left\"|данный сайт или его раздел";
+        int counter = 0;
+        foreach (var l in shortenedlinks.OrderByDescending(l => l.Value))
+            if (l.Value < 100)
+                break;
+            else
+                result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
+        rsave("u:MBH/most linked sites", result + "\n|}");
     }
     static void Main()
     {
@@ -1736,7 +1775,7 @@ class Program
         nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" };
         genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
-        afd_summarizing();
+        //afd_summarizing();
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1769,6 +1808,7 @@ class Program
             try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         }
     }
 }
