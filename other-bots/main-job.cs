@@ -538,8 +538,7 @@ class Program
         var cats = new Dictionary<string, int>() { {"Википедия:Статьи для срочного улучшения",0 },{ "Википедия:Незакрытые обсуждения переименования страниц",0 },{ "Википедия:Незакрытые обсуждения статей для" +
                 " улучшения", 0 },{ "Википедия:Кандидаты на удаление", 0 },{ "Википедия:Незакрытые обсуждения удаления страниц", 0 },{ "Википедия:Статьи для переименования", 0 }, { "Википедия:Кандидаты на " +
                 "объединение", 0 },{ "Википедия:Незакрытые обсуждения объединения страниц", 0 },{ "Википедия:Статьи для разделения", 0 },{ "Википедия:Незакрытые обсуждения разделения страниц", 0 },
-            { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0},
-            { "Википедия:Страницы на КУ более 5 лет", 0 } };
+            { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0} };
         foreach (var cat in cats.Keys.ToList()) {
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
             while (rdr.Read())
@@ -551,10 +550,10 @@ class Program
 
         string stat_text = readpage("u:MBH/Завалы");
         string result = "\n|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:" +
-            "Кандидаты на удаление"] + "||" + cats["Википедия:Страницы на КУ более 5 лет"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] +
-            "||" + cats["Википедия:Незакрытые обсуждения переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] +
-            "||" + cats["Википедия:Статьи для разделения"] + "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:" +
-            "Незакрытые обсуждения восстановления страниц"] + "||" + cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
+            "Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения " +
+            "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
+            "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:" + "Незакрытые обсуждения восстановления страниц"] +
+            "||" + cats["Инкубатор:Все статьи"] + "||" + cats ["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
         rsave("u:MBH/Завалы", stat_text + result);
     }
     static void main_inc_bot()
@@ -601,7 +600,7 @@ class Program
                             pagetext = pagetext.Replace(m.ToString(), m.ToString().Replace("[[", "[[:"));
                         foreach (Match m in index_rgx.Matches(pagetext))
                             pagetext = pagetext.Replace(m.ToString(), "");
-                        save("ru", incname, pagetext, "добавлен {{В инкубаторе}}, если не было, и [[U:MBHbot/Подготовка статей|скрыты категории]], если были");
+                        save("ru", incname, pagetext, "добавлен {{В инкубаторе}}, если не было, и [[Проект:Инкубатор/Подготовка статей|скрыты категории]], если были");
                     }
                 }
             }
@@ -1352,14 +1351,14 @@ class Program
 
         foreach (var invoking_page in invoking_pages) {
             script_user = invoking_page.Substring(invoking_page.IndexOf(':') + 1, invoking_page.IndexOf('/') - 1 - invoking_page.IndexOf(':')); Program.invoking_page = invoking_page;
-            process_site("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=" + e(invoking_page));
+            analyze_invoking_js_file("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=" + e(invoking_page));
             if (!script_users.Contains(script_user))
                 script_users.Add(script_user);
         }
 
         foreach (var username in script_users) {
             Program.script_user = username; invoking_page = "meta:" + username + "/global.js";
-            process_site("https://meta.wikimedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=user:" + e(username) + "/global.js");
+            analyze_invoking_js_file("https://meta.wikimedia.org/w/api.php?action=query&format=xml&prop=revisions&rvprop=content&rvlimit=1&titles=user:" + e(username) + "/global.js");
         }
 
         foreach (var s in scripts.OrderByDescending(s => s.Value.active))
@@ -1415,32 +1414,32 @@ class Program
         else
             scripts.Add(scriptname, new script_usages() { active = 0, inactive = 1 });
     }
-    static void process_site(string url)
+    static void analyze_invoking_js_file(string url)
     {
         string invoking_js_content = "";
         using (var r = new XmlTextReader(new StringReader(site.GetStringAsync(url).Result)))
             while (r.Read())
                 if (r.Name == "page" && r.GetAttribute("_idx") != "-1") { r.Read(); r.Read(); r.Read(); invoking_js_content = r.Value; break; }
-        try
-        {
-            invoking_js_content = e(multiline_comment.Replace(invoking_js_content, "")).Replace("(\n", "(").Replace("{\n", "{");
-            foreach (var s in invoking_js_content.Split('\n'))
-                if (!s.TrimStart(' ').StartsWith("//"))
-                {
-                    //if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
-                    //e.WriteLine(s);
-                    //if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
-                    //e.WriteLine(s);
-                    if (is_foreign_rgx.IsMatch(s))
-                        foreach (Match m in is_foreign_rgx.Matches(s))
+        invoking_js_content = multiline_comment.Replace(invoking_js_content, "").Replace("(\n", "(").Replace("{\n", "{");
+        foreach (var s in invoking_js_content.Split('\n'))
+            if (!s.TrimStart(' ').StartsWith("//"))
+            {
+                //if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
+                //e.WriteLine(s);
+                //if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
+                //e.WriteLine(s);
+                try {
+                    var str = e(s);
+                    if (is_foreign_rgx.IsMatch(str))
+                        foreach (Match m in is_foreign_rgx.Matches(str))
                             add_script(m.Groups[2].Value + ":" + m.Groups[1].Value);
                     else
                     {
-                        foreach (Match m in is_rgx.Matches(s))
+                        foreach (Match m in is_rgx.Matches(str))
                             add_script(m.Groups[1].Value);
-                        foreach (Match m in is2_rgx.Matches(s))
+                        foreach (Match m in is2_rgx.Matches(str))
                             add_script(m.Groups[1].Value);
-                        foreach (Match m in is_ext_rgx.Matches(s))
+                        foreach (Match m in is_ext_rgx.Matches(str))
                             if (m.Groups[3].Value.EndsWith("edia"))
                                 add_script(m.Groups[2].Value + ":" + m.Groups[4].Value);
                             else if (m.Groups[3].Value == "wikidata")
@@ -1449,9 +1448,9 @@ class Program
                                 add_script("mw:" + m.Groups[4].Value);
                             else
                                 add_script(m.Groups[2].Value + ":" + m.Groups[3].Value + ":" + m.Groups[4].Value);
-                        foreach (Match m in loader_rgx.Matches(s))
+                        foreach (Match m in loader_rgx.Matches(str))
                             add_script(m.Groups[2].Value);
-                        foreach (Match m in loader_foreign_rgx.Matches(s))
+                        foreach (Match m in loader_foreign_rgx.Matches(str))
                             if (m.Groups[4].Value.EndsWith("edia"))
                                 add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
                             else if (m.Groups[4].Value == "wikidata")
@@ -1460,7 +1459,7 @@ class Program
                                 add_script("mw:" + m.Groups[5].Value);
                             else
                                 add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
-                        foreach (Match m in loader_foreign2_rgx.Matches(s))
+                        foreach (Match m in loader_foreign2_rgx.Matches(str))
                             if (m.Groups[4].Value.EndsWith("edia"))
                                 add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
                             else if (m.Groups[4].Value == "wikidata")
@@ -1470,9 +1469,10 @@ class Program
                             else
                                 add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
                     }
-                }
-        } catch (Exception e) { Console.WriteLine(e.ToString() + '\n' + url); }
-        
+                } catch { Console.WriteLine(url); }
+                
+            }
+
     }
     static Dictionary<string, Dictionary<string, int>> creators = new Dictionary<string, Dictionary<string, int>>();
     static void page_creators()
@@ -1723,18 +1723,28 @@ class Program
     }
     static void cheka_list_creation()
     {
-        string result = "{{shortcut|ВП:ЧК}}[[К:Википедия:Удаление страниц]]<center>'''Не правьте эту страницу, если вы не администратор или подводящий итоги.'''\n";
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase);
+        string result = readpage("ВП:Чрезвычайная комиссия");
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var w = new StreamWriter("afd_summar_errors.txt"); using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
             "&format=xml&cmtitle=К:Википедия:Самые просроченные КУ&cmprop=title&cmlimit=max").Result)))
             while (r.Read())
                 if (r.Name == "cm") {
-                    string nominated_page = r.GetAttribute("title"); string pagetext = readpage(nominated_page); string date = afd_template.Match(pagetext).Groups[2].Value;
-                    if (iso_to_ru_date(date) != "error") {
-                        string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page;
-                        result += "==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n{|class=standard\n!Оставить!!Удалить\n|-\n|\n|\n|}\n\n";
+                    string nominated_page = r.GetAttribute("title");
+                    if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Категория:") && !nominated_page.StartsWith("Модуль:")) {
+                        string pagetext = readpage(nominated_page);
+                        bool nominated_before = false;
+                        foreach (Match h in header_rgx.Matches(pagetext))
+                            if (nominated_page == h.Groups[1].Value)
+                                nominated_before = true;
+                        if (!nominated_before) {
+                            string date = afd_template.Match(pagetext).Groups[2].Value;
+                            if (iso_to_ru_date(date) != "error") {
+                                string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page;
+                                result += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n{|class=standard\n!Оставить!!Удалить\n|-\n|\n|\n|}\n";
+                            }
+                            else w.WriteLine(nominated_page);
+                        }
                     }
-                    else w.WriteLine(nominated_page);
                 }
         rsave("ВП:Чрезвычайная комиссия", result); w.Close();
     }
@@ -1804,9 +1814,8 @@ class Program
         genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
         //try { cheka_list_creation(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { cheka_processing(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1829,13 +1838,14 @@ class Program
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         }
