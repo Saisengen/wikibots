@@ -52,6 +52,227 @@ class Program
         if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
     }
     static void rsave(string title, string text) { save("ru", title, text, ""); }
+    static void adminstats()
+    {
+        var discussiontypes = new string[] { "К удалению", "К восстановлению" }; var bots = new HashSet<string>(); var statstable = new Dictionary<string, Dictionary<string, int>>(); var sixmonths_earlier =
+            now.AddMonths(-6); var now_ym = now.ToString("yyyyMM"); var sixmonths_earlier_ym = sixmonths_earlier.ToString("yyyyMM"); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
+        connect.Open(); MySqlCommand command; MySqlDataReader r;
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\";", connect) { CommandTimeout = 99999 }; r = command.ExecuteReader();
+        while (r.Read())
+            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
+                { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
+                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
+        r.Close();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"closer\";";
+        r = command.ExecuteReader();
+        while (r.Read())
+            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
+                { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
+                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
+        r.Close();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
+        r = command.ExecuteReader();
+        while (r.Read())
+            bots.Add(r.GetString(0));
+        r.Close();
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
+            "logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type = 'delete' " +
+            "and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
+        r = command.ExecuteReader();
+        while (r.Read()) {
+            statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+            switch (r.GetString("log_action")) {
+                case "delete":
+                    statstable[r.GetString("user")]["delete"] += r.GetInt32("count");
+                    break;
+                case "restore":
+                    statstable[r.GetString("user")]["restore"] += r.GetInt32("count");
+                    break;
+                case "revision":
+                case "event":
+                    statstable[r.GetString("user")]["del_rev_log"] += r.GetInt32("count");
+                    break;
+            }
+        }
+        r.Close();
+
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON " +
+            "actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_action not like 'move_%' and " +
+            "log_type <> 'abusefilterblockeddomainhit' and log_type <> 'spamblacklist' and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and " +
+            "log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_type <> 'massmessage' and log_type<>'growthexperiments' and log_type<>'import' GROUP BY actor_name, log_type;";
+        r = command.ExecuteReader();
+        while (r.Read())
+            if (r.GetString("log_type") == "review")
+                statstable[r.GetString("user")]["review"] += r.GetInt32("count");
+            else {
+                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count"); statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
+            }
+        r.Close();
+
+        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
+            "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN ('sysop', 'closer') AND rev_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym +
+            "01000000 GROUP BY actor_name, page_namespace;";
+        r = command.ExecuteReader();
+        while (r.Read())
+        {
+            statstable[r.GetString("user")]["totaledits"] += r.GetInt32("count");
+            switch (r.GetString("page_namespace"))
+            {
+                case "0":
+                case "6":
+                case "10":
+                case "14":
+                case "100":
+                case "102":
+                    statstable[r.GetString("user")]["contentedits"] += r.GetInt32("count"); break;
+                case "8":
+                    statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count"); statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count"); break;
+            }
+        }
+        r.Close();
+
+        var lm = now.AddMonths(-1);
+        var summaryrgx = new Regex(@"={1,}\s*Итог\s*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(" +
+            genitive_month[lm.Month] + "|" + genitive_month[lm.AddMonths(-1).Month] + "|" + genitive_month[lm.AddMonths(-2).Month] + "|" + genitive_month[lm.AddMonths(-3).Month] + "|" + genitive_month[lm.AddMonths(-4).Month] +
+            "|" + genitive_month[lm.AddMonths(-5).Month] + ") (" + lm.Year + "|" + lm.AddMonths(-5).Year + @") \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        foreach (var t in discussiontypes)
+            using (var xr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "/&apnamespace=4&aplimit=max").Result)))
+                while (xr.Read())
+                    if (xr.Name == "p") {
+                        string page = xr.GetAttribute("title"); int year; try { year = i(page.Substring(page.Length - 4)); } catch { continue; }
+                        if (year >= 2018) {
+                            string pagetext;
+                            try { pagetext = readpage(page); } catch { continue; }
+                            var results = summaryrgx.Matches(pagetext);
+                            foreach (Match m in results) {
+                                string user = m.Groups[3].ToString().Replace('_', ' ');
+                                if (!statstable.ContainsKey(user))
+                                    continue;
+                                statstable[user]["totalactions"]++;
+                                if (t == "К удалению")
+                                    statstable[user]["delsum"]++;
+                                else
+                                    statstable[user]["restoresum"]++;
+                            }
+                        }
+                    }
+
+        string cutext = readpage("u:BotDR/CU_stats");
+        var custats = cutext.Split('\n');
+        foreach (var s in custats)
+            if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
+
+        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика активности " +
+            "администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + now.Year +
+            " года. Первично отсортирована по сумме числа правок и админдействий, нулевые значения не показаны. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника пропадёт " +
+            "из таблицы при следующем обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в содержательных " +
+            "пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий (итоги плюс удаления)" +
+            ", из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable\"\n!rowspan=2|Участник!!colspan=3|Правки!!colspan=13|Админдействия\n|-\n!{{abbr" +
+            "|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|" +
+            "восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)" +
+            "стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров " +
+            "правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
+        foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
+        {
+            bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
+            bool lessactions = u.Value["closer"] == 0 && u.Value["totalactions"] < 25;
+            bool lesscontent = u.Value["closer"] == 0 && u.Value["contentedits"] + u.Value["review"] < 50;
+            bool lesstotal = u.Value["closer"] == 0 && u.Value["totaledits"] + u.Value["review"] < 100;
+            string color = "";
+            if (bots.Contains(u.Key))
+                color = "style=\"background-color:#ccf\"";
+            else if (inactivecloser || lessactions || lesscontent || lesstotal)
+                color = "style=\"background-color:#fcc\"";
+            string deletetext = u.Value["delete"] + u.Value["delsum"] == 0 ? "" : inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")";
+            string restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")"; //пробелы после ''' нужны чтоб не было висящих '
+            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "''' " + cell(u.Value["totaledits"]) +
+                "'''" : cell(u.Value["totaledits"])) + "||" + (lesscontent ? "''' " + cell(u.Value["contentedits"]) + "'''" : cell(u.Value["contentedits"])) + "||" + cell(u.Value["review"]) + "||" +
+                (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + deletetext + "||" + restoretext + "||" + cell(u.Value["del_rev_log"]) + "||" +
+                cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] +
+                u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["checkuser"]) + "||" + cell(u.Value["renameuser"]);
+        }
+        rsave("ВП:Администраторы/Активность", result + "\n|}");
+    }
+    static void apat_for_filemovers()
+    {
+        var badusers = new List<string>() { "Шухрат Саъдиев" };
+        var globalusers = new HashSet<string>();
+        var globalusers_needs_flag = new HashSet<string>();
+        var apats = new HashSet<string>();
+        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
+        connect.Open();
+        var command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\" or ug_group = \"autoreview\";", connect) { CommandTimeout = 99999 };
+        var r = command.ExecuteReader();
+        while (r.Read())
+            apats.Add(r.GetString(0));
+        r.Close();
+
+        connect = new MySqlConnection(creds[2].Replace("%project%", "commonswiki"));
+        connect.Open();
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";", connect) { CommandTimeout = 99999 };
+        r = command.ExecuteReader();
+        while (r.Read())
+            globalusers.Add(r.GetString(0));
+        r.Close();
+
+        using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://meta.wikimedia.org/w/api.php?action=query&format=xml&list=globalallusers&agugroup=global-rollbacker&agulimit=max").Result)))
+            while (rdr.Read())
+                if (rdr.Name == "globaluser")
+                    if (!globalusers.Contains(rdr.GetAttribute("name")))
+                        globalusers.Add(rdr.GetAttribute("name"));
+
+        globalusers.ExceptWith(apats);
+
+        var lastmonth = now.AddMonths(-1);
+        foreach (var mover in globalusers)
+            using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString
+                ("yyyy-MM-dd") + "T00:00:00&ucprop=comment&ucuser=" + e(mover)).Result)))
+                while (rdr.Read())
+                    if (rdr.Name == "item" && rdr.GetAttribute("comment") != null)
+                        if (rdr.GetAttribute("comment").Contains("GR]") && !badusers.Contains(mover)) { globalusers_needs_flag.Add(mover); break; }
+
+        if (globalusers_needs_flag.Count > 0) {
+            string zkatext = readpage("ВП:Запросы к администраторам");
+            var header = new Regex(@"(^\{[^\n]*\}\s*<[^>]*>\n)");
+            string newmessage = "==Выдать апата глобальным правщикам==\nПеречисленные ниже участники занимаются переименованием файлов на Викискладе с заменой включений во всех разделах. В соответствии с [[ВП:ПАТ#ГЛОБ]] прошу рассмотреть их вклад и выдать им апата, чтобы такие правки не распатрулировали страницы.";
+            foreach (var mover in globalusers_needs_flag)
+                newmessage += "\n* [[special:contribs/" + mover + "|" + mover + "]]";
+            newmessage += "\n~~~~\n\n";
+            if (header.IsMatch(zkatext))
+                rsave("ВП:Запросы к администраторам", header.Replace(zkatext, "$1" + "\n\n" + newmessage));
+            else
+                rsave("ВП:Запросы к администраторам", newmessage + zkatext);
+        }
+    }
+    static void astro_update()
+    {
+        string github_base_url = "https://raw.githubusercontent.com/Saisengen/wikibots/refs/heads/main/astro-updater/";
+        var requests = new Dictionary<string, string> { { "stars-by-cluster", "Википедия:Автоматически формируемые списки звёзд по скоплениям" }, { "exoplanets-by-constellation", "Википедия:Автоматически " +
+                "формируемые списки экзопланет по созвездиям" }, { "exoplanetary-systems", "Википедия:Автоматически формируемые шаблоны экзопланетных систем" }, { "astrocatalogs", "Википедия:Автоматически " +
+                "формируемые шаблоны по астрокаталогам" }, { "stars-by-constellation", "Навигационные шаблоны:Звёзды по созвездиям" } };
+        foreach (var rq in requests.Keys)
+        {
+            var query = new StreamReader(site.GetStreamAsync(github_base_url + rq + ".rq").Result).ReadToEnd().Replace("{", "{{").Replace("}", "}}").Replace("{{0}}", "{0}"); var pages = new List<string>();
+            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:" + requests[rq]).Result));
+            while (r.Read())
+                if (r.Name == "cm")
+                    pages.Add(r.GetAttribute("title"));
+            foreach (var title in pages) {
+                var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=pageprops&ppprop=wikibase_item&format=xml&titles=" + title).Result));
+                while (r2.Read())
+                    if (r2.Name == "pageprops") {
+                        var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
+                            r2.GetAttribute("wikibase_item")) } })).Result;
+                        var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
+                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
+                            var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
+                            if (oldtext.Length - newtext.Length > 2048) { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
+                            else if (!newtext.Contains("upstream request timeout")) rsave(title, newtext);
+                        }
+                    }
+            }
+        }
+    }
     static void nonfree_files_in_nonmain_ns()
     {
         string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&generator=categorymembers&fuprop=title&fulimit=max&gcmtitle=К:Файлы:Несвободные&gcmtype=file&gcmlimit=1000";
@@ -95,27 +316,6 @@ class Program
                     if (r.NodeType == XmlNodeType.Element && r.Name == "cm") {
                         string text = readpage(r.GetAttribute("title")); save("ru", r.GetAttribute("title"), rgx.Replace(text, ""), "удалены просроченные шаблоны");
                     }
-    }
-    static void unlicensed_files()
-    {
-        var autocatfiles = new HashSet<string>();
-        var tagged_files = new HashSet<string>();
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result)))
-            while (r.Read())
-                if (r.Name == "cm")
-                    autocatfiles.Add(r.GetAttribute("title"));
-
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t:No_license&einamespace=6&eilimit=max").Result)))
-            while (r.Read())
-                if (r.Name == "ei")
-                    tagged_files.Add(r.GetAttribute("title"));
-
-        autocatfiles.ExceptWith(tagged_files);
-        foreach (var file in autocatfiles)
-        {
-            string pagetext = readpage(file);
-            save("ru", file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии");
-        }
     }
     static Regex redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[ *([^]]*) *\]\]");
     static void redirs_deletion()
@@ -721,151 +921,6 @@ class Program
                 break;
         rsave("ВП:Пинг/Статистика лайков", result + "\n|}\n|}");
     }
-    static void adminstats()
-    {
-        var discussiontypes = new string[] { "К удалению", "К восстановлению" }; var bots = new HashSet<string>(); var statstable = new Dictionary<string, Dictionary<string, int>>(); var sixmonths_earlier =
-            now.AddMonths(-6); var now_ym = now.ToString("yyyyMM"); var sixmonths_earlier_ym = sixmonths_earlier.ToString("yyyyMM"); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
-        connect.Open(); MySqlCommand command; MySqlDataReader r;
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\";", connect) { CommandTimeout = 99999 }; r = command.ExecuteReader();
-        while (r.Read())
-            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
-                { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
-                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
-        r.Close();
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"closer\";";
-        r = command.ExecuteReader();
-        while (r.Read())
-            statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
-                { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
-                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
-        r.Close();
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
-        r = command.ExecuteReader();
-        while (r.Read())
-            bots.Add(r.GetString(0));
-        r.Close();
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
-            "logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type = 'delete' " +
-            "and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
-        r = command.ExecuteReader();
-        while (r.Read())
-        {
-            statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
-            switch (r.GetString("log_action"))
-            {
-                case "delete":
-                    statstable[r.GetString("user")]["delete"] += r.GetInt32("count");
-                    break;
-                case "restore":
-                    statstable[r.GetString("user")]["restore"] += r.GetInt32("count");
-                    break;
-                case "revision":
-                case "event":
-                    statstable[r.GetString("user")]["del_rev_log"] += r.GetInt32("count");
-                    break;
-            }
-        }
-        r.Close();
-
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON " +
-            "actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_action not like 'move_%' and " +
-            "log_type <> 'abusefilterblockeddomainhit' and log_type <> 'spamblacklist' and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and " +
-            "log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_type <> 'massmessage' and log_type<>'growthexperiments' and log_type<>'import' GROUP BY actor_name, log_type;";
-        r = command.ExecuteReader();
-        while (r.Read())
-            if (r.GetString("log_type") == "review")
-                statstable[r.GetString("user")]["review"] += r.GetInt32("count");
-            else {
-                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
-                statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
-            }
-        r.Close();
-
-        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
-            "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN ('sysop', 'closer') AND rev_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + 
-            "01000000 GROUP BY actor_name, page_namespace;";
-        r = command.ExecuteReader();
-        while (r.Read()) {
-            statstable[r.GetString("user")]["totaledits"] += r.GetInt32("count");
-            switch (r.GetString("page_namespace")) {
-                case "0":
-                case "6":
-                case "10":
-                case "14":
-                case "100":
-                case "102":
-                    statstable[r.GetString("user")]["contentedits"] += r.GetInt32("count"); break;
-                case "8":
-                    statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count"); statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count"); break;
-            }
-        }
-        r.Close();
-
-        var lm = now.AddMonths(-1);
-        var summaryrgx = new Regex(@"={1,}\s*Итог\s*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(" +
-            genitive_month[lm.Month] + "|" + genitive_month[lm.AddMonths(-1).Month] + "|" + genitive_month[lm.AddMonths(-2).Month] + "|" + genitive_month[lm.AddMonths(-3).Month] + "|" + genitive_month[lm.AddMonths(-4).Month] +
-            "|" + genitive_month[lm.AddMonths(-5).Month] + ") (" + lm.Year + "|" + lm.AddMonths(-5).Year + @") \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        foreach (var t in discussiontypes)
-            using (var xr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apprefix=" + t + "/&apnamespace=4&aplimit=max").Result)))
-                while (xr.Read())
-                    if (xr.Name == "p") {
-                        string page = xr.GetAttribute("title"); int year; try { year = i(page.Substring(page.Length - 4)); } catch { continue; }
-                        if (year >= 2018) {
-                            string pagetext;
-                            try { pagetext = readpage(page); } catch { continue; }
-                            var results = summaryrgx.Matches(pagetext);
-                            foreach (Match m in results) {
-                                string user = m.Groups[3].ToString().Replace('_', ' ');
-                                if (!statstable.ContainsKey(user))
-                                    continue;
-                                statstable[user]["totalactions"]++;
-                                if (t == "К удалению")
-                                    statstable[user]["delsum"]++;
-                                else
-                                    statstable[user]["restoresum"]++;
-                            }
-                        }
-                    }
-
-        string cutext = readpage("u:BotDR/CU_stats");
-        var custats = cutext.Split('\n');
-        foreach (var s in custats)
-            if (s.Contains('=')) {
-                var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]);
-            }
-
-        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика активности " +
-            "администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + now.Year +
-            " года. Первично отсортирована по сумме числа правок и админдействий, нулевые значения не показаны. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника пропадёт " +
-            "из таблицы при следующем обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в содержательных " +
-            "пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий (итоги плюс удаления)" +
-            ", из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable\"\n!rowspan=2|Участник!!colspan=3|Правки!!colspan=13|Админдействия\n|-\n!{{abbr" +
-            "|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|" +
-            "восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)" +
-            "стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров " +
-            "правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
-        foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"])) {
-            bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
-            bool lessactions = u.Value["closer"] == 0 && u.Value["totalactions"] < 25;
-            bool lesscontent = u.Value["closer"] == 0 && u.Value["contentedits"] + u.Value["review"] < 50;
-            bool lesstotal = u.Value["closer"] == 0 && u.Value["totaledits"] + u.Value["review"] < 100;
-            string color = "";
-            if (!bots.Contains(u.Key)) {
-                if (inactivecloser || lessactions || lesscontent || lesstotal)
-                    color = "style=\"background-color:#fcc\"";
-            }
-            else
-                color = "style=\"background-color:#ccf\"";
-            string deletetext = u.Value["delete"] + u.Value["delsum"] == 0 ? "" : inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")";
-            string restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")"; //пробелы после ''' нужны чтоб не было висящих '
-            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "''' " + cell(u.Value["totaledits"]) +
-                "'''" : cell(u.Value["totaledits"])) + "||" + (lesscontent ? "''' " + cell(u.Value["contentedits"]) + "'''" : cell(u.Value["contentedits"])) + "||" + cell(u.Value["review"]) + "||" +
-                (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + deletetext + "||" + restoretext + "||" + cell(u.Value["del_rev_log"]) + "||" +
-                cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] +
-                u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["checkuser"]) + "||" + cell(u.Value["renameuser"]);
-        }
-        rsave("ВП:Администраторы/Активность", result + "\n|}");
-    }
     static bool sameuser(string s1, string s2)
     {
         if (s1.Contains(":"))
@@ -915,62 +970,6 @@ class Program
         var result = "<center>\n{| class=\"standard sortable\"\n|-\n!Откуда!!Куда";
         foreach (var r in redirs) { result += "\n|-\n|[[:" + r.Value.src_title + "]]||[[:" + r.Value.dest_title + "]]"; }//var w = new StreamWriter("incorr.redir.txt"); w.Write(result + "\n|}"); w.Close();
         rsave("u:MBH/incorrect redirects", result + "\n|}");
-    }
-    static void apat_for_filemovers()
-    {
-        var badusers = new List<string>() { "Шухрат Саъдиев" };
-        var globalusers = new HashSet<string>();
-        var globalusers_needs_flag = new HashSet<string>();
-        var apats = new HashSet<string>();
-        var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
-        connect.Open();
-        var command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\" or ug_group = \"autoreview\";", connect) { CommandTimeout = 99999 };
-        var r = command.ExecuteReader();
-        while (r.Read())
-            apats.Add(r.GetString(0));
-        r.Close();
-
-        connect = new MySqlConnection(creds[2].Replace("%project%", "commonswiki"));
-        connect.Open();
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";", connect) { CommandTimeout = 99999 };
-        r = command.ExecuteReader();
-        while (r.Read())
-            globalusers.Add(r.GetString(0));
-        r.Close();
-
-        using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://meta.wikimedia.org/w/api.php?action=query&format=xml&list=globalallusers&agugroup=global-rollbacker&agulimit=max").Result)))
-            while (rdr.Read())
-                if (rdr.Name == "globaluser")
-                    if (!globalusers.Contains(rdr.GetAttribute("name")))
-                        globalusers.Add(rdr.GetAttribute("name"));
-
-        globalusers.ExceptWith(apats);
-
-        var lastmonth = now.AddMonths(-1);
-        foreach (var mover in globalusers)
-            using (var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + lastmonth.ToString
-                ("yyyy-MM-dd") + "T00:00:00&ucprop=comment&ucuser=" + e(mover)).Result)))
-                while (rdr.Read())
-                    if (rdr.Name == "item" && rdr.GetAttribute("comment") != null)
-                        if (rdr.GetAttribute("comment").Contains("GR]") && !badusers.Contains(mover))
-                        {
-                            globalusers_needs_flag.Add(mover);
-                            break;
-                        }
-
-        if (globalusers_needs_flag.Count > 0)
-        {
-            string zkatext = readpage("ВП:Запросы к администраторам");
-            var header = new Regex(@"(^\{[^\n]*\}\s*<[^>]*>\n)");
-            string newmessage = "==Выдать апата глобальным правщикам==\nПеречисленные ниже участники занимаются переименованием файлов на Викискладе с заменой включений во всех разделах. В соответствии с [[ВП:ПАТ#ГЛОБ]] прошу рассмотреть их вклад и выдать им апата, чтобы такие правки не распатрулировали страницы.";
-            foreach (var mover in globalusers_needs_flag)
-                newmessage += "\n* [[special:contribs/" + mover + "|" + mover + "]]";
-            newmessage += "\n~~~~\n\n";
-            if (header.IsMatch(zkatext))
-                rsave("ВП:Запросы к администраторам", header.Replace(zkatext, "$1" + "\n\n" + newmessage));
-            else
-                rsave("ВП:Запросы к администраторам", newmessage + zkatext);
-        }
     }
     static string resulttext_per_year, resulttext_per_month, resulttext_alltime, ss_user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика" +
         " по числу итогов, подведённых %type%.\n\nСтатистика собирается поиском по тексту страниц обсуждений и потому верна лишь приближённо, нестандартный синтаксис итога или подписи итогоподводящего " +
@@ -1321,7 +1320,7 @@ class Program
     }
     static Regex is_rgx = new Regex(@"importscript\s*\(\s*['""]([^h/].*?)\s*['""]\s*\)", RegexOptions.IgnoreCase),
     is2_rgx = new Regex(@"importscript\s*\(\s*['""]/wiki/(.*?)\s*['""]\s*\)", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline),
-    is_foreign_rgx = new Regex(@"importscript\s*\(\s*['""]([^h].*?)\s*['""],\s*['""]([^""']*)\s*['""]", RegexOptions.IgnoreCase),
+    is_foreign_rgx = new Regex(@"importscript\s*\(\s*['""]([^h].*?)\s*['""]\s*,\s*['""]([^""']*)\s*['""]", RegexOptions.IgnoreCase),
     is_ext_rgx = new Regex(@"importscript\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/(.*?\.js)", RegexOptions.IgnoreCase),
     loader_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""]/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
     loader_foreign_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
@@ -1366,12 +1365,82 @@ class Program
                 result += "\n|-\n|[[:" + s.Key + "]]||" + s.Value.active + "||" + s.Value.inactive + "||" + (s.Value.active + s.Value.inactive);
         rsave("ВП:Самые используемые скрипты", result + "\n|}"); rsave("ВП:Самые используемые скрипты/details", debug_result + "\n|}");
     }
+    static void analyze_invoking_js_file(string url)
+    {
+        string invoking_js_content = "";
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync(url).Result)))
+            while (r.Read())
+                if (r.Name == "page" && r.GetAttribute("_idx") != "-1") { r.Read(); r.Read(); r.Read(); invoking_js_content = r.Value; break; }
+        try {
+            invoking_js_content = Uri.UnescapeDataString(multiline_comment.Replace(invoking_js_content, "").Replace("(\n", "(").Replace("{\n", "{"));
+            foreach (var s in invoking_js_content.Split('\n'))
+                if (s != "" && !s.TrimStart(new char[] { ' ', '\t' }).StartsWith("//"))
+                {
+                    foreach (Match m in is_foreign_rgx.Matches(s))
+                        add_script(m.Groups[2].Value + ":" + m.Groups[1].Value);
+                    foreach (Match m in is_rgx.Matches(s))
+                        add_script(m.Groups[1].Value);
+                    foreach (Match m in is2_rgx.Matches(s))
+                        add_script(m.Groups[1].Value);
+                    foreach (Match m in is_ext_rgx.Matches(s))
+                        if (m.Groups[3].Value.EndsWith("edia"))
+                            add_script(m.Groups[2].Value + ":" + m.Groups[4].Value);
+                        else if (m.Groups[3].Value == "wikidata")
+                            add_script(m.Groups[3].Value + ":" + m.Groups[4].Value);
+                        else if (m.Groups[3].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[4].Value);
+                        else
+                            add_script(m.Groups[2].Value + ":" + m.Groups[3].Value + ":" + m.Groups[4].Value);
+                    foreach (Match m in loader_rgx.Matches(s))
+                        add_script(m.Groups[2].Value);
+                    foreach (Match m in loader_foreign_rgx.Matches(s))
+                        if (m.Groups[4].Value.EndsWith("edia"))
+                            add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "wikidata")
+                            add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[5].Value);
+                        else
+                            add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
+                    foreach (Match m in loader_foreign2_rgx.Matches(s))
+                        if (m.Groups[4].Value.EndsWith("edia"))
+                            add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "wikidata")
+                            add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
+                        else if (m.Groups[4].Value == "mediawiki")
+                            add_script("mw:" + m.Groups[5].Value);
+                        else
+                            add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
+                }
+        } catch { }
+    }
+    static void add_script(string scriptname)
+    {
+        if (scriptname.StartsWith(":"))
+            scriptname = scriptname.Substring(1);
+        if (scriptname.StartsWith("ru:"))
+            scriptname = scriptname.Substring(3);
+        if (scriptname.IndexOf(":") > -1)
+            scriptname = scriptname.Substring(0, scriptname.IndexOf(":")).ToLower() + scriptname.Substring(scriptname.IndexOf(":"));
+        scriptname = scriptname.Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
+            .Replace("википедия:", "project:").Replace("вікіпедія:", "project:").Replace("користувач:", "user:").Replace("користувачка:", "user:");
+        if (scriptname.StartsWith("u:"))
+            scriptname = "user:" + scriptname.Substring(2);
+        debug_result += "\n|-\n|[[:" + invoking_page + "]]||[[:" + scriptname + "]]";
+        if (user_is_active() && scripts.ContainsKey(scriptname))
+            scripts[scriptname].active++;
+        else if (user_is_active() && !scripts.ContainsKey(scriptname))
+            scripts.Add(scriptname, new script_usages() { active = 1, inactive = 0 });
+        else if (!user_is_active() && scripts.ContainsKey(scriptname))
+            scripts[scriptname].inactive++;
+        else
+            scripts.Add(scriptname, new script_usages() { active = 0, inactive = 1 });
+    }
     static bool user_is_active()
     {
         if (users_activity.ContainsKey(script_user))
             return users_activity[script_user];
-        else
-        {
+        else {
             DateTime edit_ts = new DateTime(), log_ts = new DateTime();
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucprop=timestamp&ucuser=" + e(script_user)).Result)))
                 while (r.Read())
@@ -1383,96 +1452,10 @@ class Program
                     if (r.Name == "item") {
                         string raw_ts = r.GetAttribute("timestamp"); log_ts = new DateTime(i(raw_ts.Substring(0, 4)), i(raw_ts.Substring(5, 2)), i(raw_ts.Substring(8, 2)));
                     }
-
             if (edit_ts < now.AddMonths(-1) && log_ts < now.AddMonths(-1))
             { users_activity.Add(script_user, false); return false; }
             else { users_activity.Add(script_user, true); return true; }
-
         }
-    }
-    static void add_script(string scriptname)
-    {
-        if (scriptname.StartsWith(":"))
-            scriptname = scriptname.Substring(1);
-        if (scriptname.StartsWith("ru:"))
-            scriptname = scriptname.Substring(3);
-        if (scriptname.IndexOf(":") > -1)
-            scriptname = scriptname.Substring(0, scriptname.IndexOf(":")).ToLower() + scriptname.Substring(scriptname.IndexOf(":"));
-        scriptname = e(scriptname).Replace("_", " ").Replace("у:", "user:").Replace("участник:", "user:").Replace("участница:", "user:").Replace("вп:", "project:")
-            .Replace("википедия:", "project:").Replace("вікіпедія:", "project:").Replace("користувач:", "user:").Replace("користувачка:", "user:");
-        if (scriptname.StartsWith("u:"))
-            scriptname = "user:" + scriptname.Substring(2);
-        //if (g_invoking_page.EndsWith("/global.js") && scriptname.ToLower().StartsWith("mediawiki:"))
-        //    scriptname = "meta:" + scriptname;
-        debug_result += "\n|-\n|[[:" + invoking_page + "]]||[[:" + scriptname + "]]";
-        if (user_is_active() && scripts.ContainsKey(scriptname))
-            scripts[scriptname].active++;
-        else if (user_is_active() && !scripts.ContainsKey(scriptname))
-            scripts.Add(scriptname, new script_usages() { active = 1, inactive = 0 });
-        else if (!user_is_active() && scripts.ContainsKey(scriptname))
-            scripts[scriptname].inactive++;
-        else
-            scripts.Add(scriptname, new script_usages() { active = 0, inactive = 1 });
-    }
-    static void analyze_invoking_js_file(string url)
-    {
-        string invoking_js_content = "";
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync(url).Result)))
-            while (r.Read())
-                if (r.Name == "page" && r.GetAttribute("_idx") != "-1") { r.Read(); r.Read(); r.Read(); invoking_js_content = r.Value; break; }
-        invoking_js_content = multiline_comment.Replace(invoking_js_content, "").Replace("(\n", "(").Replace("{\n", "{");
-        foreach (var s in invoking_js_content.Split('\n'))
-            if (!s.TrimStart(' ').StartsWith("//"))
-            {
-                //if (r1.IsMatch(s) && !(is_ext_rgx.IsMatch(s) || is_foreign_rgx.IsMatch(s) || is_rgx.IsMatch(s) || is2_rgx.IsMatch(s)))
-                //e.WriteLine(s);
-                //if (r2.IsMatch(s) && !(loader_foreign_rgx.IsMatch(s) || loader_rgx.IsMatch(s)) || loader_foreign2_rgx.IsMatch(s))
-                //e.WriteLine(s);
-                try {
-                    var str = e(s);
-                    if (is_foreign_rgx.IsMatch(str))
-                        foreach (Match m in is_foreign_rgx.Matches(str))
-                            add_script(m.Groups[2].Value + ":" + m.Groups[1].Value);
-                    else
-                    {
-                        foreach (Match m in is_rgx.Matches(str))
-                            add_script(m.Groups[1].Value);
-                        foreach (Match m in is2_rgx.Matches(str))
-                            add_script(m.Groups[1].Value);
-                        foreach (Match m in is_ext_rgx.Matches(str))
-                            if (m.Groups[3].Value.EndsWith("edia"))
-                                add_script(m.Groups[2].Value + ":" + m.Groups[4].Value);
-                            else if (m.Groups[3].Value == "wikidata")
-                                add_script(m.Groups[3].Value + ":" + m.Groups[4].Value);
-                            else if (m.Groups[3].Value == "mediawiki")
-                                add_script("mw:" + m.Groups[4].Value);
-                            else
-                                add_script(m.Groups[2].Value + ":" + m.Groups[3].Value + ":" + m.Groups[4].Value);
-                        foreach (Match m in loader_rgx.Matches(str))
-                            add_script(m.Groups[2].Value);
-                        foreach (Match m in loader_foreign_rgx.Matches(str))
-                            if (m.Groups[4].Value.EndsWith("edia"))
-                                add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
-                            else if (m.Groups[4].Value == "wikidata")
-                                add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
-                            else if (m.Groups[4].Value == "mediawiki")
-                                add_script("mw:" + m.Groups[5].Value);
-                            else
-                                add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
-                        foreach (Match m in loader_foreign2_rgx.Matches(str))
-                            if (m.Groups[4].Value.EndsWith("edia"))
-                                add_script(m.Groups[3].Value + ":" + m.Groups[5].Value);
-                            else if (m.Groups[4].Value == "wikidata")
-                                add_script(m.Groups[4].Value + ":" + m.Groups[5].Value);
-                            else if (m.Groups[4].Value == "mediawiki")
-                                add_script("mw:" + m.Groups[5].Value);
-                            else
-                                add_script(m.Groups[3].Value + ":" + m.Groups[4].Value + ":" + m.Groups[5].Value);
-                    }
-                } catch { Console.WriteLine(url); }
-                
-            }
-
     }
     static Dictionary<string, Dictionary<string, int>> creators = new Dictionary<string, Dictionary<string, int>>();
     static void page_creators()
@@ -1667,34 +1650,6 @@ class Program
             }
         find_and_delete_usages(deletedfiles, false);
     }
-    static void astro_update()
-    {
-        string github_base_url = "https://raw.githubusercontent.com/Saisengen/wikibots/refs/heads/main/astro-updater/";
-        var requests = new Dictionary<string, string> { { "stars-by-cluster", "Википедия:Автоматически формируемые списки звёзд по скоплениям" }, { "exoplanets-by-constellation", "Википедия:Автоматически " +
-                "формируемые списки экзопланет по созвездиям" }, { "exoplanetary-systems", "Википедия:Автоматически формируемые шаблоны экзопланетных систем" }, { "astrocatalogs", "Википедия:Автоматически " +
-                "формируемые шаблоны по астрокаталогам" }, { "stars-by-constellation", "Навигационные шаблоны:Звёзды по созвездиям" } };
-        foreach (var rq in requests.Keys) {
-            var query = new StreamReader(site.GetStreamAsync(github_base_url + rq + ".rq").Result).ReadToEnd().Replace("{", "{{").Replace("}", "}}").Replace("{{0}}", "{0}"); var pages = new List<string>();
-            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:" + requests[rq]).Result));
-            while (r.Read())
-                if (r.Name == "cm")
-                    pages.Add(r.GetAttribute("title"));
-            foreach (var title in pages) {
-                var r2 = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=pageprops&ppprop=wikibase_item&format=xml&titles=" + title).Result));
-                while (r2.Read())
-                    if (r2.Name == "pageprops") {
-                        var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
-                            r2.GetAttribute("wikibase_item")) } })).Result;
-                        var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
-                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
-                            var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (oldtext.Length - newtext.Length > 2048) { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
-                            else if (!newtext.Contains("upstream request timeout")) rsave(title, newtext);
-                        }
-                    }
-            }
-        }
-    }
     static void best_article_lists()
     {
         var pagetypes = new Dictionary<string, string>() { { "featured", "Избранные статьи" }, { "good", "Хорошие статьи" }, { "tier3", "Добротные статьи" }, { "lists", "Избранные списки" }, { "aoty", "Статьи года" } };
@@ -1721,9 +1676,9 @@ class Program
             return day + " " + month + " " + year;
         } catch { return "error"; }        
     }
-    static void cheka_list_creation()
+    static void cheka_append()
     {
-        string result = readpage("ВП:Чрезвычайная комиссия");
+        string cheka_current_text = readpage("ВП:Чрезвычайная комиссия");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var w = new StreamWriter("afd_summar_errors.txt"); using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
             "&format=xml&cmtitle=К:Википедия:Самые просроченные КУ&cmprop=title&cmlimit=max").Result)))
@@ -1733,38 +1688,20 @@ class Program
                     if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Категория:") && !nominated_page.StartsWith("Модуль:")) {
                         string pagetext = readpage(nominated_page);
                         bool nominated_before = false;
-                        foreach (Match h in header_rgx.Matches(pagetext))
-                            if (nominated_page == h.Groups[1].Value)
-                                nominated_before = true;
+                        foreach (Match h in header_rgx.Matches(cheka_current_text))
+                            if (nominated_page == h.Groups[1].Value) { nominated_before = true; break; }
                         if (!nominated_before) {
                             string date = afd_template.Match(pagetext).Groups[2].Value;
                             if (iso_to_ru_date(date) != "error") {
                                 string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page;
-                                result += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n{|class=standard\n!Оставить!!Удалить\n|-\n|\n|\n|}\n";
+                                cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n" +
+                                    "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|ост7=\n|ост8=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|удал7=\n|удал8=}}\n";
                             }
                             else w.WriteLine(nominated_page);
                         }
                     }
                 }
-        rsave("ВП:Чрезвычайная комиссия", result); w.Close();
-    }
-    static void cheka_processing()
-    {
-        bool edited_by_unauthorised = false; var admins_and_PI = new HashSet<string>(); var votes_rgx = new Regex(@"==\[\[:([^]]*)\]\]==\n\[\[(ВП:К удалению/[^]]*)\]\]\n{{/голоса\|ост1=(.*)\|ост2=(.*)\|ост3=(.*)\|ост4=(.*)\|ост5=(.*)\|ост6=(.*)\|удал1=[[У:Pessimist2006|Pessimist]](.*)\|удал2=[[У:Zanka|Zanka]](.*)\|удал3=[[У:Wanwa|Wanwa]](.*)\|удал4=(.*)\|удал5=(.*)\|удал6=(.*)}}");
-        foreach (string flag in new string[] { "sysop", "closer" })
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&augroup=" + flag + "&aulimit=max").Result)))
-                while (r.Read())
-                    if (r.Name == "u")
-                        admins_and_PI.Add(r.GetAttribute("name"));
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=revisions&titles=ВП:Чрезвычайная комиссия&rvprop=user&rvlimit=max").Result)))
-            while (r.Read() && r.GetAttribute("user") != "MBHbot")
-                if (!admins_and_PI.Contains(r.GetAttribute("user"))) {
-                    edited_by_unauthorised = true; break;
-                }
-        if (!edited_by_unauthorised)
-        {
-
-        }
+        rsave("ВП:Чрезвычайная комиссия", cheka_current_text); w.Close();
     }
     static void extlinks_counter()
     {
@@ -1806,6 +1743,23 @@ class Program
                 result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
         rsave("ВП:Внешние ссылки/Статистика", result + "\n|}");
     }
+    static void unlicensed_files()
+    {
+        var autocatfiles = new HashSet<string>();
+        var tagged_files = new HashSet<string>();
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result)))
+            while (r.Read())
+                if (r.Name == "cm")
+                    autocatfiles.Add(r.GetAttribute("title"));
+
+        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t:No_license&einamespace=6&eilimit=max").Result)))
+            while (r.Read())
+                if (r.Name == "ei")
+                    tagged_files.Add(r.GetAttribute("title"));
+
+        autocatfiles.ExceptWith(tagged_files);
+        foreach (var file in autocatfiles) { string pagetext = readpage(file); save("ru", file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии"); }
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
@@ -1813,7 +1767,7 @@ class Program
         nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" };
         genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
-        //try { cheka_list_creation(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { cheka_append(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
