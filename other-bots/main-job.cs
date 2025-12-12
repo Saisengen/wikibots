@@ -1678,30 +1678,34 @@ class Program
     }
     static void cheka_append()
     {
-        string cheka_current_text = readpage("ВП:Чрезвычайная комиссия");
+        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
-        var w = new StreamWriter("afd_summar_errors.txt"); using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
-            "&format=xml&cmtitle=К:Википедия:Самые просроченные КУ&cmprop=title&cmlimit=max").Result)))
-            while (r.Read())
-                if (r.Name == "cm") {
-                    string nominated_page = r.GetAttribute("title");
-                    if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Категория:") && !nominated_page.StartsWith("Модуль:")) {
-                        string pagetext = readpage(nominated_page);
-                        bool nominated_before = false;
-                        foreach (Match h in header_rgx.Matches(cheka_current_text))
-                            if (nominated_page == h.Groups[1].Value) { nominated_before = true; break; }
-                        if (!nominated_before) {
-                            string date = afd_template.Match(pagetext).Groups[2].Value;
-                            if (iso_to_ru_date(date) != "error") {
-                                string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page;
-                                cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n" +
-                                    "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|ост7=\n|ост8=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|удал7=\n|удал8=}}\n";
+        int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
+        if (number_of_nominations < 100) {
+            for (int m = 75; m > 0; m--) {
+                using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
+            "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + m + "&cmprop=title&cmlimit=max").Result)))
+                    while (r.Read() && number_of_nominations < 100)
+                        if (r.Name == "cm") {
+                            string nominated_page = r.GetAttribute("title");
+                            if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Модуль:")) {
+                                bool nominated_before = false;
+                                foreach (Match h in header_rgx.Matches(cheka_current_text))
+                                    if (nominated_page == h.Groups[1].Value) { nominated_before = true; break; }
+                                if (!nominated_before) {
+                                    string pagetext = readpage(nominated_page);
+                                    string date = afd_template.Match(pagetext).Groups[2].Value;
+                                    if (iso_to_ru_date(date) != "error") {
+                                        string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page; number_of_nominations++;
+                                        cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n" +
+                                            "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
+                                    }
+                                }
                             }
-                            else w.WriteLine(nominated_page);
                         }
-                    }
-                }
-        rsave("ВП:Чрезвычайная комиссия", cheka_current_text); w.Close();
+            }
+            rsave("ВП:Коллективные итоги на КУ", cheka_current_text);
+        }
     }
     static void extlinks_counter()
     {
