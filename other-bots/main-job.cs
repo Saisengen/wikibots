@@ -266,18 +266,117 @@ class Program
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (oldtext.Length - newtext.Length > 2048) { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); continue; }
-                            else if (!newtext.Contains("upstream request timeout")) rsave(title, newtext);
+                            if (oldtext.Length - newtext.Length < 2048)
+                                rsave(title, newtext);
+                            else if (!newtext.Contains("upstream")) {
+                                var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close();
+                            }
                         }
                     }
             }
         }
     }
+    static void best_article_lists()
+    {
+        var pagetypes = new Dictionary<string, string>() { { "featured", "Избранные статьи" }, { "good", "Хорошие статьи" }, { "tier3", "Добротные статьи" }, { "lists", "Избранные списки" }, { "aoty", "Статьи года" } };
+        var result = new Dictionary<string, List<string>>() { { "featured", new List<string>() }, { "good", new List<string>() }, { "tier3", new List<string>() }, { "lists", new List<string>() }, { "aoty", new List<string>() }, };
+        foreach (var cat in pagetypes) {
+            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" + cat.Value + " по алфавиту";
+            while (cont != null) {
+                apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
+                    while (r.Read())
+                        if (r.Name == "cm")
+                            result[cat.Key].Add(r.GetAttribute("title"));
+                }
+            }
+        }
+        rsave("MediaWiki:Gadget-navboxFeaturedArticles.json", JsonConvert.SerializeObject(result));
+    }
+    static void cheka_update()
+    {
+        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ");
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
+        int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
+        if (number_of_nominations < 100) {
+            for (int m = 75; m > 0; m--) {
+                using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
+            "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + m + "&cmprop=title&cmlimit=max").Result)))
+                    while (r.Read() && number_of_nominations < 100)
+                        if (r.Name == "cm") {
+                            string nominated_page = r.GetAttribute("title");
+                            if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Модуль:")) {
+                                bool nominated_before = false;
+                                foreach (Match h in header_rgx.Matches(cheka_current_text))
+                                    if (nominated_page == h.Groups[1].Value) { nominated_before = true; break; }
+                                if (!nominated_before) {
+                                    string pagetext = readpage(nominated_page);
+                                    string date = afd_template.Match(pagetext).Groups[2].Value;
+                                    if (iso_to_ru_date(date) != "error") {
+                                        string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page; number_of_nominations++;
+                                        cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n" +
+                                            "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
+                                    }
+                                }
+                            }
+                        }
+            }
+            rsave("ВП:Коллективные итоги на КУ", cheka_current_text);
+        }
+    }
+    static string iso_to_ru_date(string iso)
+    {
+        try {
+            var parts = iso.Split('-'); string year = parts[0]; string day = parts[2].Length == 2 && parts[2][0] == '0' ? parts[2].Substring(1) : parts[2]; string month = genitive_month[i(parts[1])];
+            return day + " " + month + " " + year;
+        }
+        catch { return "error"; }
+    }
+    static void extlinks_counter()
+    {
+        var links = new Dictionary<string, int>(); var shortenedlinks = new Dictionary<string, int>(); string elcont = null, gapcont = null, query =
+            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=extlinks&generator=allpages&ellimit=max&gapfilterredir=nonredirects&gaplimit=max";
+        do {
+            string finalquery = query + (elcont == null ? "" : "&elcontinue=" + e(elcont)) + (gapcont == null ? "" : "&gapcontinue=" + e(gapcont));
+            string apiout = site.GetStringAsync(finalquery).Result;
+            using (var r = new XmlTextReader(new StringReader(apiout)))
+            {
+                r.Read(); r.Read(); r.Read(); elcont = r.GetAttribute("elcontinue"); if (r.GetAttribute("gapcontinue") != null) gapcont = r.GetAttribute("gapcontinue");
+                if (elcont == null && r.GetAttribute("gapcontinue") == null) goto end;
+                while (r.Read())
+                    if (r.Name == "el" && r.NodeType == XmlNodeType.Element) {
+                        r.Read(); string link = r.Value; link = link.Substring(link.IndexOf("//") + 2); if (link.EndsWith("/")) link = link.Substring(0, link.Length - 1);
+                        link = link.IndexOf("/") == -1 ? link : link.Substring(0, link.LastIndexOf("/"));
+                        if (!links.ContainsKey(link))
+                            links.Add(link, 1);
+                        else
+                            links[link]++;
+                    }
+            }
+        } while (elcont != null || gapcont != null);
+    end:;
+
+        foreach (var l in links.OrderByDescending(l => l.Value).ToArray()) {
+            string testurl = (l.Key.StartsWith("www.") ? l.Key.Substring(4) : "www." + l.Key);
+            if (shortenedlinks.ContainsKey(testurl))
+                shortenedlinks[testurl] += l.Value;
+            else
+                shortenedlinks.Add(l.Key, l.Value);
+        }
+        string result = "{|class=\"standard\"\n!Место!!Число&nbsp;ссылок!!style=\"text-align:left\"|из рувики на данный сайт или его раздел";
+        int counter = 0;
+        foreach (var l in shortenedlinks.OrderByDescending(l => l.Value))
+            if (l.Value < 100)
+                break;
+            else
+                result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
+        rsave("ВП:Внешние ссылки/Статистика", result + "\n|}");
+    }
     static void nonfree_files_in_nonmain_ns()
     {
         string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=fileusage&generator=categorymembers&fuprop=title&fulimit=max&gcmtitle=К:Файлы:Несвободные&gcmtype=file&gcmlimit=1000";
-        while (cont != null)
-        {
+        while (cont != null) {
             apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&gcmcontinue=" + e(cont)).Result);
             var r = new XmlTextReader(new StringReader(apiout)); r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("gcmcontinue"); string file = "";
             while (r.Read()) {
@@ -396,53 +495,6 @@ class Program
                 }
         rsave("Проект:Патрулирование/Непроверенные вне ОП", result);
     }
-    static void user_activity_stats_template()
-    {
-        var days = new Dictionary<string, int>(); var edits = new Dictionary<string, int>(); var itemrgx = new Regex("<item");
-        foreach (string group in new string[] { "sysop", "bot" })
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&aulimit=max&augroup=" + group).Result)))
-                while (r.Read())
-                    if (r.Name == "u" && !days.ContainsKey(r.GetAttribute("name")))
-                        days.Add(r.GetAttribute("name"), 1);
-        var initialusers = readpage("Ш:User activity stats/users").Split('\n');
-        foreach (var user in initialusers)
-            if (!days.ContainsKey(user))
-                days.Add(user, 1);
-        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск" })
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result)))
-                while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
-                        string user = r.GetAttribute("title");
-                        if (!user.Contains("/"))
-                            user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
-                        else
-                            user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
-                        if (!edits.ContainsKey(user))
-                            edits.Add(user, 0);
-                    }
-        foreach (var u in days.Keys.ToList())
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + e(u)).Result)))
-                while (r.Read())
-                    if (r.Name == "item") {
-                        string ts = r.GetAttribute("timestamp"); int y = i(ts.Substring(0, 4)); int m = i(ts.Substring(5, 2)); int d = i(ts.Substring(8, 2)); days[u] = (now - new DateTime(y, m, d)).Days;
-                    }
-        foreach (var v in edits.Keys.ToList()) {
-            var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") +
-                "&ucprop=&ucuser=" + e(v)).Result;
-            edits[v] = itemrgx.Matches(res).Count;
-        }
-
-        string result = "{{#switch:{{{1}}}\n";
-        foreach (var r in days.OrderBy(r => r.Value))
-            result += "|" + r.Key + "=" + r.Value + "\n";
-        rsave("Шаблон:User activity stats/days", result + "|}}");
-
-        result = "{{#switch:{{{1}}}\n";
-        foreach (var v in edits.OrderByDescending(v => v.Value))
-            if (v.Value > 0)
-                result += "|" + v.Key + "=" + (v.Value == 0 ? "" : v.Value.ToString()) + "\n";
-        rsave("Шаблон:User activity stats/edits", result + "|}}");
-    }
     static void trans_namespace_moves()
     {
         var apatusers = new HashSet<string>();
@@ -463,63 +515,6 @@ class Program
                 result += "\n|-" + (apatusers.Contains(user) ? "" : "style=\"background-color:#fcc\"") + "\n|" + date + "||[[:" + oldtitle + "]]||[[:" + newtitle + "]]||{{u|" + user + "}}||" + comment;
             }
         rsave("ВП:Страницы, перенесённые в пространство статей", result + "\n|}");
-    }
-    static void zsf_archiving()
-    {
-        var year = now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
-        var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж|АИ|бот)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
-        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)"); var threads = threadrgx.Matches(zsftext);
-        foreach (Match thread in threads)
-        {
-            string archivepage = ""; string threadtext = thread.Groups[0].Value; var summary = signature.Matches(thread.Groups[1].Value); var summary_discuss = signature.Matches(thread.Groups[4].Value);
-            bool outdated = true;
-            foreach (Match s in summary)
-                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
-                    outdated = false;
-            foreach (Match s in summary_discuss)
-                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
-                    outdated = false;
-            if (!outdated) continue;
-            switch (thread.Groups[2].Value)
-            {
-                case "апат":
-                case "пат":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Патрулирующие/" + year;
-                    break;
-                case "откат":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Откатывающие/" + year;
-                    break;
-                case "загр":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Загружающие";
-                    break;
-                case "ПИ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Подводящие итоги/" + year;
-                    break;
-                case "ПбП":
-                case "ПФ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Переименовывающие";
-                    break;
-                case "инж":
-                case "АИ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Инженеры и АИ";
-                    break;
-                case "бот":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Нарушающие боты";
-                    break;
-                default:
-                    continue;
-            }
-            zsftext = zsftext.Replace(threadtext, "");
-            try
-            {
-                string archivetext = readpage(archivepage);
-                rsave(archivepage, archivetext + threadtext);
-            }
-            catch { rsave(archivepage, threadtext); }
-
-        }
-        if (zsftext != initialtext)
-            rsave("Википедия:Заявки на снятие флагов", zsftext);
     }
     static HashSet<string> highflags = new HashSet<string>();
     static void little_flags()
@@ -1650,103 +1645,6 @@ class Program
             }
         find_and_delete_usages(deletedfiles, false);
     }
-    static void best_article_lists()
-    {
-        var pagetypes = new Dictionary<string, string>() { { "featured", "Избранные статьи" }, { "good", "Хорошие статьи" }, { "tier3", "Добротные статьи" }, { "lists", "Избранные списки" }, { "aoty", "Статьи года" } };
-        var result = new Dictionary<string, List<string>>() { { "featured", new List<string>() }, { "good", new List<string>() }, { "tier3", new List<string>() }, { "lists", new List<string>() }, { "aoty", new List<string>() }, };
-        foreach(var cat in pagetypes)
-        {
-            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" + cat.Value + " по алфавиту";
-            while (cont != null) {
-                apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout))) {
-                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
-                    while (r.Read())
-                        if (r.Name == "cm")
-                            result[cat.Key].Add(r.GetAttribute("title"));
-                }
-            }
-        }
-        rsave("MediaWiki:Gadget-navboxFeaturedArticles.json", JsonConvert.SerializeObject(result));
-    }
-    static string iso_to_ru_date(string iso)
-    {
-        try {
-            var parts = iso.Split('-'); string year = parts[0]; string day = parts[2].Length == 2 && parts[2][0] == '0' ? parts[2].Substring(1) : parts[2]; string month = genitive_month[i(parts[1])];
-            return day + " " + month + " " + year;
-        } catch { return "error"; }        
-    }
-    static void cheka_append()
-    {
-        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ");
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *(\d{4}-\d\d?-\d\d?) *\}\}", RegexOptions.IgnoreCase); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
-        int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        if (number_of_nominations < 100) {
-            for (int m = 75; m > 0; m--) {
-                using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
-            "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + m + "&cmprop=title&cmlimit=max").Result)))
-                    while (r.Read() && number_of_nominations < 100)
-                        if (r.Name == "cm") {
-                            string nominated_page = r.GetAttribute("title");
-                            if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Модуль:")) {
-                                bool nominated_before = false;
-                                foreach (Match h in header_rgx.Matches(cheka_current_text))
-                                    if (nominated_page == h.Groups[1].Value) { nominated_before = true; break; }
-                                if (!nominated_before) {
-                                    string pagetext = readpage(nominated_page);
-                                    string date = afd_template.Match(pagetext).Groups[2].Value;
-                                    if (iso_to_ru_date(date) != "error") {
-                                        string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page; number_of_nominations++;
-                                        cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]\n" +
-                                            "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
-                                    }
-                                }
-                            }
-                        }
-            }
-            rsave("ВП:Коллективные итоги на КУ", cheka_current_text);
-        }
-    }
-    static void extlinks_counter()
-    {
-        var links = new Dictionary<string, int>(); var shortenedlinks = new Dictionary<string, int>(); string elcont = null, gapcont = null, query =
-            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=extlinks&generator=allpages&ellimit=max&gapfilterredir=nonredirects&gaplimit=max";
-        do
-        {
-            string finalquery = query + (elcont == null ? "" : "&elcontinue=" + e(elcont)) + (gapcont == null ? "" : "&gapcontinue=" + e(gapcont));
-            string apiout = site.GetStringAsync(finalquery).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout))) {
-                r.Read(); r.Read(); r.Read(); elcont = r.GetAttribute("elcontinue"); if (r.GetAttribute("gapcontinue") != null) gapcont = r.GetAttribute("gapcontinue");
-                if (elcont == null && r.GetAttribute("gapcontinue") == null) goto end;
-                while (r.Read())
-                    if (r.Name == "el" && r.NodeType == XmlNodeType.Element) {
-                        r.Read(); string link = r.Value; link = link.Substring(link.IndexOf("//") + 2); if (link.EndsWith("/")) link = link.Substring(0, link.Length - 1);
-                        link = link.IndexOf("/") == -1 ? link : link.Substring(0, link.LastIndexOf("/"));
-                        if (!links.ContainsKey(link))
-                            links.Add(link, 1);
-                        else
-                            links[link]++;
-                    }
-            }
-        } while (elcont != null || gapcont != null);
-    end:;
-
-        foreach (var l in links.OrderByDescending(l => l.Value).ToArray()) {
-            string testurl = (l.Key.StartsWith("www.") ? l.Key.Substring(4) : "www." + l.Key);
-            if (shortenedlinks.ContainsKey(testurl))
-                shortenedlinks[testurl] += l.Value;
-            else
-                shortenedlinks.Add(l.Key, l.Value);
-        }
-        string result = "{|class=\"standard\"\n!Место!!Число&nbsp;ссылок!!style=\"text-align:left\"|из рувики на данный сайт или его раздел";
-        int counter = 0;
-        foreach (var l in shortenedlinks.OrderByDescending(l => l.Value))
-            if (l.Value < 100)
-                break;
-            else
-                result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
-        rsave("ВП:Внешние ссылки/Статистика", result + "\n|}");
-    }
     static void unlicensed_files()
     {
         var autocatfiles = new HashSet<string>();
@@ -1764,6 +1662,106 @@ class Program
         autocatfiles.ExceptWith(tagged_files);
         foreach (var file in autocatfiles) { string pagetext = readpage(file); save("ru", file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии"); }
     }
+    static void user_activity_stats_template()
+    {
+        var days = new Dictionary<string, int>(); var edits = new Dictionary<string, int>(); var itemrgx = new Regex("<item");
+        foreach (string group in new string[] { "sysop", "bot" })
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&aulimit=max&augroup=" + group).Result)))
+                while (r.Read())
+                    if (r.Name == "u" && !days.ContainsKey(r.GetAttribute("name")))
+                        days.Add(r.GetAttribute("name"), 1);
+        var initialusers = readpage("Ш:User activity stats/users").Split('\n');
+        foreach (var user in initialusers)
+            if (!days.ContainsKey(user))
+                days.Add(user, 1);
+        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск" })
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result)))
+                while (r.Read())
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
+                        string user = r.GetAttribute("title");
+                        if (!user.Contains("/"))
+                            user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
+                        else
+                            user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
+                        if (!edits.ContainsKey(user))
+                            edits.Add(user, 0);
+                    }
+        foreach (var u in days.Keys.ToList())
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + e(u)).Result)))
+                while (r.Read())
+                    if (r.Name == "item") {
+                        string ts = r.GetAttribute("timestamp"); int y = i(ts.Substring(0, 4)); int m = i(ts.Substring(5, 2)); int d = i(ts.Substring(8, 2)); days[u] = (now - new DateTime(y, m, d)).Days;
+                    }
+        foreach (var v in edits.Keys.ToList()) {
+            var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") +
+                "&ucprop=&ucuser=" + e(v)).Result;
+            edits[v] = itemrgx.Matches(res).Count;
+        }
+
+        string result = "{{#switch:{{{1}}}\n";
+        foreach (var r in days.OrderBy(r => r.Value))
+            result += "|" + r.Key + "=" + r.Value + "\n";
+        rsave("Шаблон:User activity stats/days", result + "|}}");
+
+        result = "{{#switch:{{{1}}}\n";
+        foreach (var v in edits.OrderByDescending(v => v.Value))
+            if (v.Value > 0)
+                result += "|" + v.Key + "=" + (v.Value == 0 ? "" : v.Value.ToString()) + "\n";
+        rsave("Шаблон:User activity stats/edits", result + "|}}");
+    }
+    static void zsf_archiving()
+    {
+        var year = now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
+        var threadrgx = new Regex(@"\n\n==[^\n]*: флаг [^=]*==[^⇧]*===\s*Итог[^=]*===([^⇧]*)\((апат|пат|откат|загр|ПИ|ПФ|ПбП|инж|АИ|бот)\)\s*—\s*{{(за|против)([^⇧]*)⇧-->", RegexOptions.Singleline);
+        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)"); var threads = threadrgx.Matches(zsftext);
+        foreach (Match thread in threads) {
+            string archivepage = ""; string threadtext = thread.Groups[0].Value; var summary = signature.Matches(thread.Groups[1].Value); var summary_discuss = signature.Matches(thread.Groups[4].Value);
+            bool outdated = true;
+            foreach (Match s in summary)
+                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                    outdated = false;
+            foreach (Match s in summary_discuss)
+                if (now - DateTime.Parse(s.Groups[1].Value, new CultureInfo("ru-RU")) < new TimeSpan(2, 0, 0, 0))
+                    outdated = false;
+            if (!outdated) continue;
+            switch (thread.Groups[2].Value) {
+                case "апат":
+                case "пат":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Патрулирующие/" + year;
+                    break;
+                case "откат":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Откатывающие/" + year;
+                    break;
+                case "загр":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Загружающие";
+                    break;
+                case "ПИ":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Подводящие итоги/" + year;
+                    break;
+                case "ПбП":
+                case "ПФ":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Переименовывающие";
+                    break;
+                case "инж":
+                case "АИ":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Инженеры и АИ";
+                    break;
+                case "бот":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Нарушающие боты";
+                    break;
+                case "ванд":
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Вандалоборцы";
+                    break;
+                default:
+                    continue;
+            }
+            zsftext = zsftext.Replace(threadtext, "");
+            try { string archivetext = readpage(archivepage); rsave(archivepage, archivetext + threadtext); } catch { rsave(archivepage, threadtext); }
+
+        }
+        if (zsftext != initialtext)
+            rsave("Википедия:Заявки на снятие флагов", zsftext);
+    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
@@ -1771,7 +1769,7 @@ class Program
         nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" };
         genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
-        //try { cheka_append(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
