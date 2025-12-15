@@ -57,7 +57,7 @@ SELECT ?line WITH {
     } UNION {
       { SELECT DISTINCT ?item ?itemLabel {
         INCLUDE %C
-        ?item wdt:P59 ?constellation; p:P398/pq:P1545 []
+        ?item wdt:P59 ?constellation; ^schema:about/schema:isPartOf <https://ru.wikipedia.org/>; p:P398/pq:P1545 []
         FILTER NOT EXISTS { [] p:P527[ps:P527 ?item; pq:P1545 []] }
         SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,mul,en" }
       } }
@@ -66,7 +66,7 @@ SELECT ?line WITH {
     } UNION {
       { SELECT DISTINCT ?item ?itemLabel {
         INCLUDE %C
-        ?item wdt:P59 ?constellation; p:P527[ps:P527/p:P398/pq:P1545 []; pq:P1545 []]
+        ?item wdt:P59 ?constellation; ^schema:about/schema:isPartOf <https://ru.wikipedia.org/>; p:P527[ps:P527/p:P398/pq:P1545 []; pq:P1545 []]
         SERVICE wikibase:label { bd:serviceParam wikibase:language "ru,mul,en" }
       } }
       BIND(CONCAT(UCASE(SUBSTR(?itemLabel, 1, 1)), SUBSTR(?itemLabel, 2)) AS ?label)
