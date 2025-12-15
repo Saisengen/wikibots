@@ -151,7 +151,7 @@ SELECT ?line WITH {
     OPTIONAL { [] schema:about ?item; schema:isPartOf <https://ru.wikipedia.org/>; schema:name ?ru }
     BIND(CONCAT(UCASE(SUBSTR(?itemLabel, 1, 1)), SUBSTR(?itemLabel, 2)) AS ?article)
     BIND(IF(BOUND(?ru), CONCAT('[[', ?ru, IF(LCASE(STR(?label)) != LCASE(STR(?ru)), CONCAT('|', ?label), ''), ']]'),
-                        CONCAT('{{нп|', ?article, '|', ?label, '|d|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '}}')) AS ?link)
+                        CONCAT('{{нп/п|', ?article, '|', ?label, '|d|', REPLACE(STR(?item), 'http://www.wikidata.org/entity/', ''), '}}')) AS ?link)
     BIND(IF(CONTAINS(?sortkey, '֍'), CONCAT("* ''", ?link, "''"), CONCAT('* ', ?link)) AS ?line)
   } UNION {
     { SELECT DISTINCT ?item ?ru {
