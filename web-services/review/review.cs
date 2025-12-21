@@ -30,6 +30,6 @@ class Program
         var a = new Random();
         var choice = results[a.Next(results.Count)];
         var oldid = choice.Groups[2].Value; var currid = choice.Groups[1].Value;
-        sendresponse(project, onlycat, cat, "<iframe src=\"https://" + project + ".org/w/index.php?title=Навальный\" height=1000 width=90%></iframe>");
+        sendresponse(project, onlycat, cat, "<iframe src=\"https://" + project + ".org/w/index.php?title=Навальный,_Алексей_Анатольевич&oldid=150192639\" height=1000 width=90%></iframe>");
     }
 }
