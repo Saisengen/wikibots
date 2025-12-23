@@ -22,10 +22,15 @@ class Program
         string project = parameters["project"];
         string cat = parameters["cat"];
         bool onlycat = parameters["cat"] == "1";
-        
-        var client = new HttpClient(); var title_rgx = new Regex(@"title=""([^""]*)""");
-        var titles = title_rgx.Matches(client.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&list=oldreviewedpages&ordir=older&orlimit=20").Result);
-        var a = new Random();
-        sendresponse(project, onlycat, cat, "<iframe src=\"https://" + project + ".org/wiki/" + Uri.EscapeDataString(titles[a.Next(titles.Count)].Groups[1].Value) + "\"></iframe>");
+        bool test = parameters["test"] == "1";
+        if (test)
+            sendresponse("ru.wikipedia", false, "", "<iframe src=\"https://ru.wikipedia.org/w/index.php?diff=137309552&oldid=135393489\"></iframe>");
+        else
+        {
+            var client = new HttpClient(); var title_rgx = new Regex(@"title=""([^""]*)""");
+            var titles = title_rgx.Matches(client.GetStringAsync("https://" + project + ".org/w/api.php?action=query&format=xml&list=oldreviewedpages&ordir=older&orlimit=20").Result);
+            var a = new Random();
+            sendresponse(project, onlycat, cat, "<iframe src=\"https://" + project + ".org/wiki/" + Uri.EscapeDataString(titles[a.Next(titles.Count)].Groups[1].Value) + "\"></iframe>");
+        }
     }
 }
