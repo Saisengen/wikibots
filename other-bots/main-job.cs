@@ -29,7 +29,6 @@ class Program
     static string e(string input) { return Uri.EscapeDataString(input); } static int i(Object input) { return Convert.ToInt32(input); }
     static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
     static bool page_exists(string domain, string pagename) { return !site.GetStringAsync("https://" + domain + ".org/w/api.php?action=query&format=xml&prop=info&titles=" + e(pagename)).Result.Contains("page _idx=\"-1\""); }
-    static string serialize(HashSet<string> list) { list.ExceptWith(highflags); return JsonConvert.SerializeObject(list); }
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static string escape_comment(string comment)
     {
@@ -266,10 +265,10 @@ class Program
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (oldtext.Length - newtext.Length < 2048)
-                                rsave(title, newtext);
-                            else if (!newtext.Contains("upstream")) {
-                                var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close();
+                            if (!newtext.StartsWith("upstream")) {
+                                if (oldtext.Length - newtext.Length < 2048)
+                                    rsave(title, newtext);
+                                else { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); }
                             }
                         }
                     }
@@ -304,7 +303,7 @@ class Program
         "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + m + "&cmprop=title&cmlimit=max").Result)))
                 while (r.Read())
                     if (r.Name == "cm") {
-                        if (number_of_nominations >= 125)
+                        if (number_of_nominations >= 100)
                             goto end;
                         string nominated_page = r.GetAttribute("title");
                         if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Модуль:"))
@@ -509,7 +508,6 @@ class Program
             }
         rsave("ВП:Страницы, перенесённые в пространство статей", result + "\n|}");
     }
-    static HashSet<string> highflags = new HashSet<string>();
     static void catmoves()
     {
         string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
@@ -836,50 +834,65 @@ class Program
                 break;
         rsave("ВП:Пинг/Статистика лайков", result + "\n|}\n|}");
     }
-    static void little_flags()
+    public class flagsRoot { public string notice; public UserSet userSet; public List<string> users_talkLinkOnly; }
+    public class UserSet {
+        public HashSet<string> A; public HashSet<string> Ar; public HashSet<string> B; public HashSet<string> C; public HashSet<string> E; public HashSet<string> F; public HashSet<string> I;
+        public HashSet<string> Iplus; public HashSet<string> K; public HashSet<string> O; public HashSet<string> S; public HashSet<string> T; public HashSet<string> V; }
+    static flagsRoot bigResult = new flagsRoot() { notice = "Список обновляется ботом, не правьте вручную. Нетехнические флаги обновляйте тут: ВП:Гаджеты/Флаги_участников/Нетехнические_флаги",
+        users_talkLinkOnly = new List<string>(), userSet = new UserSet() { A = new HashSet<string>(), Ar = new HashSet<string>(), B = new HashSet<string>(), C = new HashSet<string>(), E = new HashSet
+            <string>(), F = new HashSet<string>(), I = new HashSet<string>(), Iplus = new HashSet<string>(), K = new HashSet<string>(), O = new HashSet<string>(), S = new HashSet<string>(), T = new
+            HashSet<string>(), V = new HashSet<string>() } };
+    static void flag_lists()
     {
-        var ru = new MySqlConnection(creds[2].Replace("%project%", "ruwiki")); var global = new MySqlConnection(creds[2].Replace("%project%", "centralauth")); ru.Open(); global.Open();
-        MySqlCommand command; MySqlDataReader rdr; var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
-
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"editor\";", ru); rdr = command.ExecuteReader();
-        while (rdr.Read())
-            pats.Add(rdr.GetString(0));
-        rdr.Close();
-
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"rollbacker\";"; rdr = command.ExecuteReader();
-        while (rdr.Read())
-            rolls.Add(rdr.GetString(0));
-        rdr.Close(); rolls.Remove("Железный капут");
-
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"autoreview\";"; rdr = command.ExecuteReader();
-        while (rdr.Read())
-            apats.Add(rdr.GetString(0));
-        rdr.Close();
-
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"filemover\";"; rdr = command.ExecuteReader();
-        while (rdr.Read())
-            fmovers.Add(rdr.GetString(0));
-        rdr.Close();
-
-        foreach (string flag in new string[] { "sysop", "closer", "engineer" }) {
-            command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"" + flag + "\";";
-            rdr = command.ExecuteReader();
-            while (rdr.Read()) {
-                string user = rdr.GetString(0);
-                if (!highflags.Contains(user))
-                    highflags.Add(user);
-            }
-            rdr.Close();
-        }
-        command = new MySqlCommand("SELECT cast(gu_name as char) user FROM global_user_groups JOIN globaluser ON gu_id=gug_user WHERE gug_group=\"global-rollbacker\"", global); rdr = command.ExecuteReader();
-        while (rdr.Read())
-            if (!rolls.Contains(rdr.GetString(0)))
-                rolls.Add(rdr.GetString(0));
-
+        var other_flags = readpage("ВП:Гаджеты/Флаги участников/Нетехнические флаги").Split('\n');
+        foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet.Ar.Add(user);
+        foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet.Iplus.Add(user);
+        foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet.K.Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet.T.Add(user);
+        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.userSet.V.Add(user);
+        foreach (var user in other_flags[5].Substring(other_flags[5].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
+        var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
+        get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
+        get_flag_owners("bureaucrat", bigResult.userSet.B, false); get_flag_owners("sysop", bigResult.userSet.A, false); get_flag_owners("closer", bigResult.userSet.I, false);
+        get_flag_owners("engineer", bigResult.userSet.E, false); get_flag_owners("interface-admin", bigResult.userSet.F, false); get_flag_owners("checkuser", bigResult.userSet.C, false);
+        get_flag_owners("suppress", bigResult.userSet.O, false); get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("steward", bigResult.userSet.S, true);
+        
         var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
         var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
-        string result = "{\"userSet\":{\"p,r\":" + serialize(patrolls) + ",\"ap\":" + serialize(apats) + ",\"p\":" + serialize(patnotrolls) + ",\"r\":" + serialize(rollnotpats) + "," + "\"f\":" + serialize(fmovers) + "}}";
-        rsave("MediaWiki:Gadget-markothers.json", result);
+        string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats, true) +
+            "," + "\"f\":" + serialize(fmovers, true) + "}}";
+        rsave("MediaWiki:Gadget-markothers.json", little_result);
+        rsave("MediaWiki:Gadget-markadmins.json", JsonConvert.SerializeObject(bigResult).Replace("Iplus", "I+"));
+    }
+    static string serialize(HashSet<string> list, bool little_flag) {
+        if (little_flag) {
+            list.ExceptWith(bigResult.userSet.A); list.ExceptWith(bigResult.userSet.I); list.ExceptWith(bigResult.userSet.E); list.ExceptWith(bigResult.userSet.Iplus); list.ExceptWith(bigResult.userSet.B);
+        }
+        return JsonConvert.SerializeObject(list);
+    }
+    static void get_flag_owners(string flag, HashSet<string> list, bool global) {
+        MySqlConnection connect; MySqlCommand command;
+        if (global) {
+            connect = new MySqlConnection(creds[2].Replace("%project%", "centralauth")); command = new MySqlCommand(
+                "SELECT cast(gu_name as char) user FROM global_user_groups JOIN globaluser ON gu_id=gug_user WHERE gug_group=\"" + flag + "\";", connect);
+        }
+        else {
+            connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki")); command = new MySqlCommand(
+                "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"" + flag + "\"", connect);
+        }
+        connect.Open(); var rdr = command.ExecuteReader();
+        while (rdr.Read())
+            if (flag == "sysop") {
+                if (!bigResult.userSet.B.Contains(rdr.GetString(0)))
+                    list.Add(rdr.GetString(0));
+            }
+            else if (flag == "closer") {
+                if (!bigResult.userSet.Iplus.Contains(rdr.GetString(0)))
+                    list.Add(rdr.GetString(0));
+                }
+            else if (!list.Contains(rdr.GetString(0)))
+                list.Add(rdr.GetString(0));
+        rdr.Close();
     }
     static void main_inc_bot()
     {
@@ -1647,12 +1660,12 @@ class Program
     {
         var autocatfiles = new HashSet<string>();
         var tagged_files = new HashSet<string>();
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result)))
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result));
             while (r.Read())
                 if (r.Name == "cm")
                     autocatfiles.Add(r.GetAttribute("title"));
 
-        using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t:No_license&einamespace=6&eilimit=max").Result)))
+        r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=embeddedin&format=xml&eititle=t:No_license&einamespace=6&eilimit=max").Result));
             while (r.Read())
                 if (r.Name == "ei")
                     tagged_files.Add(r.GetAttribute("title"));
@@ -1767,7 +1780,8 @@ class Program
         nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" };
         genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
         prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
-        try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1782,7 +1796,6 @@ class Program
         try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { little_flags(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
