@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Web.UI;
 using System.Xml;
 class most_edits_record { public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index; public bool globalbot; }
@@ -25,7 +26,10 @@ public class Revision { public DateTime timestamp; }
 public class Continue { public string apcontinue; public string @continue; }
 class Program
 {
-    static DateTime now; static string[] nominative_month, genitive_month, prepositional_month, creds; static HttpClient site; static MySqlCommand command; static MySqlDataReader rdr; static MySqlConnection connect;
+    static DateTime now; static string[] nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" },
+        genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" },
+        prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" }, creds;
+    static HttpClient site; static MySqlCommand command; static MySqlDataReader rdr; static MySqlConnection connect;
     static string e(string input) { return Uri.EscapeDataString(input); } static int i(Object input) { return Convert.ToInt32(input); }
     static string readpage(string input) { return site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
     static bool page_exists(string domain, string pagename) { return !site.GetStringAsync("https://" + domain + ".org/w/api.php?action=query&format=xml&prop=info&titles=" + e(pagename)).Result.Contains("page _idx=\"-1\""); }
@@ -444,7 +448,8 @@ class Program
                 if (page_exists("ru.wikipedia", redir_for_deletion)) {
                     string target = redir_rgx.Match(readpage(redir_for_deletion)).Groups[1].Value;
                     if (always_redir(redir_for_deletion, true) && !page_exists("ru.wikipedia", target))
-                        site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(redir_for_deletion), "title" }, { new StringContent(token), "token" } });
+                        site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent(redir_for_deletion), "title" },
+                            { new StringContent(token), "token" } });
                 } 
             }
     }
@@ -842,6 +847,7 @@ class Program
         users_talkLinkOnly = new List<string>(), userSet = new UserSet() { A = new HashSet<string>(), Ar = new HashSet<string>(), B = new HashSet<string>(), C = new HashSet<string>(), E = new HashSet
             <string>(), F = new HashSet<string>(), I = new HashSet<string>(), Iplus = new HashSet<string>(), K = new HashSet<string>(), O = new HashSet<string>(), S = new HashSet<string>(), T = new
             HashSet<string>(), V = new HashSet<string>() } };
+    static HashSet<string> bots = new HashSet<string>();
     static void flag_lists()
     {
         var other_flags = readpage("ВП:Гаджеты/Флаги участников/Нетехнические флаги").Split('\n');
@@ -853,10 +859,9 @@ class Program
         foreach (var user in other_flags[5].Substring(other_flags[5].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
-        get_flag_owners("bureaucrat", bigResult.userSet.B, false); get_flag_owners("sysop", bigResult.userSet.A, false); get_flag_owners("closer", bigResult.userSet.I, false);
-        get_flag_owners("engineer", bigResult.userSet.E, false); get_flag_owners("interface-admin", bigResult.userSet.F, false); get_flag_owners("checkuser", bigResult.userSet.C, false);
-        get_flag_owners("suppress", bigResult.userSet.O, false); get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("steward", bigResult.userSet.S, true);
-        
+        get_flag_owners("bureaucrat", bigResult.userSet.B, false); get_flag_owners("sysop", bigResult.userSet.A, false); get_flag_owners("interface-admin", bigResult.userSet.F, false);
+        get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("engineer", bigResult.userSet.E, false);  get_flag_owners("checkuser", bigResult.userSet.C, false);
+        get_flag_owners("suppress", bigResult.userSet.O, false); get_flag_owners("steward", bigResult.userSet.S, true); get_flag_owners("closer", bigResult.userSet.I, false); get_flag_owners("bot", bots, false);
         var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
         var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
         string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats, true) +
@@ -865,6 +870,7 @@ class Program
         rsave("MediaWiki:Gadget-markadmins.json", JsonConvert.SerializeObject(bigResult).Replace("Iplus", "I+"));
     }
     static string serialize(HashSet<string> list, bool little_flag) {
+        list.ExceptWith(bots);
         if (little_flag) {
             list.ExceptWith(bigResult.userSet.A); list.ExceptWith(bigResult.userSet.I); list.ExceptWith(bigResult.userSet.E); list.ExceptWith(bigResult.userSet.Iplus); list.ExceptWith(bigResult.userSet.B);
         }
@@ -950,6 +956,24 @@ class Program
             afd_text = page_exists("ru.wikipedia", afd_pagename) ? readpage(afd_pagename) : "{{КУ-Навигация}}\n\n";
             rsave(afd_pagename, afd_text + afd_addition);
         }
+    }
+    static void merge()
+    {
+        var doc = new XmlDocument(); doc.LoadXml(site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result.Content.ReadAsStringAsync().Result);
+        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        for (int y = 2012; y <= 2025; y++)
+            for (int m = 1; m < 13; m++) {
+                var strm = m.ToString();
+                if (strm.Length == 1)
+                    strm = "0" + strm;
+                Console.WriteLine(y + "-" + strm);
+                site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("move"), "action" }, { new StringContent("ВП:Рейтинг википедий по числу статей/" +
+                    y + "-" + strm), "from" }, { new StringContent("ВП:Рейтинг википедий по числу статей"), "to" }, { new StringContent(token), "token" }, { new StringContent(
+                        "объединение с согласия автора"), "reason" }, { new StringContent("1"), "movetalk" }, { new StringContent("1"), "noredirect" } });
+                Thread.Sleep(1500);
+                site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent("ВП:Рейтинг википедий по числу статей"),
+                        "title" }, { new StringContent(token), "token" }, { new StringContent("объединение с согласия автора"), "reason" }, { new StringContent("1"), "deletetalk" } });
+            }
     }
     static void most_active_users()
     {
@@ -1170,9 +1194,9 @@ class Program
 
         }
     }
-    static string resulttext_per_year, resulttext_per_month, resulttext_alltime, ss_user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика" +
+    static string summstats_result, ss_user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика" +
         " по числу итогов, подведённых %type%.\n\nСтатистика собирается поиском по тексту страниц обсуждений и потому верна лишь приближённо, нестандартный синтаксис итога или подписи итогоподводящего " +
-        "может привести к тому, что такой итог не будет засчитан. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ и ЗКП(АУ).\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!" +
+        "может привести к тому, что такой итог не будет засчитан. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ, ЗКП и ЗКПАУ.\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!" +
         "Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|]]}}!!{{vh|[[ВП:КУЛ|]]}}!!{{vh|[[ВП:ЗКА|]]}}!!" +
         "{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!{{vh|[[ВП:ЗСПИ|]]}}!!{{vh|[[ВП:ЗСФ|]]}}!!{{vh|[[ВП:КОИ|]]}}!!{{vh|[[ВП:ИСЛ|]]}}!!" +
         "{{vh|[[ВП:ЗКП|]][[ВП:ЗКПАУ|(АУ)]]}}!!{{vh|[[ВП:КИС|]]}}!!{{vh|[[ВП:КИСЛ|]]}}!!{{vh|[[ВП:КХС|]]}}!!{{vh|[[ВП:КЛСХС|]]}}!!{{vh|[[ВП:КДС|]]}}!!{{vh|[[ВП:КЛСДС|]]}}!!{{vh|[[ВП:КИСП|]]}}!!{{vh|[[ВП:" +
@@ -1234,37 +1258,37 @@ class Program
                                 ss_user = ss_user.Substring(0, ss_user.IndexOf("/"));
                             if (ss_user == "TextworkerBot")
                                 continue;
-                            initialize_ss("alltime", pagetype);
+                            if (now.Month == 1)
+                                initialize_summstats("alltime", pagetype);
                             if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
-                                initialize_ss("month", pagetype);
+                                initialize_summstats("month", pagetype);
                             if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month > lastmonthdate.Month))
-                                initialize_ss("year", pagetype);
+                                initialize_summstats("year", pagetype);
                         }
                     }
                 }
             }
         }
-        if (now.Month == 1)
-        {
-            resulttext_alltime = common_resulttext.Replace("%type%", "за все годы существования Русской Википедии").Replace("%otherpage%", "итоги за [[ВП:Статистика итогов|последний месяц]] и [[ВП:Статистика итогов/За год|год]]");
-            foreach (var s in stats["alltime"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
-                writerow_ss(s, "alltime");
-            rsave("ВП:Статистика итогов/За всё время", resulttext_alltime + "\n|}");
+        if (now.Month == 1) {
+            summstats_result = common_resulttext.Replace("%type%", "за все годы существования Русской Википедии");
+            foreach (var s in stats["alltime"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"])) {
+                if (s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"] == 1)
+                    break;
+                writerow_summstats(s);
+            }
+            rsave("ВП:Статистика итогов/За всё время", summstats_result + "\n|}");
         }
-        else
-        {
-            resulttext_per_month = common_resulttext.Replace("%type%", "в " + prepositional_month[lastmonthdate.Month] + " " + lastmonthdate.Year + " года");
-            resulttext_per_year = common_resulttext.Replace("%type%", "за последние 12 месяцев");
-            foreach (var s in stats["year"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
-                writerow_ss(s, "year");
-            ss_position_number = 0;
-            foreach (var s in stats["month"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
-                writerow_ss(s, "month");
-            rsave("ВП:Статистика итогов/За год", resulttext_per_year + "\n|}");
-            rsave("ВП:Статистика итогов", resulttext_per_month + "\n|}");
-        }
+        ss_position_number = 0; summstats_result = common_resulttext.Replace("%type%", "за последние 12 месяцев");
+        foreach (var s in stats["year"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
+            writerow_summstats(s);
+        rsave("ВП:Статистика итогов/За год", summstats_result + "\n|}");
+
+        ss_position_number = 0; summstats_result = common_resulttext.Replace("%type%", "в " + prepositional_month[lastmonthdate.Month] + " " + lastmonthdate.Year + " года");
+        foreach (var s in stats["month"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
+            writerow_summstats(s);
+        rsave("ВП:Статистика итогов", summstats_result + "\n|}");
     }
-    static void initialize_ss(string type, string pagetype)
+    static void initialize_summstats(string type, string pagetype)
     {
         if (!stats[type].ContainsKey(ss_user))
             stats[type].Add(ss_user, new Dictionary<string, int>() { { "К удалению", 0 },{ "К улучшению", 0 },{ "К разделению", 0 },{ "К объединению", 0 },{ "К переименованию", 0 },{ "К восстановлению", 0 },
@@ -1276,11 +1300,11 @@ class Program
                 { "Запросы на переименование учётных записей", 0},{ "Форум/Архив/Авторское право", 0 } });
         stats[type][ss_user]["sum"]++; stats[type][ss_user][pagetype]++;
     }
-    static void writerow_ss(KeyValuePair<string, Dictionary<string, int>> s, string type)
+    static void writerow_summstats(KeyValuePair<string, Dictionary<string, int>> s)
     {
-        string newrow = "\n|-\n|" + ++ss_position_number + "||{{u|" + s.Key + "}}||" + cell(s.Value["sum"]) + "||" + cell(s.Value["К удалению"]) + "||" + cell(s.Value["К восстановлению"]) + "||" + cell(
-            s.Value["К переименованию"]) + "||" + cell(s.Value["Запросы на переименование учётных записей"]) + "||" + cell(s.Value["К объединению"] + s.Value["К разделению"]) + "||" + cell(s.Value[
-                "Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value["Оспаривание итогов"] + s.Value["Оспаривание " +
+        summstats_result += "\n|-\n|" + ++ss_position_number + "||{{u|" + s.Key + "}}||" + cell(s.Value["sum"]) + "||" + cell(s.Value["К удалению"]) + "||" + cell(s.Value["К восстановлению"]) + "||" +
+            cell(s.Value["К переименованию"]) + "||" + cell(s.Value["Запросы на переименование учётных записей"]) + "||" + cell(s.Value["К объединению"] + s.Value["К разделению"]) + "||" + cell(s.Value
+            ["Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value["Оспаривание итогов"] + s.Value["Оспаривание " +
                 "административных действий"]) + "||" + cell(s.Value["Установка защиты"]) + "||" + cell(s.Value["Снятие защиты"]) + "||" + cell(s.Value["Заявки на статус автопатрулируемого"] + s.Value[
                     "Заявки на статус патрулирующего"]) + "||" + cell(s.Value["Заявки на статус подводящего итоги"]) + "||" + cell(s.Value["Заявки на снятие флагов"]) + "||" + cell(s.Value["К оценке " +
                     "источников"]) + "||" + cell(s.Value["Изменение спам-листа"]) + "||" + cell(s.Value["Запросы к патрулирующим от автоподтверждённых участников"] + s.Value["Запросы к патрулирующим"]) +
@@ -1288,12 +1312,6 @@ class Program
                         s.Value["Хорошие статьи/К лишению статуса"]) + "||" + cell(s.Value["Добротные статьи/Кандидаты"]) + "||" + cell(s.Value["Добротные статьи/К лишению статуса"]) + "||" + cell(s.Value
                         ["Избранные списки и порталы/Кандидаты"]) + "||" + cell(s.Value["Избранные списки и порталы/К лишению статуса"]) + "||" + cell(s.Value["Запросы к ботоводам"]) + "||" + cell(s.Value
                         ["Форум/Архив/Технический"] + s.Value["Технические запросы"]) + "||" + cell(s.Value["Форум/Архив/Авторское право"]);
-        if (type == "month")
-            resulttext_per_month += newrow;
-        else if (type == "year")
-            resulttext_per_year += newrow;
-        else
-            resulttext_alltime += newrow;
     }
     static void popular_wd_items_without_ru()
     {
@@ -1777,9 +1795,6 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        nominative_month = new string[13] { "", "январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь" };
-        genitive_month = new string[13] { "", "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря" };
-        prepositional_month = new string[13] { "", "январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре" };
         //try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1812,7 +1827,6 @@ class Program
             try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         }
