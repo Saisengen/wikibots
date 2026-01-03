@@ -839,40 +839,41 @@ class Program
                 break;
         rsave("ВП:Пинг/Статистика лайков", result + "\n|}\n|}");
     }
-    public class flagsRoot { public string notice; public UserSet userSet; public List<string> users_talkLinkOnly; }
-    public class UserSet {
-        public HashSet<string> A; public HashSet<string> Ar; public HashSet<string> B; public HashSet<string> C; public HashSet<string> E; public HashSet<string> F; public HashSet<string> I;
-        public HashSet<string> Iplus; public HashSet<string> K; public HashSet<string> O; public HashSet<string> S; public HashSet<string> T; public HashSet<string> V; }
+    public class flagsRoot { public string notice; public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() { notice = "Список обновляется ботом, не правьте вручную. Нетехнические флаги обновляйте тут: ВП:Гаджеты/Флаги_участников/Нетехнические_флаги",
-        users_talkLinkOnly = new List<string>(), userSet = new UserSet() { A = new HashSet<string>(), Ar = new HashSet<string>(), B = new HashSet<string>(), C = new HashSet<string>(), E = new HashSet
-            <string>(), F = new HashSet<string>(), I = new HashSet<string>(), Iplus = new HashSet<string>(), K = new HashSet<string>(), O = new HashSet<string>(), S = new HashSet<string>(), T = new
-            HashSet<string>(), V = new HashSet<string>() } };
-    static HashSet<string> bots = new HashSet<string>();
+        users_talkLinkOnly = new List<string>(), userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() },
+            { "C", new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() },{ "Iplus", new HashSet<string>() }, { "K", new HashSet<string>() },
+        { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } } };
     static void flag_lists()
     {
         var other_flags = readpage("ВП:Гаджеты/Флаги участников/Нетехнические флаги").Split('\n');
-        foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet.Ar.Add(user);
-        foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet.Iplus.Add(user);
-        foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet.K.Add(user);
-        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet.T.Add(user);
-        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.userSet.V.Add(user);
+        foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet["Ar"].Add(user);
+        foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["Iplus"].Add(user);
+        foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["T"].Add(user);
+        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.userSet["V"].Add(user);
         foreach (var user in other_flags[5].Substring(other_flags[5].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
-        get_flag_owners("bureaucrat", bigResult.userSet.B, false); get_flag_owners("sysop", bigResult.userSet.A, false); get_flag_owners("interface-admin", bigResult.userSet.F, false);
-        get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("engineer", bigResult.userSet.E, false);  get_flag_owners("checkuser", bigResult.userSet.C, false);
-        get_flag_owners("suppress", bigResult.userSet.O, false); get_flag_owners("steward", bigResult.userSet.S, true); get_flag_owners("closer", bigResult.userSet.I, false); get_flag_owners("bot", bots, false);
+        get_flag_owners("bureaucrat", bigResult.userSet["B"], false); get_flag_owners("sysop", bigResult.userSet["A"], false); get_flag_owners("interface-admin", bigResult.userSet["F"], false);
+        get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("engineer", bigResult.userSet["E"], false);  get_flag_owners("checkuser", bigResult.userSet["C"], false);
+        get_flag_owners("suppress", bigResult.userSet["O"], false); get_flag_owners("steward", bigResult.userSet["S"], true); get_flag_owners("closer", bigResult.userSet["I"], false);
+        get_flag_owners("bot", bigResult.userSet["bots"], false);
         var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
         var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
-        string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats, true) +
-            "," + "\"f\":" + serialize(fmovers, true) + "}}";
+        string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats,
+            true) + "," + "\"f\":" + serialize(fmovers, true) + "}}";
+        foreach (var list in bigResult.userSet)
+            if (list.Key != "bots")
+                list.Value.ExceptWith(bigResult.userSet["bots"]);
+        bigResult.userSet.Remove("bots");
         rsave("MediaWiki:Gadget-markothers.json", little_result);
         rsave("MediaWiki:Gadget-markadmins.json", JsonConvert.SerializeObject(bigResult).Replace("Iplus", "I+"));
     }
     static string serialize(HashSet<string> list, bool little_flag) {
-        list.ExceptWith(bots);
+        list.ExceptWith(bigResult.userSet["bots"]);
         if (little_flag) {
-            list.ExceptWith(bigResult.userSet.A); list.ExceptWith(bigResult.userSet.I); list.ExceptWith(bigResult.userSet.E); list.ExceptWith(bigResult.userSet.Iplus); list.ExceptWith(bigResult.userSet.B);
+            list.ExceptWith(bigResult.userSet["A"]); list.ExceptWith(bigResult.userSet["I"]); list.ExceptWith(bigResult.userSet["E"]); list.ExceptWith(bigResult.userSet["Iplus"]); list.ExceptWith(bigResult.userSet["B"]);
         }
         return JsonConvert.SerializeObject(list);
     }
@@ -889,11 +890,11 @@ class Program
         connect.Open(); var rdr = command.ExecuteReader();
         while (rdr.Read())
             if (flag == "sysop") {
-                if (!bigResult.userSet.B.Contains(rdr.GetString(0)))
+                if (!bigResult.userSet["B"].Contains(rdr.GetString(0)))
                     list.Add(rdr.GetString(0));
             }
             else if (flag == "closer") {
-                if (!bigResult.userSet.Iplus.Contains(rdr.GetString(0)))
+                if (!bigResult.userSet["Iplus"].Contains(rdr.GetString(0)))
                     list.Add(rdr.GetString(0));
                 }
             else if (!list.Contains(rdr.GetString(0)))
