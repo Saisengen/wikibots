@@ -850,15 +850,14 @@ class Program
         foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet["Ar"].Add(user);
         foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["Iplus"].Add(user);
         foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
-        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["T"].Add(user);
-        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.userSet["V"].Add(user);
-        foreach (var user in other_flags[5].Substring(other_flags[5].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["V"].Add(user);
+        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
         get_flag_owners("bureaucrat", bigResult.userSet["B"], false); get_flag_owners("sysop", bigResult.userSet["A"], false); get_flag_owners("interface-admin", bigResult.userSet["F"], false);
         get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("engineer", bigResult.userSet["E"], false);  get_flag_owners("checkuser", bigResult.userSet["C"], false);
         get_flag_owners("suppress", bigResult.userSet["O"], false); get_flag_owners("steward", bigResult.userSet["S"], true); get_flag_owners("closer", bigResult.userSet["I"], false);
-        get_flag_owners("bot", bigResult.userSet["bots"], false);
+        get_flag_owners("bot", bigResult.userSet["bots"], false); get_flag_owners("vrt-permissions", bigResult.userSet["T"], true);
         var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
         var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
         string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats,
@@ -888,18 +887,29 @@ class Program
                 "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"" + flag + "\"", connect);
         }
         connect.Open(); var rdr = command.ExecuteReader();
-        while (rdr.Read())
+        while (rdr.Read()) {
+            string user = rdr.GetString(0);
             if (flag == "sysop") {
-                if (!bigResult.userSet["B"].Contains(rdr.GetString(0)))
-                    list.Add(rdr.GetString(0));
+                if (!bigResult.userSet["B"].Contains(user))
+                    list.Add(user);
             }
             else if (flag == "closer") {
-                if (!bigResult.userSet["Iplus"].Contains(rdr.GetString(0)))
-                    list.Add(rdr.GetString(0));
-                }
-            else if (!list.Contains(rdr.GetString(0)))
-                list.Add(rdr.GetString(0));
+                if (!bigResult.userSet["Iplus"].Contains(user))
+                    list.Add(user);
+            }
+            else if (!list.Contains(user) && (!global || has_edits_in_ruwiki(user)))
+                list.Add(user);
+        }
         rdr.Close();
+    }
+    static bool has_edits_in_ruwiki(string user)
+    {
+        var rgx = new Regex(@"count=""(\d+)""");
+        try {
+            if (i(rgx.Match(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user)).Result).Groups[1].Value) > 1000)
+                return true;
+        } catch { }
+        return false;
     }
     static void main_inc_bot()
     {
@@ -951,8 +961,7 @@ class Program
                     }
                 }
             }
-        if (num_of_nominated_pages > 0)
-        {
+        if (num_of_nominated_pages > 0) {
             string afd_text = "";
             afd_text = page_exists("ru.wikipedia", afd_pagename) ? readpage(afd_pagename) : "{{КУ-Навигация}}\n\n";
             rsave(afd_pagename, afd_text + afd_addition);
