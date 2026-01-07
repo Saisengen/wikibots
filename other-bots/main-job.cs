@@ -51,7 +51,7 @@ class Program
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; if (!result.IsSuccessStatusCode) return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" },
-            { new StringContent(text), "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }, { new StringContent("1"), "bot" } }).Result;
+            { new StringContent(text), "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ }).Result;
         if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
     }
     static void rsave(string title, string text) { save("ru", title, text, ""); }
@@ -795,8 +795,7 @@ class Program
             using (var rdr = new XmlTextReader(new StringReader(apiout))) {
                 rdr.Read(); rdr.Read(); rdr.Read(); cont = rdr.GetAttribute("lecontinue");
                 while (rdr.Read())
-                    if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "item")
-                    {
+                    if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "item") {
                         string source = rdr.GetAttribute("user"); string target = rdr.GetAttribute("title"); if (source == "Le Loy") source = "Ле Лой";
                         if (target != null && source != null) {
                             if (thankingusers.ContainsKey(source))
@@ -817,26 +816,22 @@ class Program
                     }
             }
         }
-        int c1 = 0, c2 = 0, c3 = 0;
         string result = "{{Плавающая шапка таблицы}}<center>См. также [https://mbh.toolforge.org/cgi-bin/likes интерактивную статистику].\n{|style=\"word-break: break-all\"\n|valign=top|\n{|class=" +
-            "\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👤⇨👍🏻|место}}";
+            "\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👤⇨👍🏻|место}}"; int c = 0;
         foreach (var p in thankingusers.OrderByDescending(p => p.Value))
-            if (++c1 <= num_of_rows_in_output_table)
-                result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c1 + "}}";
-            else
-                break;
-        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=400px|Направление!!Число";
+            if (++c <= num_of_rows_in_output_table)
+                result += "\n|-\n|[[u:" + p.Key + "]]||" + p.Value;
+            else break;
+        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=400px|Направление!!Число"; c = 0;
         foreach (var p in pairs.OrderByDescending(p => p.Value))
-            if (++c2 <= num_of_rows_in_output_table)
-                result += "\n|-\n|" + p.Key + "||{{comment|" + p.Value + "|" + c2 + "}}";
-            else
-                break;
-        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👍🏻⇨👤|место}}";
+            if (++c <= num_of_rows_in_output_table)
+                result += "\n|-\n|" + p.Key + "||" + p.Value;
+            else break;
+        result += "\n|}\n|valign=top|\n{|class=\"standard ts-stickytableheader\"\n!max-width=300px|Участник!!{{comment|👍🏻⇨👤|место}}"; c = 0;
         foreach (var p in thankedusers.OrderByDescending(p => p.Value))
-            if (++c3 <= num_of_rows_in_output_table)
-                result += "\n|-\n|{{u|" + p.Key + "}}||{{comment|" + p.Value + "|" + c3 + "}}";
-            else
-                break;
+            if (++c <= num_of_rows_in_output_table)
+                result += "\n|-\n|[[u:" + p.Key + "]]||" + p.Value;
+            else break;
         rsave("ВП:Пинг/Статистика лайков", result + "\n|}\n|}");
     }
     public class flagsRoot { public string notice; public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
