@@ -117,8 +117,8 @@ SELECT ?line WITH { SELECT ?exo ?dist ?lum ?per ?semi ?ecc ?msini ?mass ?stateme
                         CONCAT("{{нет статьи|", REPLACE(STR(?parent), "http://www.wikidata.org/entity/", ""), "|", ?article, "|Звезда}}")), " || ", 
                 ?number, " || ", IF(BOUND(?ly), STR(?ly), ""), " || ", IF(BOUND(?l), ?l, ""), " || ", IF(BOUND(?s), ?s, ""), " || ", 
                 IF(BOUND(?e), ?e, ""), " || ", IF(BOUND(?p), ?p, ""), " || ", IF(BOUND(?m), ?m, ""), " || ", 
-                IF(BOUND(?eu), CONCAT("<sup>[http://exoplanet.eu/catalog/", REPLACE(?eu, " ", "%20"), "/ EPE]</sup>"), ""), 
-                IF(BOUND(?dr2), CONCAT("<sup>[http://vizier.u-strasbg.fr/viz-bin/VizieR-S?", ENCODE_FOR_URI(?dr2), " DR2]</sup>"), ""), 
+                IF(BOUND(?eu), CONCAT("<sup>[https://exoplanet.eu/catalog/", REPLACE(?eu, " ", "%20"), "/ EPE]</sup>"), ""), 
+                IF(BOUND(?dr2), CONCAT("<sup>[https://vizier.u-strasbg.fr/viz-bin/VizieR-S?", ENCODE_FOR_URI(?dr2), " DR2]</sup>"), ""), 
                 ?src
                ) AS ?line)
   } UNION {
