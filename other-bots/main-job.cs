@@ -335,23 +335,22 @@ class Program
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *\}\}", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        var nominated_before = new List<string>();
-        foreach (Match h in header_rgx.Matches(cheka_current_text))
-            nominated_before.Add(h.Groups[1].Value);
-        foreach (Match h in header_rgx.Matches(readpage("ВП:Коллективные итоги на КУ/Нужен один голос")))
-            nominated_before.Add(h.Groups[1].Value);
-        foreach (Match h in header_rgx.Matches(readpage("ВП:Коллективные итоги на КУ/Зависшее")))
-            nominated_before.Add(h.Groups[1].Value);
-        for (int months = 75; months > 0; months--) {
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
-        "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + months + "&cmprop=title&cmlimit=max").Result)))
-                while (r.Read())
-                    if (r.Name == "cm") {
-                        if (number_of_nominations >= 60)
-                            goto end;
-                        string nominated_page = r.GetAttribute("title");
-                        /*if (!nominated_page.StartsWith("Шаблон:") && !nominated_page.StartsWith("Модуль:"))*/
-                        {
+        if (number_of_nominations < 45) {
+            var nominated_before = new List<string>();
+            foreach (Match h in header_rgx.Matches(cheka_current_text))
+                nominated_before.Add(h.Groups[1].Value);
+            foreach (Match h in header_rgx.Matches(readpage("ВП:Коллективные итоги на КУ/Нужен один голос")))
+                nominated_before.Add(h.Groups[1].Value);
+            foreach (Match h in header_rgx.Matches(readpage("ВП:Коллективные итоги на КУ/Зависшее")))
+                nominated_before.Add(h.Groups[1].Value);
+            for (int months = 75; months > 0; months--) {
+                using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers" +
+            "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + months + "&cmprop=title&cmlimit=max").Result)))
+                    while (r.Read())
+                        if (r.Name == "cm") {
+                            if (number_of_nominations >= 60)
+                                goto end;
+                            string nominated_page = r.GetAttribute("title");
                             if (!nominated_before.Contains(nominated_page)) {
                                 string pagetext = readpage(nominated_page);
                                 string date = afd_template.Match(pagetext).Groups[2].Value;
@@ -362,9 +361,9 @@ class Program
                                 }
                             }
                         }
-                    }
-        }
+            }
         end: rsave("ВП:Коллективные итоги на КУ", cheka_current_text);
+        }
     }
     static string iso_to_ru_date(string date)
     {
@@ -552,14 +551,19 @@ class Program
         foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet["Ar"].Add(user);
         foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["I+"].Add(user);
         foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
-        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["V"].Add(user);
-        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
         get_flag_owners("bureaucrat", bigResult.userSet["B"], false); get_flag_owners("sysop", bigResult.userSet["A"], false); get_flag_owners("interface-admin", bigResult.userSet["F"], false);
         get_flag_owners("global-rollbacker", rolls, true); get_flag_owners("engineer", bigResult.userSet["E"], false); get_flag_owners("checkuser", bigResult.userSet["C"], false);
         get_flag_owners("suppress", bigResult.userSet["O"], false); get_flag_owners("steward", bigResult.userSet["S"], true); get_flag_owners("closer", bigResult.userSet["I"], false);
         get_flag_owners("bot", bigResult.userSet["bots"], false); get_flag_owners("vrt-permissions", bigResult.userSet["T"], true);
+        foreach (var str in readpage("u:EyeBot/Список одобренных участников").Split('\n'))
+            if (str.StartsWith("Участни")) {
+                string user = str.Substring(str.IndexOf(':') + 1);
+                if (!bigResult.userSet["A"].Contains(user))
+                    bigResult.userSet["V"].Add(user);
+            }
         var patnotrolls = new HashSet<string>(pats); patnotrolls.ExceptWith(rolls); var rollnotpats = new HashSet<string>(rolls); rollnotpats.ExceptWith(pats);
         var patrolls = new HashSet<string>(pats); patrolls.IntersectWith(rolls);
         string little_result = "{\"userSet\":{\"p,r\":" + serialize(patrolls, true) + ",\"ap\":" + serialize(apats, true) + ",\"p\":" + serialize(patnotrolls, true) + ",\"r\":" + serialize(rollnotpats,
@@ -711,7 +715,7 @@ class Program
             if (++c <= num_of_rows_in_output_table)
                 result += "\n|-\n|[[u:" + p.Key + "]]||" + p.Value;
             else break;
-        rsave("ВП:Пинг/Статистика лайков", result + "\n|}\n|}");
+        rsave("ВП:Упоминание/Статистика лайков", result + "\n|}\n|}");
     }
     public class flagsRoot { public string notice; public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() { notice = "Список обновляется ботом, не правьте вручную. Нетехнические флаги обновляйте тут: ВП:Гаджеты/Флаги_участников/Нетехнические_флаги",
@@ -733,7 +737,8 @@ class Program
                     Root history = JsonConvert.DeserializeObject<Root>(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=json&prop=revisions&formatversion=2&rvprop=timestamp" +
                     "&rvlimit=max&titles=" + e(incname)).Result);
                     if (now - history.query.pages[0].revisions.Last().timestamp > new TimeSpan(14, 0, 0, 0) && now - history.query.pages[0].revisions.First().timestamp > new TimeSpan(7, 0, 0, 0)) {
-                        string newname = incname.Substring(10); string warning_text = ""; if (page_exists("ru.wikipedia", newname)) {
+                        string newname = incname.Substring(10); string warning_text = "";
+                        if (page_exists("ru.wikipedia", newname)) {
                             warning_text = " ВНИМАНИЕ: статья [[:" + newname + "]] уже существует."; newname += " (из Инкубатора)";
                         }
                         if (site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=info&inprop=protection&titles=" + e(newname)).Result.Contains("level=\"sysop\"")) {
@@ -1801,7 +1806,7 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        //try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
