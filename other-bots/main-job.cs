@@ -335,7 +335,7 @@ class Program
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *\}\}", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        if (number_of_nominations < 45) {
+        if (number_of_nominations < 55) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
                 nominated_before.Add(h.Groups[1].Value);
@@ -354,10 +354,11 @@ class Program
                             if (!nominated_before.Contains(nominated_page)) {
                                 string pagetext = readpage(nominated_page);
                                 string date = afd_template.Match(pagetext).Groups[2].Value;
-                                if (iso_to_ru_date(date) != "error") {
-                                    string link_to_discussion = "ВП:К удалению/" + iso_to_ru_date(date) + "#" + nominated_page; number_of_nominations++;
-                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\n[[" + link_to_discussion + "]]. Голосование открыто " + now.ToString("dd.MM.yyyy") + ".\n" +
-                                        "{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
+                                var human_date = iso_to_ru_date(date);
+                                if (human_date != "error") {
+                                    string link_to_discussion = "ВП:К удалению/" + human_date + "#" + nominated_page; number_of_nominations++;
+                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\nИсходно номинировано [[" + link_to_discussion + "|" + human_date + "]]. Голосование открыто " + now.Day +
+                                        " " + genitive_month[now.Month] + " " + now.Year + ".\n{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
                                 }
                             }
                         }
@@ -799,27 +800,23 @@ class Program
     }
     static void most_active_users()
     {
-        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "be", new string[] { "Maksim L.", "Artsiom91" } }, { "kk", new string[] { "Arystanbek", "Нұрлан Рахымжанов" } } };
-        var min_num_of_edits = new Dictionary<string, int>() { { "ru", 10000 }, { "be", 5000 }, { "kk", 500 } };
+        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "be", new string[] { "Maksim L.", "Artsiom91" } } };
+        var min_num_of_edits = new Dictionary<string, int>() { { "ru", 10000 }, { "be", 5000 } };
 
         var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{Самые активные участники}}%shortcut%<center>\nВ каждой колонке приведена сумма правок в указанном пространстве и его обсуждении. Первично отсортировано и пронумеровано по общему числу правок.%specific_text%\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!{{abbr|№ п/с|место по числу правок в статьях|0}}!!Участник!!Всего правок!!В статьях!!шаблонах!!файлах!!категориях!!порталах и проектах!!модулях и MediaWiki!!страницах участников!!метапедических страницах" },
-            { "be", "{{Самыя актыўныя ўдзельнікі}}%shortcut%<center>У кожным слупку прыведзена сума правак у адпаведнай прасторы і размовах пра яе. Першасна адсартавана і пранумаравана паводле агульнай колькасці правак.%specific_text%\n{|class=\"standard sortable\"\n!№!!{{abbr|№ п/с|месца па колькасці правак у артыкулах|0}}!!Удзельнік!!Агулам правак!!У артыкулах!!шаблонах!!файлах!!катэгорыях!!парталах і праектах!!модулях і MediaWiki!!старонках удзельнікаў!!метапедычных старонках" },
-            { "kk", "%shortcut%<center>Әрбір бағанда көрсетілген кеңістіктегі және оның талқылауындағы өңдеулер саны берілген. Ең алдымен жалпы түзетулер бойынша сұрыпталған және нөмірленген.%specific_text%\n{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!{{abbr|#м/о|мақалалардағы өңдеме саны бойынша орны|0}}!!Қатысушы!!Барлық өңдемесі!!Мақалалар!!Үлгілер!!Файлдар!!Санаттар!!Порталдар + жобалар!!Модулдар + MediaWiki!!Қатысушы беттері!!Метапедиялық (Уикипедия)" } };
+            { "be", "{{Самыя актыўныя ўдзельнікі}}%shortcut%<center>У кожным слупку прыведзена сума правак у адпаведнай прасторы і размовах пра яе. Першасна адсартавана і пранумаравана паводле агульнай колькасці правак.%specific_text%\n{|class=\"standard sortable\"\n!№!!{{abbr|№ п/с|месца па колькасці правак у артыкулах|0}}!!Удзельнік!!Агулам правак!!У артыкулах!!шаблонах!!файлах!!катэгорыях!!парталах і праектах!!модулях і MediaWiki!!старонках удзельнікаў!!метапедычных старонках" } };
 
         var resultpages = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:Самые активные боты", Second = "ВП:Участники по числу правок" } },
-            { "be", new Pair() { First = "Вікіпедыя:Боты паводле колькасці правак", Second = "Вікіпедыя:Удзельнікі паводле колькасці правак" } },
-            { "kk", new Pair() { First = "Уикипедия:Өңдеме саны бойынша боттар", Second = "Уикипедия:Өңдеме саны бойынша қатысушылар" } } };
+            { "be", new Pair() { First = "Вікіпедыя:Боты паводле колькасці правак", Second = "Вікіпедыя:Удзельнікі паводле колькасці правак" } } };
 
         var footers = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "[[К:Википедия:Боты]]", Second = "" } },
-            { "be", new Pair() { First = "[[Катэгорыя:Вікіпедыя:Боты]][[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]", Second = "[[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]" } },
-            { "kk", new Pair() { First = "{{Wikistats}}[[Санат:Уикипедия:Боттар]]", Second = "{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } } };
+            { "be", new Pair() { First = "[[Катэгорыя:Вікіпедыя:Боты]][[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]", Second = "[[Катэгорыя:Вікіпедыя:Статыстыка і прагнозы]]" } } };
 
-        var shortcuts = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } }, { "be", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } }, { "kk", new Pair() { First = "УП:ӨСБ", Second = "УП:ӨСҚ" } } };
+        var shortcuts = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } }, { "be", new Pair() { First = "ВП:САБ", Second = "ВП:САУ" } } };
 
-        foreach (var lang in new string[] { "ru", "be", "kk" }) {
+        foreach (var lang in new string[] { "ru", "be" }) {
             var hdr_modifications = new Dictionary<string, Pair>() { { "ru", new Pair() { First = " Голубым выделены глобальные боты без локального флага.", Second = " В список включены участники, имеющие не менее " + min_num_of_edits[lang] + " правок, включая удалённые правки (из-за них число живых правок в таблице может быть меньше)." } },
-            { "be", new Pair() { First = " Блакітным вылучаныя глабальныя боты без лакальнага сцяга.", Second = " У спіс уключаны ўдзельнікі, якія маюць не менш за " + min_num_of_edits[lang] + " правак." } },
-            { "kk", new Pair() { First = " Жергілікті жалаусыз ғаламдық боттар көкпен ерекшеленген.", Second = " Тізімге " + min_num_of_edits[lang] + " өңдемеден кем емес өңдеме жасаған қатысушылар кірістірілген." } } };
+            { "be", new Pair() { First = " Блакітным вылучаныя глабальныя боты без лакальнага сцяга.", Second = " У спіс уключаны ўдзельнікі, якія маюць не менш за " + min_num_of_edits[lang] + " правак." } } };
             var users = new Dictionary<string, most_edits_record>();
             var bots = new Dictionary<string, most_edits_record>();
             var connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki"));
@@ -1283,15 +1280,15 @@ class Program
     static Dictionary<string, Dictionary<string, int>> creators = new Dictionary<string, Dictionary<string, int>>();
     static void page_creators()
     {
-        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } }, { "kk", new string[] { "Arystanbek", "Нұрлан_Рахымжанов" } } };
-        var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Участники по числу созданных страниц" }, { "kk", "Уикипедия:Бет бастауы бойынша қатысушылар" } };
-        var disambigcategory = new Dictionary<string, string>() { { "ru", "Страницы значений по алфавиту" }, { "kk", "Алфавит бойынша айрық беттер" } };
+        var falsebots = new Dictionary<string, string[]>() { { "ru", new string[] { "Alex Smotrov", "Wind", "Tutaishy" } } };
+        var resultpage = new Dictionary<string, string>() { { "ru", "ВП:Участники по числу созданных страниц" } };
+        var disambigcategory = new Dictionary<string, string>() { { "ru", "Страницы значений по алфавиту" } };
         var headers = new Dictionary<string, string>() { { "ru", "{{Плавающая шапка таблицы}}{{Самые активные участники}}{{shortcut|ВП:УПЧС}}<center>Бот, генерирующий таблицу, работает так: берёт все страницы " +
                 "заданных [[ВП:Пространства имён|пространств имён]], включая редиректы, и для каждой смотрит имя первого правщика. Таким образом бот не засчитывает создание удалённых статей и статей, " +
                 "авторство в которых скрыто. Обновлено " + now.ToString("d.M.yyyy") + ".\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Статьи!!Редиректы!!Дизамбиги!!Шаблоны!!Категории!!" +
-                "Файлы" }, { "kk", "{{shortcut|УП:ББҚ}}<center>{{StatInfo}}\n{|class=\"standard sortable ts-stickytableheader\"\n!#!!Қатысушы!!Мақалалар!!Бағыттау беттері!!Айрық беттер!!Үлгілер!!Санаттар!!Файлдар" } };
-        var footers = new Dictionary<string, string>() { { "ru", "" }, { "kk", "\n{{Wikistats}}[[Санат:Уикипедия:Қатысушылар]]" } }; var limit = new Dictionary<string, int>() { { "ru", 100 }, { "kk", 50 } };
-        foreach (var lang in new string[] { "kk", "ru" }) {
+                "Файлы" } };
+        var limit = new Dictionary<string, int>() { { "ru", 100 } };
+        foreach (var lang in new string[] { "ru" }) {
             creators.Clear();
             Dictionary<string, Dictionary<string, int>> bestusers = new Dictionary<string, Dictionary<string, int>>(); HashSet<string> bots = new HashSet<string>(), disambs = new HashSet<string>();
             connect = new MySqlConnection(creds[2].Replace("%project%", lang + "wiki")); connect.Open();
@@ -1345,12 +1342,12 @@ class Program
             int c = 0;
             foreach (var u in bestusers.OrderByDescending(u => u.Value["0"])) {
                 bool bot = bots.Contains(u.Key);
-                string color = (bot ? "style=\"background-color:#ddf\"" : "");
-                string number = (bot ? "" : (++c).ToString());
+                string color = bot ? "style=\"background-color:#ddf\"" : "";
+                string number = bot ? "" : (++c).ToString();
                 result += "\n|-" + color + "\n|" + number + "||{{u|" + (u.Key.Contains('=') ? "1=" + u.Key : u.Key) + "}}||" + u.Value["0"] + "||" + u.Value["r"] + "||" + u.Value["d"] + "||" +
                     u.Value["10"] + "||" + u.Value["14"] + "||" + u.Value["6"];
             }
-            save(lang, resultpage[lang], result + "\n|}" + footers[lang], "");
+            save(lang, resultpage[lang], result + "\n|}", "");
         }
     }
     static void get_page_creator(int id, string ns, string lang)
