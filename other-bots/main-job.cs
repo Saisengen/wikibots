@@ -41,7 +41,8 @@ class Program
     }
     static HttpClient login(string lang, string login, string password)
     {
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent", login);
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
+            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com) no libraries");
         var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument(); doc.LoadXml(result.Content
             .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new 
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
@@ -269,7 +270,7 @@ class Program
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
                             var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL")) {
+                            if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL") && oldtext.Length != newtext.Length) {
                                 if (oldtext.Length - newtext.Length < 2048)
                                     rsave(title, newtext);
                                 else { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); }
@@ -545,14 +546,21 @@ class Program
                 result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
         rsave("ВП:Внешние ссылки/Статистика", result + "\n|}");
     }
-    static Regex redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[ *([^]]*) *\]\]");
+    public class flagsRoot { public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
+    static flagsRoot bigResult = new flagsRoot() {
+        users_talkLinkOnly = new List<string>(),
+        userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() }, { "C", new HashSet<string>() }, { "D", 
+                new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() }, { "I+", new HashSet<string>() }, { "K", new HashSet<string>() },
+            { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } }
+    };
     static void flag_lists()
     {
         var other_flags = readpage("ВП:Гаджеты/Флаги участников/Нетехнические флаги").Split('\n');
         foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet["Ar"].Add(user);
-        foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["I+"].Add(user);
-        foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
-        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
+        foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["D"].Add(user);
+        foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["I+"].Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
+        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
         get_flag_owners("bureaucrat", bigResult.userSet["B"], false); get_flag_owners("sysop", bigResult.userSet["A"], false); get_flag_owners("interface-admin", bigResult.userSet["F"], false);
@@ -603,7 +611,7 @@ class Program
                     list.Add(user);
             }
             else if (flag == "closer") {
-                if (!bigResult.userSet["I+"].Contains(user))
+                if (!bigResult.userSet["I+"].Contains(user) && !bigResult.userSet["D"].Contains(user))
                     list.Add(user);
             }
             else if (!list.Contains(user) && (!global || has_edits_in_ruwiki(user)))
@@ -615,7 +623,7 @@ class Program
     {
         var rgx = new Regex(@"count=""(\d+)""");
         try {
-            if (i(rgx.Match(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user)).Result).Groups[1].Value) > 1000)
+            if (i(rgx.Match(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user)).Result).Groups[1].Value) > 95)
                 return true;
         }  catch { }
         return false;
@@ -718,11 +726,6 @@ class Program
             else break;
         rsave("ВП:Упоминание/Статистика лайков", result + "\n|}\n|}");
     }
-    public class flagsRoot { public string notice; public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
-    static flagsRoot bigResult = new flagsRoot() { notice = "Список обновляется ботом, не правьте вручную. Нетехнические флаги обновляйте тут: ВП:Гаджеты/Флаги_участников/Нетехнические_флаги",
-        users_talkLinkOnly = new List<string>(), userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() },
-            { "C", new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() },{ "I+", new HashSet<string>() }, { "K", new HashSet<string>() },
-        { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } } };
     static void main_inc_bot()
     {
         var except_rgx = new Regex(@"#(REDIRECT|перенаправление) \[\[|\{\{ *db-|\{\{ *к удалению|инкубатор, (на доработке|черновик ВУС)", RegexOptions.Singleline | RegexOptions.IgnoreCase);
@@ -1579,6 +1582,7 @@ class Program
         }
         rsave("ВП:К созданию/Статьи с наибольшим числом интервик без русской", result + "\n|}{{Проект:Словники/Шаблон:Списки недостающих статей}}[[Категория:Википедия:Статьи без русских интервик]]");
     }
+    static Regex redir_rgx = new Regex(@"#(перенаправление|redirect) *\[\[ *([^]]*) *\]\]");
     static void redirs_deletion()
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; doc.LoadXml(result.Content.ReadAsStringAsync().Result);
