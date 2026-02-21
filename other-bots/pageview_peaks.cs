@@ -30,17 +30,19 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site("ru", creds[0], creds[1]);
         int year_of_previous_month = now.AddMonths(-1).Year; string lastmonth = now.AddMonths(-1).ToString("MM");
-        if (lastmonth == "12")
-        { process_pageviews("year", year_of_previous_month + "0101/" + year_of_previous_month + "1231"); process_pageviews("total", "20150701/" + year_of_previous_month + "1231"); }
+        if (lastmonth == "12") {
+            process_pageviews("year", year_of_previous_month + "0101/" + year_of_previous_month + "1231"); process_pageviews("total", "20150701/" + year_of_previous_month + "1231");
+        }
         process_pageviews("month", year_of_previous_month + lastmonth + "01/" + year_of_previous_month + lastmonth + DateTime.DaysInMonth(now.AddMonths(-1).Year, now.AddMonths(-1).Month));
     }
     static HttpClient Site(string lang, string login, string password)
     {
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent", login);
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
+            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com)");
         var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument();
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
         result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword",
-                password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
+                password }, { "lgtoken", logintoken } })).Result; return client;
     }
     static void Save(string lang, string title, string text)
     {
@@ -50,32 +52,24 @@ class Program
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", request).Result;
         if (!result.ToString().Contains("uccess")) Console.WriteLine(result);
     }
-    static string e(string input)
-    {
-        return Uri.EscapeDataString(input);
-    }
+    static string e(string input) { return Uri.EscapeDataString(input); }
     static void process_pageviews(string mode, string reqstr_period)
     {
         cl.Headers.Add("user-agent", "Stats grabber of ruwiki user MBH");
-        foreach (string lang in new HashSet<string>() { "uk", "be", "ru" })
-        {
+        foreach (string lang in new HashSet<string>() { "ru", "uk", "be"}) {
             var results = new Dictionary<string, pageviews_result>();
             var site = Site(lang, creds[0], creds[1]);
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
-            while (cont != null)
-            {
+            while (cont != null) {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout)))
-                {
+                using (var r = new XmlTextReader(new StringReader(apiout))) {
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
                     while (r.Read())
-                        if (r.Name == "p")
-                        {
+                        if (r.Name == "p") {
                             string page = r.GetAttribute("title"); var thispagestats = new Dictionary<string, int>(); string currres = "", reqstr = "", peakdate = ""; int maxviews = 0;
                             reqstr = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/" + lang + ".wikipedia/all-access/user/" + e(page) + "/daily/" + reqstr_period;
                             try { currres = cl.DownloadString(reqstr); } catch { continue; }
-                            foreach (Match match in Regex.Matches(currres, "(\\d{10})\",\"access\":\"all-access\",\"agent\":\"user\",\"views\":(\\d*)"))
-                            {
+                            foreach (Match match in Regex.Matches(currres, "(\\d{10})\",\"access\":\"all-access\",\"agent\":\"user\",\"views\":(\\d*)")) {
                                 int views = Convert.ToInt32(match.Groups[2].Value);
                                 string date = match.Groups[1].Value;
                                 thispagestats.Add(date, views);
@@ -91,12 +85,10 @@ class Program
                 }
             }
             string result = "{{popular pages}}{{floating table header}}<center>\n{|class=\"standard sortable ts-stickytableheader\" style=\"text-align:center\"\n!" + tableheader[lang];
-            foreach (var r in results.OrderByDescending(r => r.Value.max))
-            {
-                string month = r.Value.date.Substring(4, 2);
-                string day = r.Value.date.Substring(6, 2);
-                string date = mode == "total" ? r.Value.date.Substring(0, 4) + "-" + month + "-" + day : "{{~|" + month + day + "}}" + day + " " + monthnames[lang][month];
-                result += "\n|-\n|[[" + r.Key + "]]||{{formatnum:" + r.Value.max + "}}||" + r.Value.median + "||" + date;
+            foreach (var r in results.OrderByDescending(r => r.Value.max)) {
+                var peak = r.Value.max > 9999 ? "{{formatnum:" + r.Value.max + "}}" : r.Value.max.ToString();
+                string month = r.Value.date.Substring(4, 2); string day = r.Value.date.Substring(6, 2); string date = mode == "total" ? r.Value.date.Substring(0, 4) + "-" + month + "-" + day :
+                    "{{~|" + month + day + "}}" + day + " " + monthnames[lang][month]; result += "\n|-\n|[[" + r.Key + "]]||" + peak + "||" + r.Value.median + "||" + date;
             }
             Save(lang, outputpage[lang][mode], result + "\n|}");
         }
