@@ -6,7 +6,6 @@ using System.IO;
 using System.Xml;
 using DotNetWikiBot;
 using System.Web.UI;
-using System.Threading;
 
 class arbvote
 {
@@ -14,7 +13,7 @@ class arbvote
     public DateTime timestamp;
     public bool support;
 }
-class Program // с лабса работает медленнее, пускай локально
+class Program
 {
     //static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Borealis55", "Daphne mesereum"}, { "ИкИлевап", "Pikryukov" },{ "Emin Bashirov", "Abu Zarr" }, { "Kor!An",
     //"Andrey Korzun" }, { "Алексей Глушков", "Gajmar" },{ "Makakaaaa", "Lpi4635" }, { "Microcell", "TheStrayCat" },{ "Temirov1960", "Игорь Темиров" }, { "Shanghainese.ua--", "Shanghainese.ua" },
@@ -33,16 +32,10 @@ class Program // с лабса работает медленнее, пускай
 
     static void Main()
     {
-        gather_renamed_users();
-        gather_arbvotings();
-        gather_rfabs();
-
-        var result = new StreamWriter("elections.txt");
-        var renames = new StreamWriter("renames.txt");
+        gather_renamed_users(); gather_rfabs(); gather_arbvotings(); var result = new StreamWriter("elections.txt"); var renames = new StreamWriter("renames.txt");
         foreach (var renamed_user in renamed_users.OrderBy(r => r.Key))
             renames.WriteLine(renamed_user.Key + "\t" + renamed_user.Value.First + "\t" + renamed_user.Value.Second);
-        foreach (var election_id in elections)
-        {
+        foreach (var election_id in elections) {
             result.WriteLine(election_id);
 
             foreach (var yesvoter in yes[election_id])
@@ -53,8 +46,7 @@ class Program // с лабса работает медленнее, пускай
                 result.Write('\t' + novoter);
             result.WriteLine();
         }
-        result.Close();
-        renames.Close();
+        result.Close(); renames.Close();
     }
     static void Addvoter(string voter, string election_id, bool support)
     {
@@ -153,7 +145,13 @@ class Program // с лабса работает медленнее, пускай
     {
         var rfargx = new Regex(@"\{\{ЗСА/Архив\|([^|]*)\|"); var rfbrgx = new Regex(@"{{/Строка\|[^|]+(\d{4})\s*\|[^|]+\|([^|]+)\|"); var rfabs = new Dictionary<string, bool>();
         var voteblockrgx = new Regex(@"За\s*==.*\n.*Против\s*==.*\n==", RegexOptions.Singleline); var opposergx = new Regex(@"Против\s*=="); //может быть картинка в начале
-        
+
+        var last_rfas = Getpage("Википедия:Заявки на статус администратора/Архив/2023-н.в.").Split('\n');
+        foreach (var s in last_rfas)
+            if (rfargx.IsMatch(s)) {
+                elections.Add("2023adm " + rfargx.Match(s).Groups[1].ToString());
+                rfabs.Add("2023adm " + rfargx.Match(s).Groups[1].ToString(), false);
+            }
         for (int year = earlieryear; year <= 2022; year++) {
             var rfas_in_year = Getpage("Википедия:Заявки на статус администратора/Архив/" + year).Split('\n');
             foreach (var s in rfas_in_year)
@@ -162,12 +160,6 @@ class Program // с лабса работает медленнее, пускай
                     rfabs.Add(year + "adm " + rfargx.Match(s).Groups[1].ToString(), false);
                 }
         }
-        var last_rfas = Getpage("Википедия:Заявки на статус администратора/Архив/2023-н.в.").Split('\n');
-        foreach (var s in last_rfas)
-            if (rfargx.IsMatch(s)) {
-                elections.Add("2023+adm " + rfargx.Match(s).Groups[1].ToString());
-                rfabs.Add("2023+adm " + rfargx.Match(s).Groups[1].ToString(), false);
-            }
 
         var rfbs = Getpage("Википедия:Заявки на статус бюрократа/Архив").Split('\n');
         foreach (var s in rfbs)
@@ -197,8 +189,7 @@ class Program // с лабса работает медленнее, пускай
     }
     static void gather_arbvotings()
     {
-        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)");
-        var yearrgx = new Regex(@"\d{4}");
+        var signature = new Regex(@"(\d\d:\d\d, \d{1,2} \w+ \d{4}) \(UTC\)"); var yearrgx = new Regex(@"\d{4}");
         var arbvotepage = new Regex(@"Википедия:Выборы арбитров/([^/]*/Голосование/\+/.+)");
         string cont = "", query = "/w/api.php?action=query&format=xml&list=allpages&apprefix=Выборы арбитров/&apnamespace=4&aplimit=max", apiout;
         while (cont != null) {
