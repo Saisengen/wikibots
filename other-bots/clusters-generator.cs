@@ -6,6 +6,7 @@ using System.IO;
 using System.Xml;
 using DotNetWikiBot;
 using System.Web.UI;
+using System.Threading;
 
 class arbvote
 {
@@ -15,19 +16,18 @@ class arbvote
 }
 class Program // с лабса работает медленнее, пускай локально
 {
-    //static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Borealis55", "Daphne mesereum"}, { "ИкИлевап", "Pikryukov" },{ "Emin Bashirov", "Abu Zarr" }, { "Kor!An", "Andrey Korzun" }, { "Алексей Глушков", "Gajmar" },{ "Makakaaaa", "Lpi4635" },
-    //{ "Microcell", "TheStrayCat" },{ "Temirov1960", "Игорь Темиров" }, { "Shanghainese.ua--", "Shanghainese.ua" },{ "Morrfeux", "Meiræ" }, { "Nоvа", "Andrey" }, { "Drakosha999", "Quaerite" }, { "Alexei Pechko", "TheCureMan" }, { "Cchrx23", "Александр Чебоксарский" } };
-    static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{ { "Wanderer", "Wanderer777" }, { "D.bratchuk", "Good Will Hunting" }, { "Qh13", "VladXe" }, { "Ыфь77", "VladXe" }, { "Грей2010", "Ouaf-ouaf2021" }, { "Ouaf-ouaf2010", "Ouaf-ouaf2021" }, { "Bcba3cf28a06", "Pikryukov" },
-        { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021", "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Vanished user 234238", "Jaroslavleff"}, { "Vetrov69", "Грустный кофеин"},
-        { "Алёна Синичкина", "Флаттершай"} };
-    static Dictionary<string, string> processed_users = new Dictionary<string, string>();
-    static Dictionary<string, HashSet<string>> yes = new Dictionary<string, HashSet<string>>();
-    static Dictionary<string, HashSet<string>> no = new Dictionary<string, HashSet<string>>();
-    static HashSet<string> elections = new HashSet<string>();
+    //static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{{ "Borealis55", "Daphne mesereum"}, { "ИкИлевап", "Pikryukov" },{ "Emin Bashirov", "Abu Zarr" }, { "Kor!An",
+    //"Andrey Korzun" }, { "Алексей Глушков", "Gajmar" },{ "Makakaaaa", "Lpi4635" }, { "Microcell", "TheStrayCat" },{ "Temirov1960", "Игорь Темиров" }, { "Shanghainese.ua--", "Shanghainese.ua" },
+    //{ "Morrfeux", "Meiræ" }, { "Nоvа", "Andrey" }, { "Drakosha999", "Quaerite" }, { "Alexei Pechko", "TheCureMan" }, { "Cchrx23", "Александр Чебоксарский" } };
+    static Dictionary<string, string> fixes_and_merges = new Dictionary<string, string>{ { "Wanderer", "Wanderer777" }, { "D.bratchuk", "Good Will Hunting" }, { "Qh13", "VladXe" }, { "Ыфь77", "VladXe" },
+        { "Грей2010", "Ouaf-ouaf2021" }, { "Ouaf-ouaf2010", "Ouaf-ouaf2021" }, { "Bcba3cf28a06", "Pikryukov" }, { "Гав-Гав2010", "Ouaf-ouaf2021" }, { "Гав-Гав2020", "Ouaf-ouaf2021"}, { "Гав-Гав2021",
+            "Ouaf-ouaf2021"}, { "Le Loy", "Ле Лой" }, { "Otria1", "Otria" }, { "User239", "Dimetr"}, { "Vlsergey-at-work", "Vlsergey"}, { "Vanished user 234238", "Jaroslavleff"}, { "Vetrov69", 
+            "Грустный кофеин"}, { "Алёна Синичкина", "Флаттершай"}, { "Викизавр", "Wikisaurus" }, { "Renamed user abqf370234555gdfgh", "Fastboy" }, {"Renamed user 7c10241ac95836ce79711fd4aeb84baa", "FITY" } };
+    static Dictionary<string, string> processed_users = new Dictionary<string, string>(); static Dictionary<string, HashSet<string>> yes = new Dictionary<string, HashSet<string>>();
+    static Dictionary<string, HashSet<string>> no = new Dictionary<string, HashSet<string>>(); static HashSet<string> elections = new HashSet<string>();
     static Dictionary<string, Pair> renamed_users = new Dictionary<string, Pair>();
     static Regex voterrgx = new Regex(@"^#[^\*:].*\[(у:|участник:|участница:|u:|user:|оу:|обсуждение участника:|обсуждение участницы:|ut:|user talk:|special:contribs/|special:contributions/|служебная:вклад/)\s*([^#|\]]*)\s*[#|\]]", RegexOptions.IgnoreCase);
-    static Regex old_in_nick = new Regex(@"\bold\b");
-    static int earlieryear = 2006, lateryear = DateTime.Now.Year;//ЗСА имеют правильный формат с 2006, ВАРБ - с осени 2007
+    static Regex old_in_nick = new Regex(@"\bold\b"); static int earlieryear = 2006, lateryear = DateTime.Now.Year;//ЗСА имеют правильный формат с 2006, ВАРБ - с осени 2007
     static string[] creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
     static Site site = new Site("https://ru.wikipedia.org", creds[0], creds[1]);
 
@@ -151,42 +151,40 @@ class Program // с лабса работает медленнее, пускай
     }
     static void gather_rfabs()
     {
-        var rfargx = new Regex(@"\{\{ЗСА/Архив\|([^|]*)\|");
-        var rfbrgx = new Regex(@"{{/Строка\|[^|]+(\d{4})\s*\|[^|]+\|([^|]+)\|");
-        var voteblockrgx = new Regex(@"За\s*==.*\n.*Против\s*==.*\n==", RegexOptions.Singleline);
-        var opposergx = new Regex(@"Против\s*=="); //может быть картинка в начале
-        var rfabs = new Dictionary<string, bool>();
-
-        for (int year = earlieryear; year <= lateryear; year++)
-        {
+        var rfargx = new Regex(@"\{\{ЗСА/Архив\|([^|]*)\|"); var rfbrgx = new Regex(@"{{/Строка\|[^|]+(\d{4})\s*\|[^|]+\|([^|]+)\|"); var rfabs = new Dictionary<string, bool>();
+        var voteblockrgx = new Regex(@"За\s*==.*\n.*Против\s*==.*\n==", RegexOptions.Singleline); var opposergx = new Regex(@"Против\s*=="); //может быть картинка в начале
+        
+        for (int year = earlieryear; year <= 2022; year++) {
             var rfas_in_year = Getpage("Википедия:Заявки на статус администратора/Архив/" + year).Split('\n');
             foreach (var s in rfas_in_year)
-                if (rfargx.IsMatch(s))
-                {
+                if (rfargx.IsMatch(s)) {
                     elections.Add(year + "adm " + rfargx.Match(s).Groups[1].ToString());
                     rfabs.Add(year + "adm " + rfargx.Match(s).Groups[1].ToString(), false);
                 }
         }
+        var last_rfas = Getpage("Википедия:Заявки на статус администратора/Архив/2023-н.в.").Split('\n');
+        foreach (var s in last_rfas)
+            if (rfargx.IsMatch(s)) {
+                elections.Add("2023+adm " + rfargx.Match(s).Groups[1].ToString());
+                rfabs.Add("2023+adm " + rfargx.Match(s).Groups[1].ToString(), false);
+            }
+
         var rfbs = Getpage("Википедия:Заявки на статус бюрократа/Архив").Split('\n');
         foreach (var s in rfbs)
-            if (rfbrgx.IsMatch(s))
-            {
+            if (rfbrgx.IsMatch(s)) {
                 int year = Convert.ToInt16(rfbrgx.Match(s).Groups[1].ToString());
-                if (year >= earlieryear && year <= lateryear && !rfbrgx.Match(s).Groups[2].ToString().Contains('['))
-                {
+                if (year >= earlieryear && year <= lateryear && !rfbrgx.Match(s).Groups[2].ToString().Contains('[')) {
                     elections.Add(year + "bur " + rfbrgx.Match(s).Groups[2].ToString());
                     rfabs.Add(year + "bur " + rfbrgx.Match(s).Groups[2].ToString(), true);
                 }
             }
 
-        foreach (var rfab_id in rfabs.Keys)
-        {
+        foreach (var rfab_id in rfabs.Keys) {
             yes.Add(rfab_id, new HashSet<string>());
             no.Add(rfab_id, new HashSet<string>());
             string voteblock = voteblockrgx.Match(Getpage("ВП:Заявки на статус " + (rfabs[rfab_id] ? "бюрократа" : "администратора") + "/" + rfab_id.Substring(8))).Value.ToString();
             bool support = true;
-            foreach (var @string in voteblock.Split('\n'))
-            {
+            foreach (var @string in voteblock.Split('\n')) {
                 if (opposergx.IsMatch(@string)) //если началась секция против
                     support = false;
                 if (voterrgx.IsMatch(@string)) //если реплика написана с нулевым отступом
@@ -203,11 +201,9 @@ class Program // с лабса работает медленнее, пускай
         var yearrgx = new Regex(@"\d{4}");
         var arbvotepage = new Regex(@"Википедия:Выборы арбитров/([^/]*/Голосование/\+/.+)");
         string cont = "", query = "/w/api.php?action=query&format=xml&list=allpages&apprefix=Выборы арбитров/&apnamespace=4&aplimit=max", apiout;
-        while (cont != null)
-        {
+        while (cont != null) {
             apiout = cont == "" ? site.GetWebPage(query) : site.GetWebPage(query + "&apcontinue=" + Uri.EscapeDataString(cont));
-            using (var r = new XmlTextReader(new StringReader(apiout)))
-            {
+            using (var r = new XmlTextReader(new StringReader(apiout))) {
                 r.WhitespaceHandling = WhitespaceHandling.None;
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
                 while (r.Read())
@@ -235,8 +231,7 @@ class Program // с лабса работает медленнее, пускай
                                     System.Globalization.CultureInfo.GetCultureInfo("ru-RU")), support = false });
 
                         foreach (var vote in votes_by_time.OrderByDescending(vote => vote.timestamp))
-                            if (!voted_users.Contains(vote.voter) && vote.voter != "")
-                            {
+                            if (!voted_users.Contains(vote.voter) && vote.voter != "") {
                                 Addvoter(vote.voter, varb_id, vote.support);
                                 voted_users.Add(vote.voter);
                             }
@@ -247,6 +242,7 @@ class Program // с лабса работает медленнее, пускай
     static string Getpage(string pagename)
     {
         Console.WriteLine(pagename);
-        return site.GetWebPage("https://ru.wikipedia.org/wiki/" + pagename.Replace("&#61;", "=") + "?action=raw");
+        //Thread.Sleep(800);
+        return site.GetWebPage("https://ru.wikipedia.org/wiki/" + pagename.Replace("&#61;", "=") + "?action=raw"); //НИ ОДИН ИЗ ЭСКЕЙПОВ ТУТ КОРРЕКТНО НЕ РАБОТАЕТ
     }
 }
