@@ -42,7 +42,7 @@ class Program
     static HttpClient login(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
-            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com) no libraries");
+            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com)");
         var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument(); doc.LoadXml(result.Content
             .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new 
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
@@ -53,7 +53,6 @@ class Program
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
         result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" },
             { new StringContent(text), "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ }).Result;
-        if (!result.ToString().Contains("uccess")) Console.WriteLine(result.ToString());
     }
     static void rsave(string title, string text) { save("ru", title, text, ""); }
     static void adminstats()
@@ -269,8 +268,7 @@ class Program
                             r2.GetAttribute("wikibase_item")) } })).Result;
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
                         if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
-                            var oldtext = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeUriString(title) + "?action=raw").Result;
-                            if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL") && oldtext.Length != newtext.Length) {
+                            var oldtext = readpage(title); if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL") && Math.Abs(oldtext.Length - newtext.Length) > 2) {
                                 if (oldtext.Length - newtext.Length < 2048)
                                     rsave(title, newtext);
                                 else { var w = new StreamWriter(title + ".txt"); w.Write(newtext); w.Close(); }
@@ -334,6 +332,7 @@ class Program
     }
     static void cheka_update()
     {
+        var star_rgx = new Regex(@"^[A-Z]{2} [А-Я]");
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *\}\}", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         if (number_of_nominations < 55) {
@@ -352,7 +351,7 @@ class Program
                             if (number_of_nominations >= 60)
                                 goto end;
                             string nominated_page = r.GetAttribute("title");
-                            if (!nominated_before.Contains(nominated_page)) {
+                            if (!nominated_before.Contains(nominated_page) && !star_rgx.IsMatch(nominated_page)) {
                                 string pagetext = readpage(nominated_page);
                                 string date = afd_template.Match(pagetext).Groups[2].Value;
                                 var human_date = iso_to_ru_date(date);
@@ -455,9 +454,9 @@ class Program
                 r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue"); while (r.Read())
                     if (r.Name == "item" && r.GetAttribute("title") != null) {
                         string comm = r.GetAttribute("comment") ?? ""; string filename = r.GetAttribute("title");
-                        if (!page_exists("commons.wikimedia", filename.Substring(5)))
-                            if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value !=
-                            filename.Substring(5)) || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
+                        if (!page_exists("commons.wikimedia", "file:" + filename.Substring(5)))
+                            if (file_is_replaced_rgx.IsMatch(comm) && ((inner_link_to_replacement_file.IsMatch(comm) && inner_link_to_replacement_file.Match(comm).Groups[3].Value != filename.Substring(5))
+                                || (commons_importer_link.IsMatch(comm) && commons_importer_link.Match(comm).Groups[1].Value != filename.Substring(5))) && !replacedfiles.ContainsKey(filename))
                                 replacedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
                             else if (!deletedfiles.ContainsKey(filename))
                                 deletedfiles.Add(filename, new logrecord { deleter = r.GetAttribute("user"), comment = comm });
@@ -1809,7 +1808,6 @@ class Program
         site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { best_article_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
