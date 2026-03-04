@@ -12,8 +12,8 @@ enum type { home_dis, home_section_redir, other }
 class Program
 {
     static HttpClient site = new HttpClient(); static string[] creds; static string lang_from_template, home_pagename, iw_pagename, new_home_pagename, processed_wiki_lang, visible_text, comment, newtext;
-    static Dictionary<string, Dictionary<string, bool>> redirects_to_section; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw1, iw4, redir_rgx;
-    static Dictionary<type, Dictionary<string, int>> needed_articles; static Dictionary<string, Pair> deletion_cats; static HashSet<string> processed_links = new HashSet<string>();
+    static Dictionary<string, Dictionary<string, bool>> redirects_to_section; static Dictionary<string, dis_data> disambs; static Dictionary<string, bool> AfDpages; static Regex iw3, iw0, iw1, iw4, iw5,
+        redir_rgx, incorrect_prefixes; static Dictionary<type, Dictionary<string, int>> needed_articles; static Dictionary<string, Pair> deletion_cats; static HashSet<string> processed_links = new HashSet<string>();
     static HttpClient Site(string lang, string login, string password)
     {
         var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
@@ -28,7 +28,8 @@ class Program
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent { { new StringContent("edit"), 
                 "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, /*{ new StringContent("1"), "bot" },*/ { new StringContent(comment), "summary" }, { new StringContent
                 (token), "token" } };
-        var answer = site.PostAsync("https://" + processed_wiki_lang + ".wikipedia.org/w/api.php", request).Result.ToString(); if (!answer.Contains("200")) Console.WriteLine(answer);
+        var answer = site.PostAsync("https://" + processed_wiki_lang + ".wikipedia.org/w/api.php", request).Result.ToString();
+        if (!answer.Contains("200")) Console.WriteLine(answer);
     }
     static string e(string input) { return Uri.EscapeDataString(input); }
     static string readpage(string lang, string input) { return site.GetStringAsync("https://" + lang + ".wikipedia.org/wiki/" + e(input) + "?action=raw").Result; }
@@ -92,10 +93,9 @@ class Program
     }
     static void check_for_blockers_and_generate_new_text_and_comment(string page_for_processing, Match m)
     {
-        if (lang_from_template.Length > 1 && lang_from_template != "commons" && lang_from_template != "Категория" && lang_from_template != "wikt" && lang_from_template != "Файл") {
+        if (lang_from_template.Length > 1 && !incorrect_prefixes.IsMatch(lang_from_template) && !isDisambig(lang_from_template, iw_pagename) && !onAfD(home_pagename) && !iw_pagename.Contains('#')) {
             new_home_pagename = "";
-            if (NewHomePagenameFoundFromInterwiki(page_for_processing) && !isDisambig(lang_from_template, iw_pagename) && !onAfD(home_pagename) &&
-                !(isRedirectToSection(lang_from_template, iw_pagename) && iw_pagename.Contains('#'))) {
+            if (NewHomePagenameFoundFromInterwiki(page_for_processing) && !isRedirectToSection(lang_from_template, iw_pagename)) {
                 if (isRedirectToSection(processed_wiki_lang, home_pagename) && home_pagename.Contains('#'))
                     addNeededArticle(needed_articles[type.home_section_redir], home_pagename);
                 else if (isDisambig(processed_wiki_lang, home_pagename))
@@ -137,15 +137,29 @@ class Program
                 return;
         }
         string processed_page_text; try { processed_page_text = readpage(processed_wiki_lang, page_for_processing); } catch { return; } newtext = processed_page_text; comment = "";
+        foreach (Match m in iw5.Matches(processed_page_text))
+        {
+            lang_from_template = m.Groups[3].Value.Trim();
+            iw_pagename = m.Groups[4].Value.Trim();
+            visible_text = m.Groups[2].Value.Trim();
+            home_pagename = visible_text;
+            check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
+        }
+        foreach (Match m in iw4.Matches(processed_page_text))
+        {
+            lang_from_template = "en";
+            iw_pagename = m.Groups[3].Value.Trim();
+            visible_text = m.Groups[2].Value.Trim();
+            home_pagename = visible_text;
+            check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
+        }
         foreach (Match m in iw3.Matches(processed_page_text)) {
             lang_from_template = m.Groups[4].Value.Trim();
             home_pagename = m.Groups[2].Value.Trim();
-            if (home_pagename == "")
-                continue;
             visible_text = m.Groups[3].Value.Trim();
+            if (home_pagename == "")
+                home_pagename = visible_text;
             iw_pagename = m.Groups[5].Value.Trim();
-            if (iw_pagename.Contains('#'))
-                return;
             if (iw_pagename == "")
                 iw_pagename = home_pagename;
             check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
@@ -164,14 +178,6 @@ class Program
             home_pagename = visible_text;
             check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
         }
-        foreach (Match m in iw4.Matches(processed_page_text))
-        {
-            lang_from_template = "en";
-            iw_pagename = m.Groups[3].Value.Trim();
-            visible_text = m.Groups[2].Value.Trim();
-            home_pagename = visible_text;
-            check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
-        }
         if (newtext != processed_page_text)
             Save(site, processed_wiki_lang, page_for_processing, newtext, comment.Substring(2));
     }
@@ -180,17 +186,19 @@ class Program
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); string cont, query; processed_wiki_lang = "ru";
         site = Site(processed_wiki_lang, creds[0], creds[1]); iw1 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *(\| *nocat=1|) *\}\}");
         iw4 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *4 *= *([^{}|]*) *(\| *nocat=1|) *\}\}"); redir_rgx = new Regex(@"#\w*\[\[ *([^#\]]*) *\]\]");
-        iw3 = new Regex(@"\{\{ *([нН]е переведено \d|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *(\| *nocat=1|) *\}\}");
-        iw0 = new Regex(@"\[\[ *: *([\w\-]*) *: *([^[|\]]*) *\| *([^[|\]]*) *\]\]");
+        iw3 = new Regex(@"\{\{ *([нН]е переведено \d|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *\| *([^{}|]*) *(\| *nocat=1|) *\}\}"); iw0 = new Regex
+            (@"\[\[ *: *([\w\-]*) *: *([^[|\]]*) *\| *([^[|\]]*) *\]\]");
+        iw5 = new Regex(@"\{\{ *([нН]е переведено [1345]|[нН]е переведено|[нН]п\d?|iw) *\| *([^{}|]*) *\| *3 *= *([^{}|]*) *\| *4 *= *([^{}|]*) *(\| *nocat=1|) *\}\}");
+        incorrect_prefixes = new Regex(".*commons|[а-я]|wik|voy|iarchive|wikisource|incubator|file|wmru|mw|openstreetmap.*", RegexOptions.IgnoreCase);
         needed_articles = new Dictionary<type, Dictionary<string, int>>() { { type.home_dis, new Dictionary<string, int>() }, { type.home_section_redir, new Dictionary<string, int>() }, { type.other, 
                 new Dictionary<string, int>() } }; disambs = new Dictionary<string, dis_data>() { { "ru", new dis_data() { disambs = new Dictionary<string, bool>(), dis_cat_name = "Страницы значений по алфавиту" } } };
         redirects_to_section = new Dictionary<string, Dictionary<string, bool>>(); AfDpages = new Dictionary<string, bool>();
-        var templatenames = new Dictionary<string, string>() { { "ru", "Не переведено 2|Не переведено" }, { "uk", "Не перекладено" } };
+        var templatenames = new Dictionary<string, string>() { { "ru", "Не переведено|Не переведено 2" }, { "uk", "Не перекладено" } };
         deletion_cats = new Dictionary<string, Pair>() { { "ru", new Pair() { First = "К:Википедия:Кандидаты на удаление", Second = "К:Википедия:К быстрому удалению" } },
                 { "uk", new Pair() { First = "Категорія:Статті-кандидати на вилучення", Second = "Категорія:Сторінки до швидкого вилучення" } } };
 
-        //foreach (string page_for_processing in new StreamReader("iwnew.txt").ReadToEnd().Replace("\r", "").Split('\n'))
-        //    try { processPage(page_for_processing); } catch (Exception e) { Console.WriteLine(e); }
+        foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
+            try { processPage(page_for_processing); } catch (Exception e) { Console.WriteLine(e); }
 
         foreach (string template in templatenames[processed_wiki_lang].Split('|')) {
             cont = ""; query = "https://" + processed_wiki_lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=template:" + template + "&eilimit=max"; while (cont != null) {
