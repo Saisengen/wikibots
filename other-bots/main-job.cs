@@ -267,7 +267,7 @@ class Program
                         var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
                             r2.GetAttribute("wikibase_item")) } })).Result;
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
-                        if (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям") {
+                        if (!newtext.StartsWith("<") && (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям")) {
                             var oldtext = readpage(title); if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL") && Math.Abs(oldtext.Length - newtext.Length) > 2) {
                                 if (oldtext.Length - newtext.Length < 2048)
                                     rsave(title, newtext);
@@ -332,7 +332,7 @@ class Program
     }
     static void cheka_update()
     {
-        var star_rgx = new Regex(@"^[A-Z]{2} [А-Я]");
+        var star_rgx = new Regex(@"^[A-Z]{1,3}\d* [А-Я]");
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *\}\}", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         if (number_of_nominations < 55) {
@@ -1714,7 +1714,7 @@ class Program
         foreach (var user in initialusers)
             if (!days.ContainsKey(user))
                 days.Add(user, 1);
-        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск" })
+        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск", "Userbox/Активность" })
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result)))
                 while (r.Read())
                     if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
