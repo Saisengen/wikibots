@@ -82,10 +82,10 @@ class Program
         try { var rr = new XmlTextReader(new StringReader(site.GetStringAsync(request).Result)); while (rr.Read()) if (rr.Name == "ll") { rr.Read(); new_home_pagename = rr.Value; return true; } }
         catch { Console.WriteLine("error while lang=" + lang_from_template + " on page " + page_for_processing /*+ "\n" + e.ToString()*/); } return false;
     }
-    static void addNeededArticle(Dictionary<string, int> needed_articles, string home_pagename) {
-        if (!processed_links.Contains((home_pagename + lang_from_template + iw_pagename).GetHashCode())) {
-            processed_links.Add((home_pagename + lang_from_template + iw_pagename).GetHashCode());
-            string key = "[[" + home_pagename + "]]([[:" + lang_from_template + ":" + iw_pagename + "]])";
+    static void addNeededArticle(Dictionary<string, int> needed_articles, string home_pagename, string page_for_processing) {
+        if (!processed_links.Contains((page_for_processing + lang_from_template + iw_pagename).GetHashCode())) {
+            processed_links.Add((page_for_processing + lang_from_template + iw_pagename).GetHashCode());
+            string key = "[[:" + lang_from_template + ":" + iw_pagename + "]]";
             if (needed_articles.ContainsKey(key))
                 needed_articles[key]++;
             else
@@ -98,13 +98,13 @@ class Program
             new_home_pagename = "";
             if (NewHomePagenameFoundFromInterwiki(page_for_processing) && !isRedirectToSection(lang_from_template, iw_pagename)) {
                 if (isRedirectToSection(processed_wiki_lang, home_pagename) && home_pagename.Contains('#'))
-                    addNeededArticle(needed_articles[type.home_section_redir], home_pagename);
+                    addNeededArticle(needed_articles[type.home_section_redir], home_pagename, page_for_processing);
                 else if (isDisambig(processed_wiki_lang, home_pagename))
-                    addNeededArticle(needed_articles[type.home_dis], home_pagename);
+                    addNeededArticle(needed_articles[type.home_dis], home_pagename, page_for_processing);
                 else if (new_home_pagename != "" && isRedirectToSection(processed_wiki_lang, new_home_pagename))
-                    addNeededArticle(needed_articles[type.home_section_redir], new_home_pagename);
+                    addNeededArticle(needed_articles[type.home_section_redir], new_home_pagename, page_for_processing);
                 else if (new_home_pagename != "" && isDisambig(processed_wiki_lang, new_home_pagename))
-                    addNeededArticle(needed_articles[type.home_dis], new_home_pagename);
+                    addNeededArticle(needed_articles[type.home_dis], new_home_pagename, page_for_processing);
                 else if (home_pagename != page_for_processing && new_home_pagename != page_for_processing)
                 {
                     string text_in_article_for_replacement = m.Groups[0].Value, newlink;
@@ -125,7 +125,7 @@ class Program
                 }
             }
             else
-                addNeededArticle(needed_articles[type.other], home_pagename);
+                addNeededArticle(needed_articles[type.other], home_pagename, page_for_processing);
         }
     }
     static void processPage(string page_for_processing)
@@ -134,7 +134,6 @@ class Program
         //    return;
         if (page_for_processing.EndsWith("/doc"))
             return;
-        if (++c % 50000 == 0) Console.WriteLine(c);
         if (page_for_processing.Contains(':')) {
             string ns = page_for_processing.Substring(0, page_for_processing.IndexOf(':'));
             if (ns.Contains("частни") || ns.Contains("бсуждение") || ns.Contains("икипедия") || ns.Contains("роект") || ns.Contains("рбитраж"))
@@ -182,8 +181,8 @@ class Program
             home_pagename = visible_text;
             check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
         }
-        if (newtext != processed_page_text)
-            Save(site, processed_wiki_lang, page_for_processing, newtext, comment.Substring(2));
+        //if (newtext != processed_page_text)
+        //    Save(site, processed_wiki_lang, page_for_processing, newtext, comment.Substring(2));
     }
     static void Main()
     {
@@ -212,12 +211,14 @@ class Program
         }
         if (processed_wiki_lang == "ru")
             foreach (var type in needed_articles.Keys) {
+                var wr = new StreamWriter(type + ".txt");
                 string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
                 foreach (var article_data in needed_articles[type].OrderByDescending(t => t.Value)) {
-                    if (article_data.Value < 5) break;
-                    result += "\n|-\n|" + article_data.Key + "||" + article_data.Value;
+                    if (article_data.Value > 2)
+                        result += "\n|-\n|" + article_data.Key + "||" + article_data.Value;
                 }
                 try { Save(site, processed_wiki_lang, "ВП:К созданию/Из шаблонов \"не переведено\"/" + type, result + "\n|}", ""); } catch { }
+                try { wr.Write(result + "\n|}"); wr.Close(); } catch { }
             }
     }
 }
