@@ -6,14 +6,10 @@ using System.IO;
 using System.Net.Http;
 using System.Net;
 using System.Text.RegularExpressions;
-class pageviews_result
-{
-    public string date;
-    public int max, median;
-}
+class pageviews_result { public string date; public int max, median; }
 class Program
 {
-    static string[] creds; static HttpClient site; static DateTime now = DateTime.Now; static WebClient cl = new WebClient(); static Dictionary<string, string> tableheader = new Dictionary<string, string>()
+    static string[] creds; static HttpClient site; static DateTime now = DateTime.Now; static Dictionary<string, string> tableheader = new Dictionary<string, string>()
     { { "ru", "Статья!!Пик!!Медиана!!Дата пика" }, { "uk", "Стаття!!Пік!!Медіана!!Дата піку" }, { "be", "Артыкул!!Пік!!Медыяна!!Дата піка" } };
     static Dictionary<string, Dictionary<string, string>> outputpage = new Dictionary<string, Dictionary<string, string>>
         { { "uk", new Dictionary<string, string>() { { "month", "Вікіпедія:Спалахи інтересу до статей" }, { "year", "Вікіпедія:Спалахи інтересу до статей/За рік" }, { "total", "Вікіпедія:Спалахи інтересу до статей/За весь час" } } },
@@ -28,21 +24,19 @@ class Program
                         {"03","сакавіка"}, {"04","красавіка"}, {"05","траўня"}, {"06","чэрвеня"}, {"07","ліпеня"}, {"08","жніўня"}, {"09","верасня"}, {"10","кастрычніка"}, {"11","лістапада"}, {"12","снежня"} } } };
     static void Main()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site("ru", creds[0], creds[1]);
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = login("ru", creds[0], creds[1], creds[3]);
         int year_of_previous_month = now.AddMonths(-1).Year; string lastmonth = now.AddMonths(-1).ToString("MM");
         if (lastmonth == "12") {
             process_pageviews("year", year_of_previous_month + "0101/" + year_of_previous_month + "1231"); process_pageviews("total", "20150701/" + year_of_previous_month + "1231");
         }
         process_pageviews("month", year_of_previous_month + lastmonth + "01/" + year_of_previous_month + lastmonth + DateTime.DaysInMonth(now.AddMonths(-1).Year, now.AddMonths(-1).Month));
     }
-    static HttpClient Site(string lang, string login, string password)
+    static HttpClient login(string lang, string login, string password, string ua)
     {
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
-            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com)");
-        var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument();
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value;
-        result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword",
-                password }, { "lgtoken", logintoken } })).Result; return client;
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent", ua);
+        var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument(); doc.LoadXml(result.Content
+            .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new
+                FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
     }
     static void Save(string lang, string title, string text)
     {
@@ -55,10 +49,9 @@ class Program
     static string e(string input) { return Uri.EscapeDataString(input); }
     static void process_pageviews(string mode, string reqstr_period)
     {
-        cl.Headers.Add("user-agent", "Stats grabber of ruwiki user MBH");
         foreach (string lang in new HashSet<string>() { "ru", "uk", "be"}) {
             var results = new Dictionary<string, pageviews_result>();
-            var site = Site(lang, creds[0], creds[1]);
+            var site = login(lang, creds[0], creds[1], creds[3]);
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allpages&apnamespace=0&apfilterredir=nonredirects&aplimit=max";
             while (cont != null) {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
@@ -68,14 +61,12 @@ class Program
                         if (r.Name == "p") {
                             string page = r.GetAttribute("title"); var thispagestats = new Dictionary<string, int>(); string currres = "", reqstr = "", peakdate = ""; int maxviews = 0;
                             reqstr = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/" + lang + ".wikipedia/all-access/user/" + e(page) + "/daily/" + reqstr_period;
-                            try { currres = cl.DownloadString(reqstr); } catch { continue; }
+                            try { currres = site.GetStringAsync(reqstr).Result; } catch { continue; }
                             foreach (Match match in Regex.Matches(currres, "(\\d{10})\",\"access\":\"all-access\",\"agent\":\"user\",\"views\":(\\d*)")) {
                                 int views = Convert.ToInt32(match.Groups[2].Value);
                                 string date = match.Groups[1].Value;
                                 thispagestats.Add(date, views);
-                                if (views > maxviews) {
-                                    maxviews = views; peakdate = date;
-                                }
+                                if (views > maxviews) { maxviews = views; peakdate = date; }
                             }
                             var orderedlist = thispagestats.OrderBy(o => o.Value).ToList();
                             int median = orderedlist[orderedlist.Count / 2].Value;
