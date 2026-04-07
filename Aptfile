@@ -1,4 +1,0 @@
-# Required as cgi server
-python3
-# Required to build things
-dotnet8
