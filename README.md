@@ -3,13 +3,8 @@ Wikipedia bots written by ruwiki user MBH.
 
 Bots for ruwiki's article incubator was initially written by [Dmitry89](https://ru.wikipedia.org/wiki/User:Dmitry89) and completely rewritten by me after his retirement. Category Pathfinder was originally written by me and rewritten by [Adamant.pwn](https://ru.wikipedia.org/wiki/User:Adamant.pwn) (its interface is written by [Serhio Magpie](https://github.com/serdidg)). All in "rv" folder are written by [Iluvatar](https://github.com/SiarheiGribov) and [Well very well](https://github.com/LeviPesin). Scripts in "astro-update" folder are written by [Ghuron](https://github.com/ghuron).
 
-## Rebuilding webservices on Toolforge
+## Rebuilding webservice on Toolforge
 ```shell
-toolforge build start https://github.com/Saisengen/wikibots
+toolforge build start https://github.com/Saisengen/webservice
 toolforge webservice buildservice restart
-```
-
-## Setting up credentials
-```shell
-cat p | toolforge envvars add CREDS
 ```
