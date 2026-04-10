@@ -36,15 +36,13 @@ class Program
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static string escape_comment(string comment)
     {
-        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C"); if (result.Contains("{") || result.Contains("}") || result.Contains("|")) result = "<nowiki>" + result + "</nowiki>";
-        return result;
+        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C"); if (result.Contains("{") || result.Contains("}") || result.Contains("|")) result = "<nowiki>" + result + "</nowiki>";  return result;
     }
-    static HttpClient login(string lang, string login, string password)
+    static HttpClient login(string lang, string login, string password, string ua)
     {
-        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent",
-            "MBHbot/1.0 (https://github.com/Saisengen/wikibots; mbhwik@gmail.com)");
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = true, UseCookies = true, CookieContainer = new CookieContainer() }); client.DefaultRequestHeaders.Add("User-Agent", ua);
         var result = client.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&meta=tokens&type=login&format=xml").Result; var doc = new XmlDocument(); doc.LoadXml(result.Content
-            .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new 
+            .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
     }
     static void save(string lang, string title, string text, string comment)
@@ -357,7 +355,7 @@ class Program
                                 var human_date = iso_to_ru_date(date);
                                 if (human_date != "error") {
                                     string link_to_discussion = "ВП:К удалению/" + human_date + "#" + nominated_page; number_of_nominations++;
-                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\nИсходно номинировано [[" + link_to_discussion + "|" + human_date + "]]. Голосование открыто " + now.Day +
+                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\nНа КУ с [[" + link_to_discussion + "|" + human_date + "]]. Голосование с " + now.Day +
                                         " " + genitive_month[now.Month] + " " + now.Year + ".\n{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
                                 }
                             }
@@ -731,7 +729,7 @@ class Program
         var inc_tmplt_rgx = new Regex(@"\{\{[^{}|]*инкубатор[^{}]*\}\}\n", RegexOptions.IgnoreCase); var suppressed_cats_rgx = new Regex(@"\[\[ *: *(category|категория|к) *:", RegexOptions.IgnoreCase);
         var cats_rgx = new Regex(@"\[\[ *(Category|Категория|К) *:.*?\]\]", RegexOptions.Singleline | RegexOptions.IgnoreCase); int num_of_nominated_pages = 0; string afd_addition = "";
         var index_rgx = new Regex("__(INDEX|ИНДЕКС)__", RegexOptions.IgnoreCase); string afd_pagename = "Википедия:К удалению/" + now.Day + " " + genitive_month[now.Month] + " " + now.Year; var ts = now;
-        var unpatbot = login("ru", creds[3], creds[4]);
+        var unpatbot = login("ru", creds[4], creds[5], creds[3]);
         var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=allpages&apnamespace=102&apfilterredir=nonredirects&aplimit=max&format=xml").Result));
         while (rdr.Read())
             if (rdr.Name == "p" && rdr.GetAttribute("title") != "Инкубатор:Песочница") {
@@ -1805,7 +1803,7 @@ class Program
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
-        site = login("ru", creds[0], creds[1]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
+        site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1838,7 +1836,7 @@ class Program
             try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            //try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         }
     }
 }
