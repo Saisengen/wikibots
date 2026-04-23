@@ -332,8 +332,8 @@ class Program
     {
         var star_rgx = new Regex(@"^[A-Z]{1,3}\d* [А-Я]");
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *\}\}", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        if (number_of_nominations < 55) {
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
+        if (number_of_nominations < 60) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
                 nominated_before.Add(h.Groups[1].Value);
@@ -346,7 +346,7 @@ class Program
             "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + months + "&cmprop=title&cmlimit=max").Result)))
                     while (r.Read())
                         if (r.Name == "cm") {
-                            if (number_of_nominations >= 60)
+                            if (number_of_nominations >= 65)
                                 goto end;
                             string nominated_page = r.GetAttribute("title");
                             if (!nominated_before.Contains(nominated_page) && !star_rgx.IsMatch(nominated_page)) {
@@ -503,45 +503,6 @@ class Program
             "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:" + "Незакрытые обсуждения восстановления страниц"] +
             "||" + cats["Инкубатор:Все статьи"] + "||" + cats["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
         rsave("u:MBH/Завалы", stat_text + result);
-    }
-    static void extlinks_counter()
-    {
-        var links = new Dictionary<string, int>(); var shortenedlinks = new Dictionary<string, int>(); string elcont = null, gapcont = null, query =
-            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=extlinks&generator=allpages&ellimit=max&gapfilterredir=nonredirects&gaplimit=max";
-        do {
-            string finalquery = query + (elcont == null ? "" : "&elcontinue=" + e(elcont)) + (gapcont == null ? "" : "&gapcontinue=" + e(gapcont));
-            string apiout = site.GetStringAsync(finalquery).Result;
-            using (var r = new XmlTextReader(new StringReader(apiout))) {
-                r.Read(); r.Read(); r.Read(); elcont = r.GetAttribute("elcontinue"); if (r.GetAttribute("gapcontinue") != null) gapcont = r.GetAttribute("gapcontinue");
-                if (elcont == null && r.GetAttribute("gapcontinue") == null) goto end;
-                while (r.Read())
-                    if (r.Name == "el" && r.NodeType == XmlNodeType.Element) {
-                        r.Read(); string link = r.Value; link = link.Substring(link.IndexOf("//") + 2); if (link.EndsWith("/")) link = link.Substring(0, link.Length - 1);
-                        link = link.IndexOf("/") == -1 ? link : link.Substring(0, link.LastIndexOf("/"));
-                        if (!links.ContainsKey(link))
-                            links.Add(link, 1);
-                        else
-                            links[link]++;
-                    }
-            }
-        } while (elcont != null || gapcont != null);
-    end:;
-
-        foreach (var l in links.OrderByDescending(l => l.Value).ToArray()) {
-            string testurl = (l.Key.StartsWith("www.") ? l.Key.Substring(4) : "www." + l.Key);
-            if (shortenedlinks.ContainsKey(testurl))
-                shortenedlinks[testurl] += l.Value;
-            else
-                shortenedlinks.Add(l.Key, l.Value);
-        }
-        string result = "{|class=\"standard\"\n!Место!!Число&nbsp;ссылок!!style=\"text-align:left\"|из рувики на данный сайт или его раздел";
-        int counter = 0;
-        foreach (var l in shortenedlinks.OrderByDescending(l => l.Value))
-            if (l.Value < 100)
-                break;
-            else
-                result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
-        rsave("ВП:Внешние ссылки/Статистика", result + "\n|}");
     }
     public class flagsRoot { public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() {
@@ -1802,7 +1763,7 @@ class Program
     }
     static void Main()
     {
-        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+        creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1836,7 +1797,6 @@ class Program
             try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            //try { extlinks_counter(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         }
     }
 }
