@@ -30,6 +30,7 @@ class Program
             process_pageviews("year", year_of_previous_month + "0101/" + year_of_previous_month + "1231"); process_pageviews("total", "20150701/" + year_of_previous_month + "1231");
         }
         process_pageviews("month", year_of_previous_month + lastmonth + "01/" + year_of_previous_month + lastmonth + DateTime.DaysInMonth(now.AddMonths(-1).Year, now.AddMonths(-1).Month));
+        extlinks_counter();
     }
     static HttpClient login(string lang, string login, string password, string ua)
     {
@@ -38,7 +39,7 @@ class Program
             .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
     }
-    static void Save(string lang, string title, string text)
+    static void save(string lang, string title, string text)
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent { { new StringContent("edit"),
@@ -47,6 +48,44 @@ class Program
         if (!result.ToString().Contains("uccess")) Console.WriteLine(result);
     }
     static string e(string input) { return Uri.EscapeDataString(input); }
+    static void extlinks_counter()
+    {
+        var links = new Dictionary<string, int>(); var shortenedlinks = new Dictionary<string, int>(); string elcont = null, gapcont = null, query =
+            "https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=extlinks&generator=allpages&ellimit=max&gapfilterredir=nonredirects&gaplimit=max";
+        do {
+            string finalquery = query + (elcont == null ? "" : "&elcontinue=" + e(elcont)) + (gapcont == null ? "" : "&gapcontinue=" + e(gapcont));
+            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync(finalquery).Result))) {
+                r.Read(); r.Read(); r.Read(); elcont = r.GetAttribute("elcontinue"); if (r.GetAttribute("gapcontinue") != null) gapcont = r.GetAttribute("gapcontinue");
+                if (elcont == null && r.GetAttribute("gapcontinue") == null) goto end;
+                while (r.Read())
+                    if (r.Name == "el" && r.NodeType == XmlNodeType.Element) {
+                        r.Read(); string link = r.Value; link = link.Substring(link.IndexOf("//") + 2); if (link.EndsWith("/")) link = link.Substring(0, link.Length - 1);
+                        link = link.IndexOf("/") == -1 ? link : link.Substring(0, link.LastIndexOf("/"));
+                        if (!links.ContainsKey(link))
+                            links.Add(link, 1);
+                        else
+                            links[link]++;
+                    }
+            }
+        } while (elcont != null || gapcont != null);
+    end:;
+
+        foreach (var l in links.OrderByDescending(l => l.Value).ToArray()) {
+            string testurl = (l.Key.StartsWith("www.") ? l.Key.Substring(4) : "www." + l.Key);
+            if (shortenedlinks.ContainsKey(testurl))
+                shortenedlinks[testurl] += l.Value;
+            else
+                shortenedlinks.Add(l.Key, l.Value);
+        }
+        string result = "{|class=\"standard\"\n!Место!!Число&nbsp;ссылок!!style=\"text-align:left\"|из рувики на данный сайт или его раздел";
+        int counter = 0;
+        foreach (var l in shortenedlinks.OrderByDescending(l => l.Value))
+            if (l.Value < 100)
+                break;
+            else
+                result += "\n|-\n|" + ++counter + "||" + l.Value + "||" + l.Key;
+        save("ru", "ВП:Внешние ссылки/Статистика", result + "\n|}");
+    }
     static void process_pageviews(string mode, string reqstr_period)
     {
         foreach (string lang in new HashSet<string>() { "ru", "uk", "be"}) {
@@ -81,7 +120,7 @@ class Program
                 string month = r.Value.date.Substring(4, 2); string day = r.Value.date.Substring(6, 2); string date = mode == "total" ? r.Value.date.Substring(0, 4) + "-" + month + "-" + day :
                     "{{~|" + month + day + "}}" + day + " " + monthnames[lang][month]; result += "\n|-\n|[[" + r.Key + "]]||" + peak + "||" + r.Value.median + "||" + date;
             }
-            Save(lang, outputpage[lang][mode], result + "\n|}");
+            save(lang, outputpage[lang][mode], result + "\n|}");
         }
     }
 }
