@@ -330,10 +330,9 @@ class Program
     }
     static void cheka_update()
     {
-        var star_rgx = new Regex(@"^[A-Z]{1,3}\d* [А-Я]");
-        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        if (number_of_nominations < 60) {
+        var article_about_star = new Regex(@"^[A-Z]{1,3}\d* [А-Я]"); string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count; int limit = 60;
+        if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
                 nominated_before.Add(h.Groups[1].Value);
@@ -346,10 +345,10 @@ class Program
             "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + months + "&cmprop=title&cmlimit=max").Result)))
                     while (r.Read())
                         if (r.Name == "cm") {
-                            if (number_of_nominations >= 65)
+                            if (number_of_nominations >= limit)
                                 goto end;
                             string nominated_page = r.GetAttribute("title");
-                            if (!nominated_before.Contains(nominated_page) && !star_rgx.IsMatch(nominated_page)) {
+                            if (!nominated_before.Contains(nominated_page) && !article_about_star.IsMatch(nominated_page)) {
                                 string pagetext = readpage(nominated_page);
                                 string date = afd_template.Match(pagetext).Groups[2].Value;
                                 var human_date = iso_to_ru_date(date);
@@ -725,7 +724,7 @@ class Program
                         unpatbot.PostAsync("https://ru.wikipedia.org/w/api.php", request);
                     }
                     else {
-                        if (!pagetext.Contains("{{В инкубаторе"))
+                        if (!pagetext.Contains("{{В инкубаторе") && !pagetext.Contains("{{В Инкубаторе"))
                             pagetext = "{{В инкубаторе}}\n" + pagetext;
                         foreach (Match m in cats_rgx.Matches(pagetext))
                             pagetext = pagetext.Replace(m.ToString(), m.ToString().Replace("[[", "[[:"));
