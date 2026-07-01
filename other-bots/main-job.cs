@@ -8,7 +8,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Web.UI;
 using System.Xml;
 class most_edits_record { public int all, main, user, templ, file, cat, portproj, meta, tech, main_edits_index; public bool globalbot; }
@@ -163,16 +162,16 @@ class Program
         foreach (var s in custats)
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
 
-        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика активности " +
-            "администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + now.Year +
-            " года. Первично отсортирована по сумме числа правок и админдействий, нулевые значения не показаны. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника пропадёт " +
-            "из таблицы при следующем обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в содержательных " +
-            "пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий (итоги плюс удаления)" +
-            ", из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable\"\n!rowspan=2|Участник!!colspan=3|Правки!!colspan=13|Админдействия\n|-\n!{{abbr" +
-            "|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|" +
-            "восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)" +
-            "стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров " +
-            "правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
+        string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{sticky header}}{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика " +
+            "активности администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + 
+            now.Year + " года. Первично отсортирована по сумме числа правок и админдействий, нулевые значения не показаны. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника " +
+            "пропадёт из таблицы при следующем обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в " +
+            "содержательных пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий " +
+            "(итоги плюс удаления), из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable ts-stickytableheader\"\n!rowspan=2|Участник!!colspan=3|" +
+            "Правки!!colspan=13|Админдействия\n|-\n!{{abbr|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги " +
+            "на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие" +
+            "|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>" +
+            "🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
         {
             bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
@@ -275,24 +274,6 @@ class Program
                     }
             }
         }
-    }
-    static void best_article_lists()
-    {
-        var pagetypes = new Dictionary<string, string>() { { "featured", "Избранные статьи" }, { "good", "Хорошие статьи" }, { "tier3", "Добротные статьи" }, { "lists", "Избранные списки" }, { "aoty", "Статьи года" } };
-        var result = new Dictionary<string, List<string>>() { { "featured", new List<string>() }, { "good", new List<string>() }, { "tier3", new List<string>() }, { "lists", new List<string>() }, { "aoty", new List<string>() }, };
-        foreach (var cat in pagetypes) {
-            string apiout, cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmprop=title&cmlimit=max&cmtitle=К:Википедия:" + cat.Value + " по алфавиту";
-            while (cont != null) {
-                apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout))) {
-                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("cmcontinue");
-                    while (r.Read())
-                        if (r.Name == "cm")
-                            result[cat.Key].Add(r.GetAttribute("title"));
-                }
-            }
-        }
-        rsave("MediaWiki:Gadget-navboxFeaturedArticles.json", JsonConvert.SerializeObject(result));
     }
     static void catmoves()
     {
@@ -505,10 +486,9 @@ class Program
     }
     public class flagsRoot { public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() {
-        users_talkLinkOnly = new List<string>(),
-        userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() }, { "C", new HashSet<string>() }, { "D", 
-                new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() }, { "I+", new HashSet<string>() }, { "K", new HashSet<string>() },
-            { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } }
+        users_talkLinkOnly = new List<string>(), userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() }, { "C", new 
+                HashSet<string>() }, { "D", new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() }, { "I+", new HashSet<string>() }, { "K", new 
+                HashSet<string>() }, { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } }
     };
     static void flag_lists()
     {
@@ -739,24 +719,6 @@ class Program
             afd_text = page_exists("ru.wikipedia", afd_pagename) ? readpage(afd_pagename) : "{{КУ-Навигация}}\n\n";
             rsave(afd_pagename, afd_text + afd_addition);
         }
-    }
-    static void merge_pages_to_one()
-    {
-        var doc = new XmlDocument(); doc.LoadXml(site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result.Content.ReadAsStringAsync().Result);
-        var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        for (int y = 2012; y <= 2025; y++)
-            for (int m = 1; m < 13; m++) {
-                var strm = m.ToString();
-                if (strm.Length == 1)
-                    strm = "0" + strm;
-                Console.WriteLine(y + "-" + strm);
-                site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("move"), "action" }, { new StringContent("ВП:Рейтинг википедий по числу статей/" +
-                    y + "-" + strm), "from" }, { new StringContent("ВП:Рейтинг википедий по числу статей"), "to" }, { new StringContent(token), "token" }, { new StringContent(
-                        "объединение с согласия автора"), "reason" }, { new StringContent("1"), "movetalk" }, { new StringContent("1"), "noredirect" } });
-                Thread.Sleep(1500);
-                site.PostAsync("https://ru.wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("delete"), "action" }, { new StringContent("ВП:Рейтинг википедий по числу статей"),
-                        "title" }, { new StringContent(token), "token" }, { new StringContent("объединение с согласия автора"), "reason" }, { new StringContent("1"), "deletetalk" } });
-            }
     }
     static void most_active_users()
     {
