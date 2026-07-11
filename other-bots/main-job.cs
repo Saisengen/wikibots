@@ -335,8 +335,15 @@ class Program
                                 var human_date = iso_to_ru_date(date);
                                 if (human_date != "error") {
                                     string link_to_discussion = "ВП:К удалению/" + human_date + "#" + nominated_page; number_of_nominations++;
-                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\nНа КУ с [[" + link_to_discussion + "|" + human_date + "]]. Голосование с " + now.Day +
-                                        " " + genitive_month[now.Month] + " " + now.Year + ".\n{{ВЧК-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
+                                    cheka_current_text += "\n==[[:" + nominated_page + "]]==\nНа КУ с [[" + link_to_discussion + "|" + human_date + "]]. Голосование с " + now.Day + " " + genitive_month
+                                        [now.Month] + " " + now.Year + ".\n{{КИКУ-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
+                                    try {
+                                        var KUpage_text = readpage("ВП:К удалению/" + human_date); var rgx = new Regex(@"== *\[\[:?" + nominated_page + @"\]\] *==");
+                                        if (rgx.IsMatch(KUpage_text)) {
+                                            KUpage_text = rgx.Replace(KUpage_text, "$&\nВынесено на [[ВП:ЧК#" + nominated_page + "|голосование админов и ПИ]] из-за просроченности номинации."); 
+                                            rsave("ВП:К удалению/" + human_date, KUpage_text);
+                                        }
+                                    } catch { }
                                 }
                             }
                         }
