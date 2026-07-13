@@ -989,6 +989,15 @@ class Program
             }
         }
     }
+    static void remove_template_from_non_orphan_page()
+    {
+        try {
+            string pagetext = readpage(orphan_article);
+            save("ru", orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
+            legit_link_found = true;
+        }
+        catch { }
+    }
     static void orphan_nonfree_files()
     {
         string cont, apiout, query, fucont = "", gcmcont = ""; var tagged_files = new HashSet<string>(); var nonfree_files = new HashSet<string>(); var unused_files = new HashSet<string>();
@@ -1088,61 +1097,41 @@ class Program
     { { "month", new Dictionary<string, Dictionary<string, int>>() }, { "year", new Dictionary<string, Dictionary<string, int>>() }, { "alltime", new Dictionary<string, Dictionary<string, int>>() } };
     static void summary_stats()
     {
-        var lastmonthdate = now.AddMonths(-1);
-        var lastyear = now.AddYears(-1);
-        var first_not_fully_summaried_year = new Dictionary<string, int>
-        {
-            { "К удалению", 2018 },{ "К улучшению", 2018 },{ "К разделению", 2018 },{ "К объединению", 2015 },{ "К переименованию", 2015 },{ "К восстановлению", 2018 },{ "Обсуждение категорий", 2017 },
-            { "Снятие защиты", 0 },{ "Установка защиты", 0 },{ "Оспаривание итогов", 0 },{ "Оспаривание административных действий", 0 },{ "Форум/Архив/Технический", 0 },{ "Технические запросы", 0 },
-            { "К оценке источников", 0 },{ "Изменение спам-листа", 0 },{ "Запросы к патрулирующим", 0 },{ "Запросы к патрулирующим от автоподтверждённых участников", 0 },{ "Запросы к ботоводам", 0 },
-            { "Заявки на снятие флагов", 0 },{ "Запросы к администраторам", 0 },{ "Хорошие статьи/Кандидаты", 0 },{ "Избранные статьи/Кандидаты", 0 },
-            { "Добротные статьи/Кандидаты", 0 },{ "Избранные списки и порталы/Кандидаты", 0 },{ "Заявки на статус патрулирующего", 0 },{ "Заявки на статус подводящего итоги", 0 }, { "Заявки на статус" +
-            " автопатрулируемого", 0 },{ "Избранные статьи/Кандидаты в устаревшие", 0 },{ "Хорошие статьи/К лишению статуса", 0 },{ "Добротные статьи/К лишению статуса", 0 }, { "Избранные списки и " +
-            "порталы/К лишению статуса", 0 }, {"Запросы на переименование учётных записей", 0},{ "Форум/Архив/Авторское право", 0 }
+        var lastmonthdate = now.AddMonths(-1); var lastyear = now.AddYears(-1); var discussions = new List<string> {{ "К удалению" },{ "К улучшению" },{ "К разделению" },{ "К объединению" },{ "К переименованию" },
+            { "К восстановлению" },{ "Обсуждение категорий" },{ "Снятие защиты" },{ "Установка защиты" },{ "Оспаривание итогов" },{ "Оспаривание административных действий" },{ "Форум/Архив/Технический" },
+            { "Технические запросы" },{ "К оценке источников" },{ "Изменение спам-листа" },{ "Запросы к патрулирующим" },{ "Запросы к патрулирующим от автоподтверждённых участников" },{ "Запросы к ботоводам" },
+            { "Заявки на снятие флагов" },{ "Запросы к администраторам" },{ "Хорошие статьи/Кандидаты" },{ "Избранные статьи/Кандидаты" }, { "Добротные статьи/Кандидаты" },{ "Избранные списки и порталы" +
+            "/Кандидаты" },{ "Заявки на статус патрулирующего" },{ "Заявки на статус подводящего итоги" },{ "Заявки на статус автопатрулируемого" },{ "Избранные статьи/Кандидаты в устаревшие"},{ "Хорошие " +
+            "статьи/К лишению статуса" },{ "Добротные статьи/К лишению статуса" }, { "Избранные списки и порталы/К лишению статуса" }, {"Запросы на переименование учётных записей"},{ "Форум/Архив/Авторское право" }
         };
         var monthnumbers = new Dictionary<string, int>{{ "января", 1 },{ "февраля", 2 },{ "марта", 3 },{ "апреля", 4 },{ "мая", 5 },{ "июня", 6 },{ "июля", 7 },{ "августа", 8 },
-            { "сентября", 9 },{ "октября", 10 },{ "ноября", 11 },{ "декабря", 12 }};//НЕ ПЕРЕНОСИТЬ СТРОКУ НИЖЕ, ОНА ЛОМАЕТСЯ
+            { "сентября", 9 },{ "октября", 10 },{ "ноября", 11 },{ "декабря", 12 }};//НЕ ПЕРЕНОСИТЬ СТРОКИ НИЖЕ, ОНИ ЛОМАЮТСЯ
         var summary_rgx = new Regex(@"={1,}\s*(Итог)[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var rdb_zkp_summary_rgx = new Regex(@"(done|сделано|отпатрулировано|отклонено)\s*\}\}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var yearrgx = new Regex(@"\d{4}");
-        foreach (var pagetype in first_not_fully_summaried_year.Keys)
-        {
+        foreach (var pagetype in discussions) {
             int ns;
             if (pagetype.Contains("статьи") || pagetype.Contains("списки"))
                 ns = 104;
             else ns = 4;
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&apprefix=" + pagetype + "&apnamespace=" + ns + "&aplimit=max";
-            while (cont != "-")
-            {
+            while (cont != "-") {
                 Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
                 cont = response.@continue == null ? "-" : response.@continue.apcontinue;
-                foreach (var pageinfo in response.query.allpages)
-                {
+                foreach (var pageinfo in response.query.allpages) {
                     string pagetitle = pageinfo.title;
-                    bool correctpage = false;
-                    int startyear = now.Month == 1 ? 2000 : (first_not_fully_summaried_year[pagetype] == 0 ? lastyear.Year : first_not_fully_summaried_year[pagetype]);
-                    if (pagetitle.Contains("Избранные"))
-                        correctpage = true;
-                    else if (yearrgx.IsMatch(pagetitle))
-                        if (i(yearrgx.Match(pagetitle).Value) >= startyear)
-                            correctpage = true;
-                        else if (pagetitle.IndexOf('/') == -1)
-                            correctpage = true;
-                    if (correctpage)
-                    {
+                    if (pagetitle.Contains("Избранные") || yearrgx.IsMatch(pagetitle) || pagetitle.IndexOf('/') == -1) {
                         string pagetext = readpage(pagetitle);
                         var summaries = (pagetype == "Запросы к ботоводам" || pagetype == "Запросы к патрулирующим от автоподтверждённых участников" || pagetype == "Запросы к патрулирующим") ?
                             rdb_zkp_summary_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
-                        foreach (Match summary in summaries)
-                        {
+                        foreach (Match summary in summaries) {
                             int signature_year = i(summary.Groups[7].Value); int signature_month = monthnumbers[summary.Groups[6].Value];
                             ss_user = summary.Groups[4].ToString().Replace('_', ' ');
                             if (ss_user.Contains("/"))
                                 ss_user = ss_user.Substring(0, ss_user.IndexOf("/"));
                             if (ss_user == "TextworkerBot")
                                 continue;
-                            if (now.Month == 1)
-                                initialize_summstats("alltime", pagetype);
+                            initialize_summstats("alltime", pagetype);
                             if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
                                 initialize_summstats("month", pagetype);
                             if (signature_year == lastmonthdate.Year || (signature_year == lastmonthdate.Year - 1 && signature_month > lastmonthdate.Month))
@@ -1152,15 +1141,14 @@ class Program
                 }
             }
         }
-        if (now.Month == 1) {
-            summstats_result = common_resulttext.Replace("%type%", "за все годы существования Русской Википедии");
-            foreach (var s in stats["alltime"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"])) {
-                if (s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"] == 1)
-                    break;
-                writerow_summstats(s);
-            }
-            rsave("ВП:Статистика итогов/За всё время", summstats_result + "\n|}");
+        summstats_result = common_resulttext.Replace("%type%", "за все годы существования Русской Википедии");
+        foreach (var s in stats["alltime"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"])) {
+            if (s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"] == 1)
+                break;
+            writerow_summstats(s);
         }
+        rsave("ВП:Статистика итогов/За всё время", summstats_result + "\n|}");
+
         ss_position_number = 0; summstats_result = common_resulttext.Replace("%type%", "за последние 12 месяцев");
         foreach (var s in stats["year"].OrderByDescending(s => s.Value["sum"] - s.Value["К улучшению"] - s.Value["Запросы к патрулирующим от автоподтверждённых участников"] - s.Value["Запросы к патрулирующим"]))
             writerow_summstats(s);
@@ -1559,14 +1547,6 @@ class Program
                     return false;
             }
         return true;
-    }
-    static void remove_template_from_non_orphan_page()
-    {
-        try {
-            string pagetext = readpage(orphan_article);
-            save("ru", orphan_article, pagetext.Replace("{{изолированная статья|", "{{subst:ET|").Replace("{{Изолированная статья|", "{{subst:ET|"), "удаление неактуального шаблона изолированной статьи");
-            legit_link_found = true;
-        } catch { }
     }
     static void trans_namespace_moves()
     {
