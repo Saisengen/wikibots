@@ -311,7 +311,7 @@ class Program
     }
     static void cheka_update()
     {
-        var article_about_star = new Regex(@"^[A-Z]{1,3}\d* [А-Я]"); string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
+        var article_about_star = new Regex(@"^[A-Z]{1,3} ?\d"); string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]==");
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count; int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
@@ -338,7 +338,7 @@ class Program
                                     cheka_current_text += "\n==[[:" + nominated_page + "]]==\nНа КУ с [[" + link_to_discussion + "|" + human_date + "]]. Голосование с " + now.Day + " " + genitive_month
                                         [now.Month] + " " + now.Year + ".\n{{КИКУ-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
                                     try {
-                                        var KUpage_text = readpage("ВП:К удалению/" + human_date); var rgx = new Regex(@"== *\[\[:?" + nominated_page + @"\]\] *==");
+                                        var KUpage_text = readpage("ВП:К удалению/" + human_date); var rgx = new Regex(@"== *\[\[:?" + nominated_page + @"\]\] *==+");
                                         if (rgx.IsMatch(KUpage_text)) {
                                             KUpage_text = rgx.Replace(KUpage_text, "$&\nВынесено на [[ВП:ЧК#" + nominated_page + "|голосование админов и ПИ]] из-за просроченности номинации."); 
                                             rsave("ВП:К удалению/" + human_date, KUpage_text);
