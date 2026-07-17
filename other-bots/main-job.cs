@@ -61,14 +61,14 @@ class Program
         while (r.Read())
             statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
                 { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
-                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
+                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0}, { "suppress", 0} });
         r.Close();
         command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"closer\";";
         r = command.ExecuteReader();
         while (r.Read())
             statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
                 { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
-                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0} });
+                { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0}, { "suppress", 0} });
         r.Close();
         command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
         r = command.ExecuteReader();
@@ -156,11 +156,10 @@ class Program
                             }
                         }
                     }
-
-        string cutext = readpage("u:BotDR/CU_stats");
-        var custats = cutext.Split('\n');
-        foreach (var s in custats)
+        foreach (var s in readpage("u:BotDR/CU_stats").Split('\n'))
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
+        foreach (var s in readpage("u:BotDR/OS_stats").Split('\n'))
+            if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["suppress"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
 
         string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{sticky header}}{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика " +
             "активности администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + 
@@ -169,9 +168,9 @@ class Program
             "содержательных пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий " +
             "(итоги плюс удаления), из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable ts-stickytableheader\"\n!rowspan=2|Участник!!colspan=3|" +
             "Правки!!colspan=13|Админдействия\n|-\n!{{abbr|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги " +
-            "на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие" +
-            "|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>" +
-            "🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
+            "на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big> (∅)|удаление правок и записей журналов (ревизорское)|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|" +
+            "защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц" +
+            "|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
         {
             bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
@@ -183,11 +182,12 @@ class Program
                 color = "style=\"background-color:#ccf\"";
             else if (inactivecloser || lessactions || lesscontent || lesstotal)
                 color = "style=\"background-color:#fcc\"";
-            string deletetext = u.Value["delete"] + u.Value["delsum"] == 0 ? "" : inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")";
-            string restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")"; //пробелы после ''' нужны чтоб не было висящих '
+            var deletetext = u.Value["delete"] + u.Value["delsum"] == 0 ? "" : inactivecloser ? "'''" + u.Value["delete"] + " (" + u.Value["delsum"] + ")'''" : u.Value["delete"] + " (" + u.Value["delsum"] + ")";
+            var restoretext = u.Value["restore"] + u.Value["restoresum"] == 0 ? "" : u.Value["restore"] + " (" + u.Value["restoresum"] + ")"; //пробелы после ''' нужны чтоб не было висящих '
+            var del_rev_log_text = u.Value["del_rev_log"] + u.Value["suppress"] == 0 ? "" : u.Value["del_rev_log"] + " (" + u.Value["suppress"] + ")";
             result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + (lesstotal ? "''' " + cell(u.Value["totaledits"]) +
                 "'''" : cell(u.Value["totaledits"])) + "||" + (lesscontent ? "''' " + cell(u.Value["contentedits"]) + "'''" : cell(u.Value["contentedits"])) + "||" + cell(u.Value["review"]) + "||" +
-                (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + deletetext + "||" + restoretext + "||" + cell(u.Value["del_rev_log"]) + "||" +
+                (lessactions ? "''' " + cell(u.Value["totalactions"]) + "'''" : cell(u.Value["totalactions"])) + "||" + deletetext + "||" + restoretext + "||" + del_rev_log_text + "||" +
                 cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] +
                 u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["checkuser"]) + "||" + cell(u.Value["renameuser"]);
         }
@@ -340,7 +340,7 @@ class Program
                                     try {
                                         var KUpage_text = readpage("ВП:К удалению/" + human_date); var rgx = new Regex(@"== *\[\[:?" + nominated_page + @"\]\] *==+");
                                         if (rgx.IsMatch(KUpage_text)) {
-                                            KUpage_text = rgx.Replace(KUpage_text, "$&\nВынесено на [[ВП:ЧК#" + nominated_page + "|голосование админов и ПИ]] из-за просроченности номинации."); 
+                                            KUpage_text = rgx.Replace(KUpage_text, "$&\n<small>Вынесено на [[ВП:ЧК#" + nominated_page + "|голосование админов и ПИ]] из-за просроченности номинации. ~~~~</small>\n"); 
                                             rsave("ВП:К удалению/" + human_date, KUpage_text);
                                         }
                                     } catch { }
@@ -1090,9 +1090,9 @@ class Program
         " по числу итогов, подведённых %type%.\n\nСтатистика собирается поиском по тексту страниц обсуждений и потому верна лишь приближённо, нестандартный синтаксис итога или подписи итогоподводящего " +
         "может привести к тому, что такой итог не будет засчитан. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ, ЗКП и ЗКПАУ.\n{|class=\"standard sortable ts-stickytableheader\"\n!№!!" +
         "Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|]]}}!!{{vh|[[ВП:КУЛ|]]}}!!{{vh|[[ВП:ЗКА|]]}}!!" +
-        "{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!{{vh|[[ВП:ЗСПИ|]]}}!!{{vh|[[ВП:ЗСФ|]]}}!!{{vh|[[ВП:КОИ|]]}}!!{{vh|[[ВП:ИСЛ|]]}}!!" +
-        "{{vh|[[ВП:ЗКП|]][[ВП:ЗКПАУ|(АУ)]]}}!!{{vh|[[ВП:КИС|]]}}!!{{vh|[[ВП:КИСЛ|]]}}!!{{vh|[[ВП:КХС|]]}}!!{{vh|[[ВП:КЛСХС|]]}}!!{{vh|[[ВП:КДС|]]}}!!{{vh|[[ВП:КЛСДС|]]}}!!{{vh|[[ВП:КИСП|]]}}!!{{vh|[[ВП:" +
-        "КЛСИСП|]]}}!!{{vh|[[ВП:РДБ|]]}}!!{{vh|[[ВП:ФТ|]]+[[ВП:ТЗ|]]}}!!{{vh|[[ВП:Ф-АП|АП]]}}"; static int ss_position_number;
+        "{{vh|[[ВП:ФА|]]}}!!{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!{{vh|[[ВП:ЗСПИ|]]}}!!{{vh|[[ВП:ЗСФ|]]}}!!{{vh|[[ВП:КОИ|]]}}!!{{vh|" +
+        "[[ВП:ИСЛ|]]}}!!{{vh|[[ВП:ЗКП|]][[ВП:ЗКПАУ|(АУ)]]}}!!{{vh|[[ВП:КИС|]]}}!!{{vh|[[ВП:КИСЛ|]]}}!!{{vh|[[ВП:КХС|]]}}!!{{vh|[[ВП:КЛСХС|]]}}!!{{vh|[[ВП:КДС|]]}}!!{{vh|[[ВП:КЛСДС|]]}}!!{{vh|[[ВП:КИСП|]]}}!!" +
+        "{{vh|[[ВП:КЛСИСП|]]}}!!{{vh|[[ВП:РДБ|]]}}!!{{vh|[[ВП:ФТ|]]+[[ВП:ТЗ|]]}}!!{{vh|[[ВП:Ф-АП|АП]]}}"; static int ss_position_number;
     static Dictionary<string, Dictionary<string, Dictionary<string, int>>> stats = new Dictionary<string, Dictionary<string, Dictionary<string, int>>>
     { { "month", new Dictionary<string, Dictionary<string, int>>() }, { "year", new Dictionary<string, Dictionary<string, int>>() }, { "alltime", new Dictionary<string, Dictionary<string, int>>() } };
     static void summary_stats()
@@ -1102,7 +1102,8 @@ class Program
             { "Технические запросы" },{ "К оценке источников" },{ "Изменение спам-листа" },{ "Запросы к патрулирующим" },{ "Запросы к патрулирующим от автоподтверждённых участников" },{ "Запросы к ботоводам" },
             { "Заявки на снятие флагов" },{ "Запросы к администраторам" },{ "Хорошие статьи/Кандидаты" },{ "Избранные статьи/Кандидаты" }, { "Добротные статьи/Кандидаты" },{ "Избранные списки и порталы" +
             "/Кандидаты" },{ "Заявки на статус патрулирующего" },{ "Заявки на статус подводящего итоги" },{ "Заявки на статус автопатрулируемого" },{ "Избранные статьи/Кандидаты в устаревшие"},{ "Хорошие " +
-            "статьи/К лишению статуса" },{ "Добротные статьи/К лишению статуса" }, { "Избранные списки и порталы/К лишению статуса" }, {"Запросы на переименование учётных записей"},{ "Форум/Архив/Авторское право" }
+            "статьи/К лишению статуса" },{ "Добротные статьи/К лишению статуса" }, { "Избранные списки и порталы/К лишению статуса" }, {"Запросы на переименование учётных записей"},{ "Форум/Архив/Авторское " +
+            "право" }, { "Форум администраторов" }
         };
         var monthnumbers = new Dictionary<string, int>{{ "января", 1 },{ "февраля", 2 },{ "марта", 3 },{ "апреля", 4 },{ "мая", 5 },{ "июня", 6 },{ "июля", 7 },{ "августа", 8 },
             { "сентября", 9 },{ "октября", 10 },{ "ноября", 11 },{ "декабря", 12 }};//НЕ ПЕРЕНОСИТЬ СТРОКИ НИЖЕ, ОНИ ЛОМАЮТСЯ
@@ -1110,10 +1111,7 @@ class Program
         var rdb_zkp_summary_rgx = new Regex(@"(done|сделано|отпатрулировано|отклонено)\s*\}\}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         var yearrgx = new Regex(@"\d{4}");
         foreach (var pagetype in discussions) {
-            int ns;
-            if (pagetype.Contains("статьи") || pagetype.Contains("списки"))
-                ns = 104;
-            else ns = 4;
+            int ns = (pagetype.Contains("статьи") || pagetype.Contains("списки")) ? 104 : 4;
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&apprefix=" + pagetype + "&apnamespace=" + ns + "&aplimit=max";
             while (cont != "-") {
                 Root response = JsonConvert.DeserializeObject<Root>(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&apcontinue=" + e(cont)).Result);
@@ -1175,10 +1173,10 @@ class Program
     {
         summstats_result += "\n|-\n|" + ++ss_position_number + "||{{u|" + s.Key + "}}||" + cell(s.Value["sum"]) + "||" + cell(s.Value["К удалению"]) + "||" + cell(s.Value["К восстановлению"]) + "||" +
             cell(s.Value["К переименованию"]) + "||" + cell(s.Value["Запросы на переименование учётных записей"]) + "||" + cell(s.Value["К объединению"] + s.Value["К разделению"]) + "||" + cell(s.Value
-            ["Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value["Оспаривание итогов"] + s.Value["Оспаривание " +
-                "административных действий"]) + "||" + cell(s.Value["Установка защиты"]) + "||" + cell(s.Value["Снятие защиты"]) + "||" + cell(s.Value["Заявки на статус автопатрулируемого"] + s.Value[
-                    "Заявки на статус патрулирующего"]) + "||" + cell(s.Value["Заявки на статус подводящего итоги"]) + "||" + cell(s.Value["Заявки на снятие флагов"]) + "||" + cell(s.Value["К оценке " +
-                    "источников"]) + "||" + cell(s.Value["Изменение спам-листа"]) + "||" + cell(s.Value["Запросы к патрулирующим от автоподтверждённых участников"] + s.Value["Запросы к патрулирующим"]) +
+            ["Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value["Форум администраторов"]) + "||" + cell(s.Value
+            ["Оспаривание итогов"] + s.Value["Оспаривание административных действий"]) + "||" + cell(s.Value["Установка защиты"]) + "||" + cell(s.Value["Снятие защиты"]) + "||" + cell(s.Value["Заявки на статус " +
+            "автопатрулируемого"] + s.Value["Заявки на статус патрулирующего"]) + "||" + cell(s.Value["Заявки на статус подводящего итоги"]) + "||" + cell(s.Value["Заявки на снятие флагов"]) + "||" + cell(
+                s.Value["К оценке источников"]) + "||" + cell(s.Value["Изменение спам-листа"]) + "||" + cell(s.Value["Запросы к патрулирующим от автоподтверждённых участников"] + s.Value["Запросы к патрулирующим"]) +
                     "||" + cell(s.Value["Избранные статьи/Кандидаты"]) + "||" + cell(s.Value["Избранные статьи/Кандидаты в устаревшие"]) + "||" + cell(s.Value["Хорошие статьи/Кандидаты"]) + "||" + cell(
                         s.Value["Хорошие статьи/К лишению статуса"]) + "||" + cell(s.Value["Добротные статьи/Кандидаты"]) + "||" + cell(s.Value["Добротные статьи/К лишению статуса"]) + "||" + cell(s.Value
                         ["Избранные списки и порталы/Кандидаты"]) + "||" + cell(s.Value["Избранные списки и порталы/К лишению статуса"]) + "||" + cell(s.Value["Запросы к ботоводам"]) + "||" + cell(s.Value
