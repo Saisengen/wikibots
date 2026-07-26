@@ -311,8 +311,8 @@ class Program
     }
     static void cheka_update()
     {
-        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"==\[\[:([^=]*)\]\]=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        string starlist = "пропущены статьи о звёздах ";
+        string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
+        string starlist = "пропущены "; string new_nominated = "вынесены ";
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var article_about_star = new Regex(@"^[A-Z]{1,3} ?\d"); int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
@@ -327,8 +327,6 @@ class Program
             "&format=xml&cmtitle=К:Википедия:Месяцев просрочки на КУ:" + months + "&cmprop=title&cmlimit=max").Result)))
                     while (r.Read())
                         if (r.Name == "cm") {
-                            if (number_of_nominations >= limit)
-                                goto end;
                             string nominated_page = r.GetAttribute("title");
                             if (!nominated_before.Contains(nominated_page))
                                 if (article_about_star.IsMatch(nominated_page))
@@ -338,7 +336,7 @@ class Program
                                     string date = afd_template.Match(pagetext).Groups[2].Value;
                                     var human_date = iso_to_ru_date(date);
                                     if (human_date != "error") {
-                                        string link_to_discussion = "ВП:К удалению/" + human_date + "#" + nominated_page; number_of_nominations++;
+                                        string link_to_discussion = "ВП:К удалению/" + human_date + "#" + nominated_page; number_of_nominations++; new_nominated += "[[" + nominated_page + "]], ";
                                         cheka_current_text += "\n==[[:" + nominated_page + "]]==\nНа КУ с [[" + link_to_discussion + "|" + human_date + "]]. Голосование с " + now.Day + " " + genitive_month
                                             [now.Month] + " " + now.Year + ".\n{{КИКУ-голоса\n|ост1=\n|ост2=\n|ост3=\n|ост4=\n|ост5=\n|ост6=\n|удал1=\n|удал2=\n|удал3=\n|удал4=\n|удал5=\n|удал6=\n|обс=\n}}\n";
                                         try {
@@ -348,11 +346,13 @@ class Program
                                                 save("ru", "ВП:К удалению/" + human_date, KUpage_text, "[[" + nominated_page + "]] вынесена на [[ВП:КИКУ]]");
                                             }
                                         } catch { }
+                                        if (number_of_nominations >= limit)
+                                            goto end;
                                     }
                                 }
                         }
             }
-        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, starlist);
+        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated + starlist);
         }
     }
     static string iso_to_ru_date(string date)
@@ -1192,8 +1192,7 @@ class Program
     is_ext_rgx = new Regex(@"importscript\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/(.*?\.js)", RegexOptions.IgnoreCase),
     loader_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""]/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
     loader_foreign_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/w/index\.php\?title=(.*?\.js)", RegexOptions.IgnoreCase),
-    loader_foreign2_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/([^?]*)\?", RegexOptions.IgnoreCase),
-    r1 = new Regex(@"importscript.*\.js", RegexOptions.IgnoreCase), r2 = new Regex(@"\.(load|getscript|using)\b.*\.js", RegexOptions.IgnoreCase);
+    loader_foreign2_rgx = new Regex(@"\.(load|getscript|using)\s*\(\s*['""](https?:|)//([^.]*)\.([^.]*)\.org/wiki/([^?]*)\?", RegexOptions.IgnoreCase);
     static HashSet<string> invoking_pages = new HashSet<string>(), script_users = new HashSet<string>(); static string debug_result = "<center>\n{|class=\"standard sortable\"\n!Страница вызова!!Скрипт", invoking_page;
     static Dictionary<string, bool> users_activity = new Dictionary<string, bool>(); static Dictionary<string, script_usages> scripts = new Dictionary<string, script_usages>(); static string script_user;
     static Dictionary<string, Dictionary<string, int>> creators = new Dictionary<string, Dictionary<string, int>>();
