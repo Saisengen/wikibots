@@ -313,7 +313,7 @@ class Program
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         string starlist = "пропущены "; string new_nominated = "вынесены ";
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var article_about_star = new Regex(@"^[A-Z]{1,3} ?\d"); int limit = 60;
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var article_about_star = new Regex(@"^[A-Z]{1,3} ?[\dА-Я]"); int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
@@ -352,7 +352,7 @@ class Program
                                 }
                         }
             }
-        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated + starlist);
+        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated + (starlist.Length > 10 ? starlist : ""));
         }
     }
     static string iso_to_ru_date(string date)
@@ -1091,7 +1091,7 @@ class Program
                     }
     }
     static string summstats_result, ss_user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика по числу итогов, подведённых %type%. " +
-        "Статистика собирается поиском по тексту страниц обсуждений и потому 1) верна лишь приближённо (нестандартный синтаксис итога или подписи итогоподводящего может привести к тому, что итог не будет " +
+        "Собирается поиском по тексту страниц обсуждений и потому 1) верна лишь приближённо (нестандартный синтаксис итога или подписи итогоподводящего может привести к тому, что итог не будет " +
         "засчитан), 2) при переименовании участника статистика по нему разбивается отдельно по старому и новому никнейму. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ, ЗКП и ЗКПАУ.\n{|" +
         "class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|" +
         "]]}}!!{{vh|[[ВП:КУЛ|]]}}!!{{vh|[[ВП:ЗКА|]]}}!!{{vh|[[ВП:ФА|]]}}!!{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:Ф-ПРА|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!" +
@@ -1675,37 +1675,27 @@ class Program
             switch (thread.Groups[2].Value) {
                 case "апат":
                 case "пат":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Патрулирующие/" + year;
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Патрулирующие/" + year; break;
                 case "откат":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Откатывающие/" + year;
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Откатывающие/" + year; break;
                 case "загр":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Загружающие";
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Загружающие"; break;
                 case "ПИ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Подводящие итоги/" + year;
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Подводящие итоги/" + year; break;
                 case "ПбП":
                 case "ПФ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Переименовывающие";
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Переименовывающие"; break;
                 case "инж":
                 case "АИ":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Инженеры и АИ";
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Инженеры и АИ"; break;
                 case "бот":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Нарушающие боты";
-                    break;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Нарушающие боты"; break;
                 case "ванд":
-                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Вандалоборцы";
-                    break;
-                default:
-                    continue;
+                    archivepage = "Википедия:Заявки на снятие флагов/Архив/Вандалоборцы"; break;
+                default: continue;
             }
             zsftext = zsftext.Replace(threadtext, "");
             try { string archivetext = readpage(archivepage); rsave(archivepage, archivetext + threadtext); } catch { rsave(archivepage, threadtext); }
-
         }
         if (zsftext != initialtext)
             rsave("Википедия:Заявки на снятие флагов", zsftext);
