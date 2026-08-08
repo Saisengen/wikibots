@@ -7,7 +7,7 @@ using PCRE;
 using System.Net.Http;
 using System.Linq;
 using Newtonsoft.Json;
-public class Root { public string domain; public string notes; public string addedBy; } public class page { public string ns; public string title; }
+public class Root { public string domain; public string notes; public string addedBy; }
 class Program
 {
     static HttpClient login(string login, string password, string ua)
@@ -24,10 +24,8 @@ class Program
         request.Add(new StringContent("edit"), "action"); request.Add(new StringContent(title), "title"); request.Add(new StringContent(text), "text"); request.Add(new StringContent(comment), "summary");
         request.Add(new StringContent("xml"), "format"); request.Add(new StringContent(token), "token"); return site.PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
-    static void Main()
-    {
-        var new_spamlinks_on_page = new HashSet<string>(); var pages = new Dictionary<string, page>(); var requeststrings = new HashSet<string>();
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
+    static void Main() {
+        var new_spamlinks_on_page = new HashSet<string>(); var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n');
         var bot = login(creds[0], creds[1], creds[3]); var nonbot = login(creds[4], creds[5], creds[3]); var blackrgx = new List<PcreRegex>(); var whitergx = new List<PcreRegex>();
         string rawblacklist = bot.GetStringAsync("https://meta.wikimedia.org/wiki/Spam_blacklist?action=raw").Result;
         rawblacklist += bot.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Spam-blacklist?action=raw").Result;
@@ -36,43 +34,29 @@ class Program
         string rawwhitelist = bot.GetStringAsync("https://ru.wikipedia.org/wiki/MediaWiki:Spam-whitelist?action=raw").Result; var blacklist = rawblacklist.Split('\n'); var whitelist = rawwhitelist.Split('\n');
         var spam_template_rgx = new PcreRegex(@"\n*\{\{спам-ссылки\|1?=?([^}]*)\|?2?=?1?\}\}"); var too_many_stars_rgx = new PcreRegex(@"^\*{2,}"); //var start = new StreamReader("spamstart.txt").ReadLine();
         foreach (string b in blacklist.OrderBy(b => b)) {
-            string current = b;
-            if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();
+            string current = b; if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();
             if (current != "") blackrgx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
         foreach (var w in whitelist) {
-            string current = w;
-            if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();//&apfrom=" + start;
+            string current = w; if (current.Contains("#")) current = current.Substring(0, current.IndexOf("#")).Trim();
             if (current != "") whitergx.Add(new PcreRegex(current, PcreOptions.IgnoreCase));
         }
-        string apiout, cont = "", id="", idset="", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apfilterredir=nonredirects&aplimit=max";
+        string cont = "", id = "", idset = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=allpages&format=xml&apfilterredir=nonredirects&aplimit=max",//&apfrom=" + start;
+            query2 = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids=";
         while (cont != null) {
-            apiout = (cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result);
-            using (var r = new XmlTextReader(new StringReader(apiout))) {
-                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
-                while (r.Read())
-                    if (r.Name == "p") {
-                        string pid = r.GetAttribute("pageid"); try { pages.Add(pid, new page() { title = r.GetAttribute("title"), ns = r.GetAttribute("ns") }); } catch {  }
-                    }
-            }
-        }
-        int c = 0; foreach (var p in pages.Keys) { idset += "|" + p; if (++c % 500 == 0) { requeststrings.Add(idset.Substring(1)); idset = ""; } }
-        if (idset.Length > 0) requeststrings.Add(idset.Substring(1));
-
-        query = "https://ru.wikipedia.org/w/api.php?action=query&prop=extlinks&format=xml&ellimit=max&pageids="; foreach (var q in requeststrings) {
-            string title = ""; cont = ""; while (cont != null) {
-                apiout = (cont == "" ? bot.GetStringAsync(query + q).Result : bot.GetStringAsync(query + q + "&eloffset=" + cont).Result);
-                using (var r = new XmlTextReader(new StringReader(apiout))) {
-                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eloffset"); while (r.Read()) {
-                        if (r.Name == "page") {
+            var r = new XmlTextReader(new StringReader(cont == "" ? bot.GetStringAsync(query).Result : bot.GetStringAsync(query + "&apcontinue=" + Uri.EscapeDataString(cont)).Result));
+            r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("apcontinue");
+            while (r.Read())
+                if (r.Name == "p") {
+                    string pid = r.GetAttribute("pageid"), title = r.GetAttribute("title"), ns = r.GetAttribute("ns"); string cont2 = "";
+                    var r2 = new XmlTextReader(new StringReader(cont2 == "" ? bot.GetStringAsync(query2 + pid).Result : bot.GetStringAsync(query2 + pid + "&eloffset=" + cont2).Result));
+                    r2.Read(); r2.Read(); r2.Read(); cont2 = r2.GetAttribute("eloffset"); while (r2.Read()) {
+                        if (r2.Name == "page") {
                             var domains = new HashSet<string>();
-                            title = r.GetAttribute("title");
-                            if (r.NodeType == XmlNodeType.EndElement && new_spamlinks_on_page.Count != 0) {
+                            if (r2.NodeType == XmlNodeType.EndElement && new_spamlinks_on_page.Count != 0) {
                                 string summary = "[[ВП:Форум/Архив/Общий/2020/03#Решение проблемы со спам-ссылками в статьях|спам-ссылки]]: ";
-                                string page_text = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(pages[id].title) + "?action=raw").Result;
-                                string newtemplate = "\n{{спам-ссылки|1=";
-                                var newstrings = new HashSet<string>();
-                                if (spam_template_rgx.IsMatch(page_text)) {
+                                string page_text = bot.GetStringAsync("https://ru.wikipedia.org/wiki/" + Uri.EscapeDataString(title) + "?action=raw").Result;
+                                string newtemplate = "\n{{спам-ссылки|1="; var newstrings = new HashSet<string>(); if (spam_template_rgx.IsMatch(page_text)) {
                                     string oldtemplate = spam_template_rgx.Match(page_text).Groups[0].ToString();
                                     var old_link_strings_raw = spam_template_rgx.Match(page_text).Groups[1].ToString().Split('\n');
                                     page_text = page_text.Replace(oldtemplate, "");
@@ -83,7 +67,7 @@ class Program
                                             if (newstring.StartsWith("https://")) newstring = newstring.Substring(8); if (too_many_stars_rgx.IsMatch(newstring)) newstring = too_many_stars_rgx.Replace(newstring, "*");
                                             if (!newstrings.Contains(newstring)) newstrings.Add(newstring);
                                         }
-                                    foreach(var newstring in newstrings)
+                                    foreach (var newstring in newstrings)
                                         newtemplate += "\n" + newstring;
                                 }
                                 foreach (var link in new_spamlinks_on_page)
@@ -100,27 +84,26 @@ class Program
                                 foreach (var domain in domains)
                                     summary += domain + ", ";
                                 if (new_spamlinks_on_page.Count > 0 && domains.Count > 0)
-                                    try { Save(bot, pages[id].title, page_text + (pages[id].ns == "0" ? newtemplate + "}}" : ""), summary.Substring(0, summary.Length - 2)); } catch { }
+                                    try { Save(bot, title, page_text + (ns == "0" ? newtemplate + "}}" : ""), summary.Substring(0, summary.Length - 2)); } catch { }
                                 new_spamlinks_on_page.Clear();
                             }
-                            if (r.NodeType == XmlNodeType.Element && r.GetAttribute("missing") == null) id = r.GetAttribute("pageid");
+                            if (r2.NodeType == XmlNodeType.Element && r2.GetAttribute("missing") == null) id = r2.GetAttribute("pageid");
                         }
-                        if (r.NodeType == XmlNodeType.Element && r.Name == "el") {
-                            r.Read(); bool match = false; string link = r.Value;
+                        if (r2.NodeType == XmlNodeType.Element && r2.Name == "el") {
+                            r2.Read(); bool match = false; string link = r2.Value;
                             foreach (var br in blackrgx)
                                 if (br.IsMatch(link)) { match = true; break; }
                             if (match)
                                 foreach (var wr in whitergx)
                                     if (wr.IsMatch(link)) { match = false; break; }
-                            if (match && !new_spamlinks_on_page.Contains(r.Value)) {
-                                string answer = Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r.Value, "[[" + title + "]] " + r.Value);
+                            if (match && !new_spamlinks_on_page.Contains(r2.Value)) {
+                                string answer = Save(nonbot, "u:MBH/test", "[[" + title + "]] " + r2.Value, "[[" + title + "]] " + r2.Value);
                                 if (answer.Contains("spamblacklist") || answer.Contains("blocked-domains"))
-                                    new_spamlinks_on_page.Add(r.Value);
+                                    new_spamlinks_on_page.Add(r2.Value);
                             }
                         }
                     }
                 }
-            }
         }
     }
 }
