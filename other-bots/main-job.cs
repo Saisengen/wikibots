@@ -313,7 +313,7 @@ class Program
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         string starlist = "пропущены "; string new_nominated = "вынесены ";
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var article_about_star = new Regex(@"^[A-Z]{1,3} ?[\dА-Я]"); int limit = 60;
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"^([A-Z]{1,3} ?[\dА-Я]|Файл:Герб)"); int limit = 65;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
@@ -329,7 +329,7 @@ class Program
                         if (r.Name == "cm") {
                             string nominated_page = r.GetAttribute("title");
                             if (!nominated_before.Contains(nominated_page))
-                                if (article_about_star.IsMatch(nominated_page))
+                                if (articles_for_skip.IsMatch(nominated_page))
                                     starlist += "[[" + nominated_page + "]], ";
                                 else {
                                     string pagetext = readpage(nominated_page);
@@ -1571,8 +1571,7 @@ class Program
     }
     static void unlicensed_files()
     {
-        var autocatfiles = new HashSet<string>();
-        var tagged_files = new HashSet<string>();
+        var autocatfiles = new HashSet<string>(); var tagged_files = new HashSet<string>();
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=categorymembers&format=xml&cmtitle=Категория:Файлы:Без машиночитаемой лицензии&cmprop=title&cmlimit=50").Result));
             while (r.Read())
                 if (r.Name == "cm")
@@ -1583,13 +1582,11 @@ class Program
                 if (r.Name == "ei")
                     tagged_files.Add(r.GetAttribute("title"));
 
-        autocatfiles.ExceptWith(tagged_files);
-        foreach (var file in autocatfiles) { string pagetext = readpage(file); save("ru", file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии"); }
+        autocatfiles.ExceptWith(tagged_files); foreach (var file in autocatfiles) { string pagetext = readpage(file); save("ru", file, "{{subst:nld}}\n" + pagetext, "вынос на КБУ файла без валидной лицензии"); }
     }
     static void unreviewed_in_nonmain_ns()
     {
-        var nsnames = new Dictionary<int, string>() { { 0, "Статьи" }, { 6, "Файлы" }, { 10, "Шаблоны" }, { 14, "Категории" }, { 100, "Порталы" }, { 828, "Модули" } };
-        string result = "";
+        var nsnames = new Dictionary<int, string>() { { 0, "Статьи" }, { 6, "Файлы" }, { 10, "Шаблоны" }, { 14, "Категории" }, { 100, "Порталы" }, { 828, "Модули" } }; string result = "";
         foreach (var ns in nsnames.Keys)
             foreach (string type in new string[] { "nonredirects", "redirects" })
                 if (!(ns == 0 && type == "nonredirects")) {
