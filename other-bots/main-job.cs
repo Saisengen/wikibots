@@ -44,12 +44,15 @@ class Program
             .ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken }, { "format", "xml" } })).Result; return client;
     }
-    static void save(string lang, string title, string text, string comment)
-    {
+    static void save(string lang, string title, string text, string comment) {
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; if (!result.IsSuccessStatusCode) return;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" },
-            { new StringContent(text), "text" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ }).Result;
+        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent
+                (text), "text" }, { new StringContent("xml"), "format" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ });
+    }
+    static void fastsave(string lang, string title, string text, string comment, string token) {
+        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent
+                (text), "text" }, { new StringContent("xml"), "format" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }, { new StringContent("1"), "bot" } });
     }
     static void rsave(string title, string text) { save("ru", title, text, ""); }
     static void adminstats()
@@ -1696,6 +1699,15 @@ class Program
         }
         if (zsftext != initialtext)
             rsave("Википедия:Заявки на снятие флагов", zsftext);
+    }
+    static void rgx_replacement()
+    {
+        var rg1 = new Regex(@"\{\{ *архивировано *\| *url *= *https://archive.today/[^}]*\}\}"); var rg2 = new Regex(@"\| *archive-url *= *https://archive.today/[^{}|]*\| *archive-date *=[^{}|]*");
+        var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result); string token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
+        foreach (var page in new StreamReader("src.txt").ReadToEnd().Replace("\r", "").Split('\n')) try {
+                fastsave("ru", page, rg2.Replace(rg1.Replace(readpage(page), ""), ""), "archive.today внесён в блок-лист в викимедии", token);
+            } catch { }
     }
     static void Main()
     {
