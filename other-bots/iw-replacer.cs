@@ -27,7 +27,7 @@ class Program
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + processed_wiki_lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
         doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; var request = new MultipartFormDataContent { { new StringContent("edit"), 
-                "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, /*{ new StringContent("1"), "bot" },*/ { new StringContent(comment), "summary" }, { new StringContent
+                "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent("xml"), "format" }, { new StringContent(comment), "summary" }, { new StringContent
                 (token), "token" } };
         var answer = site.PostAsync("https://" + processed_wiki_lang + ".wikipedia.org/w/api.php", request).Result.ToString();
         if (!answer.Contains("200")) Console.WriteLine(answer);
@@ -130,9 +130,7 @@ class Program
     }
     static void processPage(string page_for_processing)
     {
-        //if (page_for_processing.StartsWith("Список глав "))
-        //    return;
-        if (page_for_processing.EndsWith("/doc"))
+        if (page_for_processing.EndsWith("/doc") /*|| page_for_processing.StartsWith("Список глав ")*/)
             return;
         if (page_for_processing.Contains(':')) {
             string ns = page_for_processing.Substring(0, page_for_processing.IndexOf(':'));
@@ -212,12 +210,12 @@ class Program
         if (processed_wiki_lang == "ru")
             foreach (var type in needed_articles.Keys) {
                 var wr = new StreamWriter(type + ".txt");
-                string result = "<center>\n{|class=standard\n!Статья!!Ссылок на неё";
+                string result = "[[К:Википедия:Списки недостающих статей]]<center>\n{|class=standard\n!Статья!!Ссылок на неё";
                 foreach (var article_data in needed_articles[type].OrderByDescending(t => t.Value)) {
                     if (article_data.Value > 2)
                         result += "\n|-\n|" + article_data.Key + "||" + article_data.Value;
                 }
-                try { Save(site, processed_wiki_lang, "ВП:К созданию/Из шаблонов \"не переведено\"/" + type, result + "\n|}", ""); } catch { }
+                try { Save(site, processed_wiki_lang, "ВП:К созданию/Из шаблонов \"не переведено\"" + (type == type.other ? "" : "/" + type.ToString()), result + "\n|}", ""); } catch { }
                 try { wr.Write(result + "\n|}"); wr.Close(); } catch { }
             }
     }
