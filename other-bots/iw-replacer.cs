@@ -132,11 +132,6 @@ class Program
     {
         if (page_for_processing.EndsWith("/doc") /*|| page_for_processing.StartsWith("Список глав ")*/)
             return;
-        if (page_for_processing.Contains(':')) {
-            string ns = page_for_processing.Substring(0, page_for_processing.IndexOf(':'));
-            if (ns.Contains("частни") || ns.Contains("бсуждение") || ns.Contains("икипедия") || ns.Contains("роект") || ns.Contains("рбитраж"))
-                return;
-        }
         string processed_page_text; try { processed_page_text = readpage(processed_wiki_lang, page_for_processing); } catch { return; } newtext = processed_page_text; comment = "";
         foreach (Match m in iw5.Matches(processed_page_text))
         {
@@ -179,8 +174,8 @@ class Program
             home_pagename = visible_text;
             check_for_blockers_and_generate_new_text_and_comment(page_for_processing, m);
         }
-        //if (newtext != processed_page_text)
-        //    Save(site, processed_wiki_lang, page_for_processing, newtext, comment.Substring(2));
+        if (newtext != processed_page_text)
+            Save(site, processed_wiki_lang, page_for_processing, newtext, comment.Substring(2));
     }
     static void Main()
     {
@@ -200,19 +195,21 @@ class Program
 
         foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
             try { processPage(page_for_processing); } catch (Exception e) { Console.WriteLine(e); }
-        foreach (string template in templatenames[processed_wiki_lang].Split('|')) {
-            cont = ""; query = "https://" + processed_wiki_lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=template:" + template + "&eilimit=max"; while (cont != null) {
-                //EIDIR НЕ СРАБОТАЕТ ДЛЯ СОРТИРОВКИ, БУДЕТ СОРТИРОВКА ПО ДАТЕ СОЗДАНИЯ СТРАНИЦЫ
-                var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
-                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read()) if (r.Name == "ei") try { processPage(r.GetAttribute("title")); } catch (Exception e) { Console.WriteLine(e); }
+        foreach (int ns in new int[] { 0, 10, 14, 100, 104 })
+            foreach (string template in templatenames[processed_wiki_lang].Split('|')) {
+                cont = ""; query = "https://" + processed_wiki_lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&eititle=template:" + template + "&eilimit=max&einamespace=" + ns;
+                while (cont != null) {//EIDIR НЕ СРАБОТАЕТ ДЛЯ СОРТИРОВКИ, БУДЕТ СОРТИРОВКА ПО ДАТЕ СОЗДАНИЯ СТРАНИЦЫ
+                    var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&eicontinue=" + e(cont)).Result));
+                    r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read()) if (r.Name == "ei") try { processPage(r.GetAttribute("title")); } catch (Exception e) { Console.WriteLine(e); }
+                }
             }
-        }
         if (processed_wiki_lang == "ru")
             foreach (var type in needed_articles.Keys) {
-                var wr = new StreamWriter(type + ".txt");
-                string result = "[[К:Википедия:Списки недостающих статей]]<center>\n{|class=standard\n!Статья!!Ссылок на неё";
+                var wr = new StreamWriter(type + ".txt"); string result = "[[К:Википедия:Списки недостающих статей]]<center>\n{|class=standard\n!Статья!!Ссылок на неё";
                 foreach (var article_data in needed_articles[type].OrderByDescending(t => t.Value)) {
-                    if (article_data.Value > 2)
+                    if (article_data.Value == 7)
+                        break;
+                    else
                         result += "\n|-\n|" + article_data.Key + "||" + article_data.Value;
                 }
                 try { Save(site, processed_wiki_lang, "ВП:К созданию/Из шаблонов \"не переведено\"" + (type == type.other ? "" : "/" + type.ToString()), result + "\n|}", ""); } catch { }
