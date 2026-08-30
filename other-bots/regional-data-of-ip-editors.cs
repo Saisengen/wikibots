@@ -14,7 +14,7 @@ class Program
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); } static double round(double input) { return Math.Round(input, 1); }
     static Dictionary<string, string> ranges2regions = new Dictionary<string, string>(); static HttpClient client = new HttpClient(); static HttpClient site;
     static Dictionary<int, slicedata> total = new Dictionary<int, slicedata>() { { 0, new slicedata { reg = 0, ip4 = 0, ip6 = 0 } } }; static Regex iprgx = new Regex(@"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$");
-    static Dictionary<string, Dictionary<int, int>> resulttable = new Dictionary<string, Dictionary<int, int>>(); static string lang = "pt"; static int startyear = 2014, endyear = 2017;
+    static Dictionary<string, Dictionary<int, int>> resulttable = new Dictionary<string, Dictionary<int, int>>(); static string lang; static int startyear = 2002; static bool fastmode = true;
     static void save(HttpClient site, string title, string text)
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; if (!result.IsSuccessStatusCode) return;
@@ -56,8 +56,7 @@ class Program
     {
         for (int y = 2002; y <= 2024; y = y + 2)
             total.Add(y, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
-        foreach (int part in new int[] { 2007, 2013, 2017, 2023, 2025 })
-        {
+        foreach (int part in new int[] { 2014, 2016, 2024 }) {
             var temp_table = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<int, int>>>(new StreamReader(lang + part + ".txt").ReadToEnd());
             foreach (var region in temp_table.Keys) {
                 initialize_resulttable_row(region);
@@ -71,34 +70,35 @@ class Program
             }
             total[0].reg += temp_total[0].reg; total[0].ip4 += temp_total[0].ip4; total[0].ip6 += temp_total[0].ip6;
         }
-        string result = "{{шапка геотаблиц}}\n|Всего правок, тыс.";
+        string result = "{{шапка геотаблиц}}\n|- class=\"sorttop\"\n|Всего правок, тыс.";
         for (int year = 2002; year <= 2024; year = year + 2)
             result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : ((total[year].reg + total[year].ip4 + total[year].ip6) / 1000).ToString());
         result += "||" + (total[0].reg + total[0].ip4 + total[0].ip6) / 1000;
 
-        result += "\n|-\n|Доля анонимных";
+        result += "\n|- class=\"sorttop\"\n|Доля анонимных";
         for (int year = 2002; year <= 2024; year = year + 2)
             result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : round((double)(total[year].ip4 + total[year].ip6) * 100 / (total[year].reg + total[year].ip4 + total[year].ip6)) + "%");
         result += "||" + round((double)(total[0].ip4 + total[0].ip6) * 100 / (total[0].reg + total[0].ip4 + total[0].ip6)) + "%";
 
-        result += "\n|-\n|Доля IPv6 в анонимных";
+        result += "\n|- class=\"sorttop\"\n|Доля IPv6 в анонимных";
         for (int year = 2002; year <= 2024; year = year + 2)
             result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : round((double)total[year].ip6 * 100 / (total[year].ip4 + total[year].ip6)) + "%");
         result += "||" + round((double)total[0].ip6 * 100 / (total[0].ip4 + total[0].ip6)) + "%";
 
-        foreach (var fullregion in resulttable.OrderByDescending(r => r.Value[0]))
-        {
-            string region = fullregion.Key.Split('!')[1]; string country = fullregion.Key.Split('!')[0];
-            result += "\n|-\n|{{flag|" + country + "}} " + region;
-            for (int year = 2002; year <= 2024; year = year + 2)
-                result += "||" + cell(fullregion.Value[year]);
-            result += "||" + cell(fullregion.Value[0]);
+        foreach (var fullregion in resulttable.OrderByDescending(r => r.Value[0])) {
+            if (fullregion.Key != "null") {
+                string region = fullregion.Key.Split('!')[1]; string country = fullregion.Key.Split('!')[0];
+                result += "\n|-\n|{{flag|" + country + "}} " + region;
+                for (int year = 2002; year <= 2024; year = year + 2)
+                    result += "||" + cell(fullregion.Value[year]);
+                result += "||" + cell(fullregion.Value[0]);
+            }
         }
         save(site, "ВП:Геопозиция анонимных правщиков/" + lang + "wiki", result + "\n|}");
     }
     static void read_part()
     {
-        for (int year = startyear; year <= endyear; year = year + 2) {
+        for (int year = startyear; year <= 2024; year = year + 2) {
             string query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allrevisions&arvprop=user&arvlimit=max&arvend=" + year + "-01-01T00:00:00&&arvstart=" + (year + 1) +
                 "-12-31T23:59:59", cont = ""; Console.WriteLine(year); total.Add(year, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
             while (cont != null) {
@@ -122,13 +122,42 @@ class Program
                         }
                         else { total[year].reg++; total[0].reg++; }
             }
+            try { var w = new StreamWriter(lang + year + ".txt"); w.Write(JsonConvert.SerializeObject(resulttable)); w.Close(); } catch { }
+            try { var w = new StreamWriter(lang + year + "total.txt"); w.Write(JsonConvert.SerializeObject(total)); w.Close(); } catch { }
         }
-        try { var w = new StreamWriter(lang + endyear + ".txt"); w.Write(JsonConvert.SerializeObject(resulttable)); w.Close(); } catch { }
-        try { var w = new StreamWriter(lang + endyear + "total.txt"); w.Write(JsonConvert.SerializeObject(total)); w.Close(); } catch { }
+        if (fastmode)
+        {
+            string result = "{{шапка геотаблиц}}\n|- class=\"sorttop\"\n|Всего правок, тыс.";
+            for (int year = 2002; year <= 2024; year = year + 2)
+                result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : ((total[year].reg + total[year].ip4 + total[year].ip6) / 1000).ToString());
+            result += "||" + (total[0].reg + total[0].ip4 + total[0].ip6) / 1000;
+
+            result += "\n|- class=\"sorttop\"\n|Доля анонимных";
+            for (int year = 2002; year <= 2024; year = year + 2)
+                result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : round((double)(total[year].ip4 + total[year].ip6) * 100 / (total[year].reg + total[year].ip4 + total[year].ip6)) + "%");
+            result += "||" + round((double)(total[0].ip4 + total[0].ip6) * 100 / (total[0].reg + total[0].ip4 + total[0].ip6)) + "%";
+
+            result += "\n|- class=\"sorttop\"\n|Доля IPv6 в анонимных";
+            for (int year = 2002; year <= 2024; year = year + 2)
+                result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : round((double)total[year].ip6 * 100 / (total[year].ip4 + total[year].ip6)) + "%");
+            result += "||" + round((double)total[0].ip6 * 100 / (total[0].ip4 + total[0].ip6)) + "%";
+
+            foreach (var fullregion in resulttable.OrderByDescending(r => r.Value[0])) {
+                if (fullregion.Key != "null") {
+                    string region = fullregion.Key.Split('!')[1]; string country = fullregion.Key.Split('!')[0];
+                    result += "\n|-\n|{{flag|" + country + "}} " + region;
+                    for (int year = 2002; year <= 2024; year = year + 2)
+                        result += "||" + cell(fullregion.Value[year]);
+                    result += "||" + cell(fullregion.Value[0]);
+                }
+            }
+            save(site, "ВП:Геопозиция анонимных правщиков/" + lang + "wiki", result + "\n|}");
+        }
     }
     static void Main()
     {
         var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site(creds[0], creds[1]);
+        lang = new StreamReader("lang.txt").ReadToEnd();
         //merge();
         read_part();        
     }
