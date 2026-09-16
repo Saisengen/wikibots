@@ -46,13 +46,9 @@ class Program
     }
     static void save(string lang, string title, string text, string comment) {
         var doc = new XmlDocument(); var result = site.GetAsync("https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; if (!result.IsSuccessStatusCode) return;
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent
-                (text), "text" }, { new StringContent("xml"), "format" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ });
-    }
-    static void fastsave(string lang, string title, string text, string comment, string token) {
-        site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php", new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent
-                (text), "text" }, { new StringContent("xml"), "format" }, { new StringContent(comment), "summary" }, { new StringContent(token), "token" }, { new StringContent("1"), "bot" } });
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result); var token = doc.SelectSingleNode("//tokens/@csrftoken").Value; result = site.PostAsync("https://" + lang + ".wikipedia.org/w/api.php",
+            new MultipartFormDataContent { { new StringContent("edit"), "action" }, { new StringContent(title), "title" }, { new StringContent(text), "text" }, { new StringContent("xml"), "format" },
+                { new StringContent(comment), "summary" }, { new StringContent(token), "token" }/*, { new StringContent("1"), "bot" }*/ }).Result;
     }
     static void rsave(string title, string text) { save("ru", title, text, ""); }
     static void adminstats()
@@ -316,7 +312,7 @@ class Program
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         string starlist = "пропущены "; string new_nominated = "вынесены ";
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"^([A-Z]{1,3} ?[\dА-Я]|Файл:Герб)"); int limit = 65;
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"^([A-Z]{1,3} ?[\dА-Я]|Файл:Герб)"); int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
@@ -355,7 +351,7 @@ class Program
                                 }
                         }
             }
-        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated + (starlist.Length > 10 ? starlist : ""));
+        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated /*+ (starlist.Length > 10 ? starlist : "")*/);
         }
     }
     static string iso_to_ru_date(string date)
@@ -378,7 +374,7 @@ class Program
     static void delete_transclusion(pair dp, bool isCommons)
     {
         string initial_text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(dp.page) + "?action=raw").Result; string new_page_text = initial_text;
-        string filename = dp.file[4] == ':' ? dp.file.Substring(5) : dp.file; string rgxtext = filename.Replace(" ", "[ _]+"); rgxtext = "(" + rgxtext + "|" + e(filename) + ")";
+        string filename = dp.file[4] == ':' ? dp.file.Substring(5) : dp.file; string rgxtext = Regex.Escape(filename).Replace(" ", "[ _]+"); rgxtext = "(" + rgxtext + "|" + e(filename) + ")";
         var r1 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^[\]]*\]\]", RegexOptions.IgnoreCase);
         var r2 = new Regex(@" *\[\[\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^[]*(\[\[[^\[\]]*\]\][^[\]]*)*\]\]", RegexOptions.IgnoreCase);
         var r3 = new Regex(@" *<\s*gallery[^>]*>\s*(file|image|файл|изображение):\s*" + rgxtext + @"[^\n]*<\s*/gallery\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
@@ -480,8 +476,7 @@ class Program
                 " улучшения", 0 },{ "Википедия:Кандидаты на удаление", 0 },{ "Википедия:Незакрытые обсуждения удаления страниц", 0 },{ "Википедия:Статьи для переименования", 0 }, { "Википедия:Кандидаты на " +
                 "объединение", 0 },{ "Википедия:Незакрытые обсуждения объединения страниц", 0 },{ "Википедия:Статьи для разделения", 0 },{ "Википедия:Незакрытые обсуждения разделения страниц", 0 },
             { "Википедия:Незакрытые обсуждения восстановления страниц", 0 },{ "Инкубатор:Все статьи", 0 },{ "Инкубатор:Запросы помощи/проверки", 0 }, { "Википедия:Статьи со спам-ссылками", 0} };
-        foreach (var cat in cats.Keys.ToList())
-        {
+        foreach (var cat in cats.Keys.ToList()) {
             var rdr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&prop=categoryinfo&titles=К:" + e(cat) + "&format=xml").Result));
             while (rdr.Read())
                 if (rdr.NodeType == XmlNodeType.Element && rdr.Name == "categoryinfo")
@@ -913,6 +908,25 @@ class Program
             }
         }
         rsave("ВП:Список наблюдения/Самые отслеживаемые", result);
+    }
+    static void new_pages()
+    {
+        var infoboxrgx = new Regex(@"\n\s*\|.*"); var regexes = new Dictionary<string, Regex>(); var newpages = new Dictionary<string, string>(); var input = readpage("u:MBH/Новые статьи").Split('\n');
+        for (int i = 0; i < input.Length / 2; i++) {
+            regexes.Add(input[2 * i], new Regex(input[2 * i + 1], RegexOptions.IgnoreCase)); newpages.Add(input[2 * i], "");
+        }
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=logevents&leprop=title|user|timestamp&letype=create&lenamespace=0&lelimit=max").Result));
+        while (r.Read())
+            if (r.Name == "item") {
+                string text;
+                try { text = site.GetStringAsync("https://ru.wikipedia.org/wiki/" + e(r.GetAttribute("title")) + "?action=raw").Result; text = text.Substring(0, text.IndexOf("==")); text = infoboxrgx.Replace(text, ""); } catch { continue; }
+                foreach (var x in regexes)
+                    if (x.Value.IsMatch(text))
+                        newpages[x.Key] += "*{{новая статья|" + r.GetAttribute("title") + "|" + r.GetAttribute("timestamp") + "|3=" + r.GetAttribute("user") + "}}\n";
+            }
+        foreach (var n in newpages)
+            if (n.Value != "")
+                rsave(n.Key, n.Value);
     }
     static void nonfree_files_in_nonmain_ns()
     {
@@ -1700,20 +1714,12 @@ class Program
         if (zsftext != initialtext)
             rsave("Википедия:Заявки на снятие флагов", zsftext);
     }
-    static void rgx_replacement()
-    {
-        var rg1 = new Regex(@"\{\{ *архивировано *\| *url *= *https://archive.today/[^}]*\}\}"); var rg2 = new Regex(@"\| *archive-url *= *https://archive.today/[^{}|]*\| *archive-date *=[^{}|]*");
-        var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result;
-        doc.LoadXml(result.Content.ReadAsStringAsync().Result); string token = doc.SelectSingleNode("//tokens/@csrftoken").Value;
-        foreach (var page in new StreamReader("src.txt").ReadToEnd().Replace("\r", "").Split('\n')) try {
-                fastsave("ru", page, rg2.Replace(rg1.Replace(readpage(page), ""), ""), "archive.today внесён в блок-лист в викимедии", token);
-            } catch { }
-    }
     static void Main()
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
