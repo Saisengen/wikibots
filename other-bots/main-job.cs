@@ -1624,52 +1624,66 @@ class Program
                 }
         rsave("Проект:Патрулирование/Непроверенные вне ОП", result);
     }
-    static void user_activity_stats_template()
+    static void user_activity_stats_days()
     {
-        var days = new Dictionary<string, int>(); var edits = new Dictionary<string, int>(); var itemrgx = new Regex("<item");
+        var days = new Dictionary<string, int>(); var initialusers = readpage("Ш:User activity stats/users").Split('\n');
+        foreach (var user in initialusers)
+            if (!days.ContainsKey(user))
+                days.Add(user, 1);
         foreach (string group in new string[] { "sysop", "bot" })
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=allusers&aulimit=max&augroup=" + group).Result)))
                 while (r.Read())
                     if (r.Name == "u" && !days.ContainsKey(r.GetAttribute("name")))
                         days.Add(r.GetAttribute("name"), 1);
-        var initialusers = readpage("Ш:User activity stats/users").Split('\n');
-        foreach (var user in initialusers)
-            if (!days.ContainsKey(user))
-                days.Add(user, 1);
-        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск", "Userbox/Активность" })
-            using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result)))
-                while (r.Read())
-                    if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
-                        string user = r.GetAttribute("title");
-                        if (!user.Contains("/"))
-                            user = user.Substring(user.IndexOf(':') + 1, user.Length - user.IndexOf(':') - 1);
-                        else
-                            user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
-                        if (!edits.ContainsKey(user))
-                            edits.Add(user, 0);
-                    }
         foreach (var u in days.Keys.ToList())
             using (var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=1&ucuser=" + e(u)).Result)))
                 while (r.Read())
                     if (r.Name == "item") {
                         string ts = r.GetAttribute("timestamp"); int y = i(ts.Substring(0, 4)); int m = i(ts.Substring(5, 2)); int d = i(ts.Substring(8, 2)); days[u] = (now - new DateTime(y, m, d)).Days;
                     }
+        string result = "{{#switch:{{{1}}}\n";
+        foreach (var r in days.OrderBy(r => r.Value))
+            result += "|" + r.Key + "=" + r.Value + "\n";
+        rsave("Шаблон:User activity stats/days", result + "|}}");        
+    }
+    static void user_activity_stats_edits()
+    {
+        var edits = new Dictionary<string, int>(); var itemrgx = new Regex("<item");
+        foreach (string tmplt in new string[] { "Участник покинул проект", "Вики-отпуск", "Userbox/Активность" }) {
+            var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2|3&eilimit=max&eititle=Ш:" + tmplt).Result));
+            while (r.Read())
+                if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
+                    string user = r.GetAttribute("title");
+                    if (!user.Contains("/"))
+                        user = user.Substring(user.IndexOf(':') + 1);
+                    else
+                        user = user.Substring(user.IndexOf(':') + 1, user.IndexOf("/") - user.IndexOf(':') - 1);
+                    if (!edits.ContainsKey(user))
+                        edits.Add(user, 0);
+                }
+        }
         foreach (var v in edits.Keys.ToList()) {
             var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=usercontribs&uclimit=max&ucend=" + now.AddDays(-7).ToString("yyyy-MM-ddTHH:mm:ss") +
                 "&ucprop=&ucuser=" + e(v)).Result;
             edits[v] = itemrgx.Matches(res).Count;
         }
-
         string result = "{{#switch:{{{1}}}\n";
-        foreach (var r in days.OrderBy(r => r.Value))
-            result += "|" + r.Key + "=" + r.Value + "\n";
-        rsave("Шаблон:User activity stats/days", result + "|}}");
-
-        result = "{{#switch:{{{1}}}\n";
         foreach (var v in edits.OrderByDescending(v => v.Value))
             if (v.Value > 0)
-                result += "|" + v.Key + "=" + (v.Value == 0 ? "" : v.Value.ToString()) + "\n";
+                result += "|" + v.Key + "=" + v.Value + "\n";
         rsave("Шаблон:User activity stats/edits", result + "|}}");
+    }
+    static void user_activity_stats_totaledits()
+    {
+        var ecrgx = new Regex(@"editcount=""(\d+)"""); string result = "{{#switch:{{{1}}}\n";
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2&eilimit=max&eititle=Ш:Участник умер").Result));
+        while (r.Read())
+            if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
+                string user = r.GetAttribute("title").Substring(r.GetAttribute("title").IndexOf(':') + 1);
+                var res = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user)).Result;
+                result += "|" + user + "=" + ecrgx.Match(res).Groups[1].Value + "\n";
+            }
+        rsave("Шаблон:User activity stats/totaledits", result + "|}}");
     }
     static void zsf_archiving()
     {
@@ -1718,13 +1732,15 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
+        try { user_activity_stats_totaledits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { user_activity_stats_template(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
