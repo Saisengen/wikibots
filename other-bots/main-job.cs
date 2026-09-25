@@ -1675,16 +1675,13 @@ class Program
     }
     static void user_activity_stats_totaledits()
     {
-        var ecrgx = new Regex(@"editcount=""(\d+)"""); string result = "{{#switch:{{{1}}}\n";
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=embeddedin&einamespace=2&eilimit=max&eititle=Ш:Участник умер").Result));
-        while (r.Read())
-            if (r.NodeType == XmlNodeType.Element && r.Name == "ei") {
-                string user = r.GetAttribute("title").Substring(r.GetAttribute("title").IndexOf(':') + 1);
-                var localedits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user)).Result;
-                var globaledits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=globaluserinfo&guiprop=editcount&guiuser=" + e(user)).Result;
-                int localedits = i(ecrgx.Match(localedits_answer.ToString()).Groups[1].Value);
-                result += "|" + user + "=" + localedits + "/" + (i(ecrgx.Match(globaledits_answer).Groups[1].Value) - localedits) + "\n";
-            }
+        var ecrgx = new Regex(@"editcount=""(\d+)"""); string result = "{{#switch:{{{1}}}\n"; var uurgx = new Regex(@"\{\{УУ\|([^|]*)\|");
+        foreach(Match user in uurgx.Matches(readpage("ВП:Умершие участники"))) {
+            var localedits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user.Groups[1].Value)).Result;
+            var globaledits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=globaluserinfo&guiprop=editcount&guiuser=" + e(user.Groups[1].Value)).Result;
+            int localedits = i(ecrgx.Match(localedits_answer.ToString()).Groups[1].Value);
+            result += "|" + user.Groups[1].Value + "=" + localedits + "/" + (i(ecrgx.Match(globaledits_answer).Groups[1].Value) - localedits) + "\n";
+        }
         rsave("Шаблон:User activity stats/totaledits", result + "|#default=0}}");
     }
     static void zsf_archiving()
@@ -1734,9 +1731,9 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
+        try { user_activity_stats_totaledits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { user_activity_stats_totaledits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
