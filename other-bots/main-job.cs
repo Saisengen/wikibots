@@ -496,8 +496,8 @@ class Program
     public class flagsRoot { public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() {
         users_talkLinkOnly = new List<string>(), userSet = new Dictionary<string, HashSet<string>>() { { "A", new HashSet<string>() }, { "Ar", new HashSet<string>() }, { "B", new HashSet<string>() }, { "C", new 
-                HashSet<string>() }, { "D", new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() }, { "I+", new HashSet<string>() }, { "K", new 
-                HashSet<string>() }, { "O", new HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } }
+                HashSet<string>() }, { "D", new HashSet<string>() }, { "E", new HashSet<string>() },{ "F", new HashSet<string>() }, { "I", new HashSet<string>() }, { "I+", new HashSet<string>() }, { "O", new 
+                HashSet<string>() }, { "S", new HashSet<string>() },{ "T", new HashSet<string>() }, { "V", new HashSet<string>() }, { "bots", new HashSet<string>() } }
     };
     static void flag_lists()
     {
@@ -505,8 +505,7 @@ class Program
         foreach (var user in other_flags[0].Substring(other_flags[0].IndexOf(':') + 1).Split('|')) bigResult.userSet["Ar"].Add(user);
         foreach (var user in other_flags[1].Substring(other_flags[1].IndexOf(':') + 1).Split('|')) bigResult.userSet["D"].Add(user);
         foreach (var user in other_flags[2].Substring(other_flags[2].IndexOf(':') + 1).Split('|')) bigResult.userSet["I+"].Add(user);
-        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.userSet["K"].Add(user);
-        foreach (var user in other_flags[4].Substring(other_flags[4].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
+        foreach (var user in other_flags[3].Substring(other_flags[3].IndexOf(':') + 1).Split('|')) bigResult.users_talkLinkOnly.Add(user);
         var pats = new HashSet<string>(); var rolls = new HashSet<string>(); var apats = new HashSet<string>(); var fmovers = new HashSet<string>();
         get_flag_owners("editor", pats, false); get_flag_owners("rollbacker", rolls, false); get_flag_owners("autoreview", apats, false); get_flag_owners("filemover", fmovers, false);
         get_flag_owners("bureaucrat", bigResult.userSet["B"], false); get_flag_owners("sysop", bigResult.userSet["A"], false); get_flag_owners("interface-admin", bigResult.userSet["F"], false);
@@ -1673,17 +1672,6 @@ class Program
                 result += "|" + v.Key + "=" + v.Value + "\n";
         rsave("Шаблон:User activity stats/edits", result + "|}}");
     }
-    static void user_activity_stats_totaledits()
-    {
-        var ecrgx = new Regex(@"editcount=""(\d+)"""); string result = "{{#switch:{{{1}}}\n"; var uurgx = new Regex(@"\{\{УУ\|([^|]*)\|");
-        foreach(Match user in uurgx.Matches(readpage("ВП:Умершие участники"))) {
-            var localedits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&list=users&usprop=editcount&ususers=" + e(user.Groups[1].Value)).Result;
-            var globaledits_answer = site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=globaluserinfo&guiprop=editcount&guiuser=" + e(user.Groups[1].Value)).Result;
-            int localedits = i(ecrgx.Match(localedits_answer.ToString()).Groups[1].Value);
-            result += "|" + user.Groups[1].Value + "=" + localedits + "/" + (i(ecrgx.Match(globaledits_answer).Groups[1].Value) - localedits) + "\n";
-        }
-        rsave("Шаблон:User activity stats/totaledits", result + "|#default=0}}");
-    }
     static void zsf_archiving()
     {
         var year = now.Year; string zsftext = readpage("ВП:Заявки на снятие флагов"); string initialtext = zsftext;
@@ -1731,7 +1719,6 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        try { user_activity_stats_totaledits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
