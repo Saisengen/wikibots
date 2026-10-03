@@ -35,7 +35,7 @@ class Program
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); }
     static string escape_comment(string comment)
     {
-        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C"); if (result.Contains("{") || result.Contains("}") || result.Contains("|")) result = "<nowiki>" + result + "</nowiki>";  return result;
+        string result = comment.Replace("[[К", "[[:К").Replace("[[C", "[[:C"); if (result.Contains("{") || result.Contains("}") || result.Contains("|")) result = "<nowiki>" + result + "</nowiki>"; return result;
     }
     static HttpClient login(string lang, string login, string password, string ua)
     {
@@ -95,16 +95,17 @@ class Program
         }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON " +
-            "actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_action not like 'move_%' and " +
-            "log_type <> 'abusefilterblockeddomainhit' and log_type <> 'spamblacklist' and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and " +
-            "log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_type <> 'massmessage' and log_type<>'growthexperiments' and log_type<>'import' GROUP BY actor_name, log_type;";
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON actor_id=" +
+            "log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type <> 'thanks' and log_type <> 'upload' and " +
+            "log_type <> 'create' and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'spamblacklist' GROUP BY actor_name, log_type;";
         r = command.ExecuteReader();
         while (r.Read())
             if (r.GetString("log_type") == "review")
                 statstable[r.GetString("user")]["review"] += r.GetInt32("count");
             else {
-                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count"); statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
+                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+                if (statstable[r.GetString("user")].ContainsKey(r.GetString("log_type")))
+                    statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
             }
         r.Close();
 
@@ -161,15 +162,15 @@ class Program
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["suppress"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
 
         string result = "<templatestyles src=\"Википедия:Администраторы/Активность/styles.css\"/>\n{{sticky header}}{{Самые активные участники}}{{списки администраторов}}{{shortcut|ВП:АДА}}<center>\nСтатистика " +
-            "активности администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " + 
-            now.Year + " года. Первично отсортирована по сумме числа правок и админдействий, нулевые значения не показаны. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника " +
+            "активности администраторов и подводящих итоги Русской Википедии за период с 1 " + genitive_month[sixmonths_earlier.Month] + " " + sixmonths_earlier.Year + " по 1 " + genitive_month[now.Month] + " " +
+            now.Year + " года. Первично отсортирована по сумме числа правок и админдействий. Включает только участников, имеющих флаг сейчас - после снятия флага строка участника " +
             "пропадёт из таблицы при следующем обновлении.\n\nДля подтверждения активности [[ВП:А#Неактивность администратора|администраторы]] должны сделать за полгода минимум 100 правок, из них 50 — в " +
             "содержательных пространствах имён, а также 25 админдействий, включая подведение итогов на специальных страницах. [[ВП:ПИ#Процедура снятия статуса|Подводящие итоги]] должны совершить 10 действий " +
             "(итоги плюс удаления), из которых не менее двух — именно итоги.\n{|class=\"ts-википедия_администраторы_активность-table standard sortable ts-stickytableheader\"\n!rowspan=2|Участник!!colspan=3|" +
             "Правки!!colspan=13|Админдействия\n|-\n!{{abbr|Σ∀|все правки|0}}!!{{abbr|Σ|контентные правки|0}}!!{{abbr|✔|патрулирование|0}}!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big> (📝)|удаление (итоги " +
             "на КУ)|0}}!!{{abbr|<big>🗑⇧</big> (📝)|восстановление (итоги на ВУС)|0}}!!{{abbr|<big>≡🗑</big> (∅)|удаление правок и записей журналов (ревизорское)|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|" +
             "защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц" +
-            "|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|чекъюзерские проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
+            "|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"] + t.Value["totaledits"]))
         {
             bool inactivecloser = u.Value["closer"] == 1 && (u.Value["delete"] + u.Value["delsum"] < 10 || u.Value["delsum"] < 2);
@@ -191,6 +192,97 @@ class Program
                 u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["checkuser"]) + "||" + cell(u.Value["renameuser"]);
         }
         rsave("ВП:Администраторы/Активность", result + "\n|}");
+    }
+    static void adminstats_total()
+    {
+        var bots = new HashSet<string>(); var statstable = new Dictionary<string, Dictionary<string, int>>(); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
+        connect.Open(); MySqlCommand command; MySqlDataReader r;
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\" or ug_group = \"closer\" or ug_group = \"engineer\";", connect)
+        { CommandTimeout = 99999 }; r = command.ExecuteReader();
+        while (r.Read())
+            if (!statstable.ContainsKey(r.GetString(0)))
+                statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "inactive", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block",
+                        0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0},
+                    { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
+        r.Close();
+        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type=\"rights\" and (log_params like \"%sysop%\" or log_params like \"%closer%\" or log_params like " +
+            "\"%engineer%\");"; rdr = command.ExecuteReader();
+        while (rdr.Read())
+            if (!statstable.ContainsKey(rdr.GetString("title").Replace("_", " ")))
+                statstable.Add(rdr.GetString("title").Replace("_", " "), new Dictionary<string, int>() { { "inactive", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 },
+                    { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0},
+                    { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
+        rdr.Close();
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
+        r = command.ExecuteReader();
+        while (r.Read())
+            bots.Add(r.GetString(0));
+        r.Close();
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
+            "logging_userindex ON actor_id = log_actor WHERE log_type = 'delete' and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
+        r = command.ExecuteReader();
+        while (r.Read()) {
+            string user = r.GetString("user");
+            if (statstable.ContainsKey(user)) {
+                statstable[user]["totalactions"] += r.GetInt32("count");
+                switch (r.GetString("log_action")) {
+                    case "delete":
+                        statstable[user]["delete"] += r.GetInt32("count");
+                        break;
+                    case "restore":
+                        statstable[user]["restore"] += r.GetInt32("count");
+                        break;
+                    case "revision":
+                    case "event":
+                        statstable[user]["del_rev_log"] += r.GetInt32("count");
+                        break;
+                }
+            }
+        }
+        r.Close();
+
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <> 'spamblacklist' " +
+            "and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and " +
+            "log_type <> 'massmessage' and log_type<>'growthexperiments' and log_type<>'review' and log_type<>'patrol' GROUP BY actor_name, log_type;";//and actor_name<>'QBA-bot'
+        r = command.ExecuteReader();
+        while (r.Read())
+            if (statstable.ContainsKey(r.GetString("user"))) {
+                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+                if (statstable[r.GetString("user")].ContainsKey(r.GetString("log_type")))
+                    statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
+            }
+        r.Close();
+
+        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
+            "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE page_namespace=8 GROUP BY actor_name, page_namespace;"; r = command.ExecuteReader();
+        while (r.Read())
+            if (statstable.ContainsKey(r.GetString("user"))) {
+                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
+                statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count"); break;
+            } r.Close();
+
+        foreach (var s in readpage("u:BotDR/CU_total").Split('\n'))
+            if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
+        foreach (var s in readpage("u:BotDR/OS_total").Split('\n'))
+            if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["suppress"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
+
+        string result = "{{sticky header}}{{Самые активные участники}}{{списки администраторов}}<center>\nСтатистика активности админов, ПИ и инженеров рувики за всё время. Первично отсортирована по сумме " +
+            "действий.\n{|class=\"standard sortable ts-stickytableheader\"\n!Участник!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big>|удаление страниц|0}}!!{{abbr|<big>🗑⇧</big>|восстановление|0}}!!{{abbr|" +
+            "<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|∅|ревизорское скрытие|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|" +
+            "3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|" +
+            "изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
+        foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"])) {
+            string color = "";
+            if (bots.Contains(u.Key))
+                color = "style=\"background-color:#ccf\"";
+            else if (u.Value["inactive"] == 1)
+                color = "style=\"background-color:#bbb\"";
+            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + cell(u.Value["totalactions"]) + "||" + u.Value["delete"] +
+                "||" + u.Value["restore"] + "||" + u.Value["del_rev_log"] + "||" + u.Value["suppress"] + "||" + cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(
+                    u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] + u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value[
+                        "abusefilter"]) + "||" + cell(u.Value["renameuser"]) + "||" + cell(u.Value["import"]) + "||" + u.Value["checkuser"];
+        }
+        rsave("ВП:Администраторы/Активность/За всё время", result + "\n|}");
     }
     static void apat_for_filemovers()
     {
@@ -277,7 +369,7 @@ class Program
     static void catmoves()
     {
         string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
-        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp%7Ccomment%7Cdetails&letype=move&lenamespace=14&lelimit=max").Result));
+        var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&letype=move&lenamespace=14&lelimit=max").Result));
         while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "item") {
                 string oldtitle = r.GetAttribute("title");
@@ -292,7 +384,32 @@ class Program
             }
         rsave("u:MBH/Переименованные категории с недоперенесёнными страницами", result + "\n|}");
         result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
-        r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title%7Cuser%7Ctimestamp%7Ccomment%7Cdetails&leaction=delete/delete&lenamespace=14&lelimit=max").Result));
+
+        //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max";
+        //while (cont != null)
+        //{
+        //    string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + e(cont)).Result);
+        //    var rrr = new XmlTextReader(new StringReader(apiout));
+        //    rrr.Read(); rrr.Read(); rrr.Read(); cont = rrr.GetAttribute("lecontinue"); Console.WriteLine(cont);
+        //    while (rrr.Read())
+        //        if (rrr.NodeType == XmlNodeType.Element && rrr.Name == "item" && rrr.GetAttribute("title") != null)
+        //        {
+        //            string title = rrr.GetAttribute("title");
+        //            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
+        //            while (rr.Read())
+        //                if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null)
+        //                {
+        //                    rr.Read();
+        //                    if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
+        //                    {
+        //                        string user = rrr.GetAttribute("user"); string timestamp = rrr.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(rrr.GetAttribute("comment"));
+        //                        result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+        //                    }
+        //                }
+        //        }
+        //}
+
+        r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max").Result));
         while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
                 string title = r.GetAttribute("title");
@@ -1233,8 +1350,7 @@ class Program
                 if (!falsebots[lang].Contains(bot) && !bots.Contains(bot))
                     bots.Add(bot.Replace("_", " "));
             }
-            rdr.Close();
-            connect.Close();
+            rdr.Close(); connect.Close();
             string cont = "", query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=categorymembers&cmtitle=category:" + disambigcategory[lang] + "&cmprop=ids&cmlimit=max";
             while (cont != null) {
                 string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&cmcontinue=" + e(cont)).Result);
@@ -1719,6 +1835,8 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
+        try { adminstats_total(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1736,7 +1854,6 @@ class Program
         try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
             try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
