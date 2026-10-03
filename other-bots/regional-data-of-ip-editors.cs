@@ -56,7 +56,7 @@ class Program
     {
         for (int y = 2002; y <= 2024; y = y + 2)
             total.Add(y, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
-        foreach (int part in new int[] { 2014, 2016, 2024 }) {
+        foreach (int part in new int[] { 2024 }) {
             var temp_table = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<int, int>>>(new StreamReader(lang + part + ".txt").ReadToEnd());
             foreach (var region in temp_table.Keys) {
                 initialize_resulttable_row(region);
@@ -68,7 +68,6 @@ class Program
             foreach (var year in temp_total.Keys) {
                 total[year].reg += temp_total[year].reg; total[year].ip4 += temp_total[year].ip4; total[year].ip6 += temp_total[year].ip6;
             }
-            total[0].reg += temp_total[0].reg; total[0].ip4 += temp_total[0].ip4; total[0].ip6 += temp_total[0].ip6;
         }
         string result = "{{шапка геотаблиц}}\n|- class=\"sorttop\"\n|Всего правок, тыс.";
         for (int year = 2002; year <= 2024; year = year + 2)
@@ -100,7 +99,7 @@ class Program
     {
         for (int year = startyear; year <= 2024; year = year + 2) {
             string query = "https://" + lang + ".wikipedia.org/w/api.php?action=query&format=xml&list=allrevisions&arvprop=user&arvlimit=max&arvend=" + year + "-01-01T00:00:00&&arvstart=" + (year + 1) +
-                "-12-31T23:59:59", cont = ""; Console.WriteLine(year); total.Add(year, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
+                "-12-31T23:59:59", cont = ""; total.Add(year, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
             while (cont != null) {
                 var r = new XmlTextReader(new StringReader(cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&arvcontinue=" + cont).Result)); r.Read(); r.Read(); r.Read();
                 cont = r.GetAttribute("arvcontinue"); while (r.Read())
@@ -156,9 +155,7 @@ class Program
     }
     static void Main()
     {
-        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site(creds[0], creds[1]);
-        lang = new StreamReader("lang.txt").ReadToEnd();
-        //merge();
-        read_part();        
+        var creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); site = Site(creds[0], creds[1]); lang = new StreamReader("lang.txt").ReadToEnd();
+        if (Environment.OSVersion.ToString().Contains("Windows")) merge(); else read_part();        
     }
 }
