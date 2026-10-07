@@ -205,15 +205,15 @@ class Program
                         0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0},
                     { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
         r.Close();
-        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type=\"rights\" and (log_params like \"%sysop%\" or log_params like \"%closer%\" or log_params like " +
-            "\"%engineer%\");"; rdr = command.ExecuteReader();
+        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type='rights' and (log_params like '%sysop%' or log_params like '%closer%' or log_params like " +
+            "'%engineer%');"; rdr = command.ExecuteReader();
         while (rdr.Read())
             if (!statstable.ContainsKey(rdr.GetString("title").Replace("_", " ")))
                 statstable.Add(rdr.GetString("title").Replace("_", " "), new Dictionary<string, int>() { { "inactive", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 },
                     { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0},
                     { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
         rdr.Close();
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
+        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type='rights' and log_params like '%bot%';";
         r = command.ExecuteReader();
         while (r.Read())
             bots.Add(r.GetString(0));
@@ -383,29 +383,29 @@ class Program
                     }
             }
         rsave("u:MBH/Переименованные категории с недоперенесёнными страницами", result + "\n|}");
-        result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
+        //string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
 
         //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max";
-        //while (cont != null)
-        //{
+        //while (cont != null) {
         //    string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + e(cont)).Result);
         //    var rrr = new XmlTextReader(new StringReader(apiout));
         //    rrr.Read(); rrr.Read(); rrr.Read(); cont = rrr.GetAttribute("lecontinue"); Console.WriteLine(cont);
         //    while (rrr.Read())
-        //        if (rrr.NodeType == XmlNodeType.Element && rrr.Name == "item" && rrr.GetAttribute("title") != null)
-        //        {
+        //        if (rrr.NodeType == XmlNodeType.Element && rrr.Name == "item" && rrr.GetAttribute("title") != null) {
         //            string title = rrr.GetAttribute("title");
-        //            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
-        //            while (rr.Read())
-        //                if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null)
-        //                {
-        //                    rr.Read();
-        //                    if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
+        //            try {
+        //                var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
+        //                while (rr.Read())
+        //                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null)
         //                    {
-        //                        string user = rrr.GetAttribute("user"); string timestamp = rrr.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(rrr.GetAttribute("comment"));
-        //                        result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+        //                        rr.Read();
+        //                        if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
+        //                        {
+        //                            string user = rrr.GetAttribute("user"); string timestamp = rrr.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(rrr.GetAttribute("comment"));
+        //                            result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+        //                        }
         //                    }
-        //                }
+        //            } catch { }
         //        }
         //}
 
@@ -1835,7 +1835,6 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        try { adminstats_total(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1862,6 +1861,7 @@ class Program
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { adminstats_total(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
