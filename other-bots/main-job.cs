@@ -193,96 +193,99 @@ class Program
         }
         rsave("ВП:Администраторы/Активность", result + "\n|}");
     }
+    static Dictionary<string, Dictionary<string, int>> statstable = new Dictionary<string, Dictionary<string, int>>();
+    static void initialize_admtotal(string user)
+    {
+        statstable.Add(user, new Dictionary<string, int>() { { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0},
+            { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0},
+            { "import", 0 }, { "checkuser", 0}, { "suppress", 0 }, { "massmessage", 0 }, { "move", 0 }, { "nuke", 0 }, { "patrol", 0 }, { "review", 0 }, { "upload", 0 } });
+    }
     static void adminstats_total()
     {
-        var bots = new HashSet<string>(); var statstable = new Dictionary<string, Dictionary<string, int>>(); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
-        connect.Open(); MySqlCommand command; MySqlDataReader r;
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\" or ug_group = \"closer\" or ug_group = \"engineer\";", connect)
+        var bots = new HashSet<string>(); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki")); connect.Open(); MySqlCommand command; MySqlDataReader r;
+        command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type='rights' and log_params like '%bot%';", connect)
         { CommandTimeout = 99999 }; r = command.ExecuteReader();
-        while (r.Read())
-            if (!statstable.ContainsKey(r.GetString(0)))
-                statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "inactive", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block",
-                        0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0},
-                    { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
-        r.Close();
-        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type='rights' and (log_params like '%sysop%' or log_params like '%closer%' or log_params like " +
-            "'%engineer%');"; rdr = command.ExecuteReader();
-        while (rdr.Read())
-            if (!statstable.ContainsKey(rdr.GetString("title").Replace("_", " ")))
-                statstable.Add(rdr.GetString("title").Replace("_", " "), new Dictionary<string, int>() { { "inactive", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 },
-                    { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0},
-                    { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0}, { "import", 0 }, { "checkuser", 0}, { "suppress", 0 } });
-        rdr.Close();
-        command.CommandText = "select distinct cast(log_title as char) title from logging where log_type='rights' and log_params like '%bot%';";
-        r = command.ExecuteReader();
         while (r.Read())
             bots.Add(r.GetString(0));
         r.Close();
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
-            "logging_userindex ON actor_id = log_actor WHERE log_type = 'delete' and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
+
+        command.CommandText = "SELECT cast(actor_name as char) user, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type = 'delete'" +
+            " and log_action <> 'delete_redir' GROUP BY actor_name, log_action;";
         r = command.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
-            if (statstable.ContainsKey(user)) {
-                statstable[user]["totalactions"] += r.GetInt32("count");
-                switch (r.GetString("log_action")) {
-                    case "delete":
-                        statstable[user]["delete"] += r.GetInt32("count");
-                        break;
-                    case "restore":
-                        statstable[user]["restore"] += r.GetInt32("count");
-                        break;
-                    case "revision":
-                    case "event":
-                        statstable[user]["del_rev_log"] += r.GetInt32("count");
-                        break;
-                }
+            if (!statstable.ContainsKey(user))
+                initialize_admtotal(user);
+            statstable[user]["totalactions"] += r.GetInt32("count");
+            switch (r.GetString("log_action")) {
+                case "delete":
+                    statstable[user]["delete"] += r.GetInt32("count");
+                    break;
+                case "restore":
+                    statstable[user]["restore"] += r.GetInt32("count");
+                    break;
+                case "revision":
+                case "event":
+                    statstable[user]["del_rev_log"] += r.GetInt32("count");
+                    break;
             }
-        }
-        r.Close();
+        } r.Close();
+
+        command.CommandText = "SELECT cast(actor_name as char) user, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor join comment on log_comment_id=comment_id " +
+            "WHERE log_action <> 'delete' and (comment_text like 'Множественное%' or comment_text like 'Массовое%' or comment_text like '[[ВП:Вандализм|вандализм]] (%') GROUP BY actor_name, log_action;";
+        r = command.ExecuteReader();
+        while (r.Read()) {
+            string user = r.GetString("user");
+            if (!statstable.ContainsKey(user))
+                initialize_admtotal(user);
+            statstable[user]["nuke"] += r.GetInt32("count");
+            statstable[user]["delete"] -= r.GetInt32("count");
+        } r.Close();
 
         command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <> 'spamblacklist' " +
-            "and log_type <> 'thanks' and log_type <> 'upload' and log_type <> 'create' and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and " +
-            "log_type <> 'massmessage' and log_type<>'growthexperiments' and log_type<>'review' and log_type<>'patrol' GROUP BY actor_name, log_type;";//and actor_name<>'QBA-bot'
-        r = command.ExecuteReader();
-        while (r.Read())
-            if (statstable.ContainsKey(r.GetString("user"))) {
-                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
-                if (statstable[r.GetString("user")].ContainsKey(r.GetString("log_type")))
-                    statstable[r.GetString("user")][r.GetString("log_type")] += r.GetInt32("count");
-            }
-        r.Close();
+            "and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>'autopromote' " +
+            "GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
+        while (r.Read()) {
+            string user = r.GetString("user");
+            if (!statstable.ContainsKey(user))
+                initialize_admtotal(user);
+            statstable[user]["totalactions"] += r.GetInt32("count");
+            if (statstable[user].ContainsKey(r.GetString("log_type")))
+                statstable[user][r.GetString("log_type")] += r.GetInt32("count");
+
+        } r.Close();
 
         command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
             "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE page_namespace=8 GROUP BY actor_name, page_namespace;"; r = command.ExecuteReader();
-        while (r.Read())
-            if (statstable.ContainsKey(r.GetString("user"))) {
-                statstable[r.GetString("user")]["totalactions"] += r.GetInt32("count");
-                statstable[r.GetString("user")]["mediawiki"] += r.GetInt32("count"); break;
-            } r.Close();
+        while (r.Read()) {
+            string user = r.GetString("user");
+            if (!statstable.ContainsKey(user))
+                initialize_admtotal(user);
+            statstable[user]["totalactions"] += r.GetInt32("count");
+            statstable[user]["mediawiki"] += r.GetInt32("count");
+        } r.Close();
 
         foreach (var s in readpage("u:BotDR/CU_total").Split('\n'))
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["checkuser"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
         foreach (var s in readpage("u:BotDR/OS_total").Split('\n'))
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["suppress"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
 
-        string result = "{{sticky header}}{{Самые активные участники}}{{списки администраторов}}<center>\nСтатистика активности админов, ПИ и инженеров рувики за всё время. Первично отсортирована по сумме " +
-            "действий.\n{|class=\"standard sortable ts-stickytableheader\"\n!Участник!!{{abbr|Σ|все действия|0}}!!{{abbr|<big>🗑</big>|удаление страниц|0}}!!{{abbr|<big>🗑⇧</big>|восстановление|0}}!!{{abbr|" +
-            "<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|∅|ревизорское скрытие|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|" +
-            "3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸</big>|" +
-            "изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
+        string result = "{{sticky header}}{{Самые активные участники}}<center>\nСтатистика участников рувики по логируемым действиям за всё время.\n{|class=\"standard sortable ts-stickytableheader\"\n!Участник" +
+            "!!{{abbr|Σ|все действия|0}}!!{{abbr|✔|патрулирование, включая старое|0}}!!{{abbr|<big>⇨</big>|переименования|0}}!!{{abbr|🖼️|загрузка файлов|0}}!!{{abbr|<big>🗑</big>|удаление страниц|0}}!!{{abbr|" +
+            "💥|нюк вклада|0}}!!{{abbr|<big>🗑⇧</big>|восстановление|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|∅|ревизорское скрытие|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|" +
+            "🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели " +
+            "страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|📢|массовые рассылки|0}}!!" +
+            "{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"])) {
-            string color = "";
-            if (bots.Contains(u.Key))
-                color = "style=\"background-color:#ccf\"";
-            else if (u.Value["inactive"] == 1)
-                color = "style=\"background-color:#bbb\"";
-            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + cell(u.Value["totalactions"]) + "||" + u.Value["delete"] +
-                "||" + u.Value["restore"] + "||" + u.Value["del_rev_log"] + "||" + u.Value["suppress"] + "||" + cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(
-                    u.Value["stable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] + u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value[
-                        "abusefilter"]) + "||" + cell(u.Value["renameuser"]) + "||" + cell(u.Value["import"]) + "||" + u.Value["checkuser"];
+            if (u.Value["totalactions"] <= 100) break;
+            string color = bots.Contains(u.Key) ? "style=\"background-color:#ccf\"" : "";
+            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + u.Value["totalactions"] + "||" + cell(u.Value["patrol"] + 
+                u.Value["review"]) + "||" + cell(u.Value["move"]) + "||" + cell(u.Value["upload"]) + "||" + cell(u.Value["delete"]) + "||" + cell(u.Value["nuke"]) + "||" + cell(u.Value["restore"]) + "||" +
+                cell(u.Value["del_rev_log"]) + "||" + cell(u.Value["suppress"]) + "||" + cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" +
+                cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] + u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value
+                ["renameuser"]) + "||" + cell(u.Value["import"]) + "||" + cell(u.Value["massmessage"]) + "||" + cell(u.Value["checkuser"]);
         }
-        rsave("ВП:Администраторы/Активность/За всё время", result + "\n|}");
+        rsave("ВП:Статистика действий", result + "\n|}");
     }
     static void apat_for_filemovers()
     {
@@ -383,7 +386,7 @@ class Program
                     }
             }
         rsave("u:MBH/Переименованные категории с недоперенесёнными страницами", result + "\n|}");
-        //string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
+        result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
 
         //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max";
         //while (cont != null) {
@@ -1224,9 +1227,9 @@ class Program
                     }
     }
     static string summstats_result, ss_user, common_resulttext = "{{самые активные участники}}{{Плавающая шапка таблицы}}{{shortcut|ВП:ИТОГИ}}<center>\nСтатистика по числу итогов, подведённых %type%. " +
-        "Собирается поиском по тексту страниц обсуждений и потому 1) верна лишь приближённо (нестандартный синтаксис итога или подписи итогоподводящего может привести к тому, что итог не будет " +
-        "засчитан), 2) при переименовании участника статистика по нему разбивается отдельно по старому и новому никнейму. Первично отсортировано по сумме всех итогов, кроме итогов на КУЛ, ЗКП и ЗКПАУ.\n{|" +
-        "class=\"standard sortable ts-stickytableheader\"\n!№!!Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|" +
+        "Собирается поиском по тексту страниц обсуждений и потому 1) верна лишь приближённо (нестандартный синтаксис итога или подписи итогоподводящего может привести к тому, что итог не будет засчитан), 2) " +
+        "при переименовании участника статистика по нему разбивается отдельно по старому и новому никнейму. Первично отсортировано по сумме всех итогов, кроме КУЛ, ЗКП и ЗКПАУ.\n{|class=\"standard sortable " +
+        "ts-stickytableheader\"\n!№!!Участник!!Σ!!{{vh|[[ВП:КУ|]]}}!!{{vh|[[ВП:КИКУ|]]}}!!{{vh|[[ВП:ВУС|]]}}!!{{vh|[[ВП:КПМ|]]}}!!{{vh|[[ВП:ПУЗ|]]}}!!{{vh|[[ВП:КОБ|]]+[[ВП:КРАЗД|РАЗД]]}}!!{{vh|[[ВП:ОБК|" +
         "]]}}!!{{vh|[[ВП:КУЛ|]]}}!!{{vh|[[ВП:ЗКА|]]}}!!{{vh|[[ВП:ФА|]]}}!!{{vh|[[ВП:ОСП|]]+[[ВП:ОАД|]]}}!!{{vh|[[ВП:Ф-ПРА|]]}}!!{{vh|[[ВП:ЗС|]]}}!!{{vh|[[ВП:ЗС-|]]}}!!{{vh|[[ВП:ЗСП|ЗС]]+[[ВП:ЗСАП|(А)П]]}}!!" +
         "{{vh|[[ВП:ЗСПИ|]]}}!!{{vh|[[ВП:ЗСФ|]]}}!!{{vh|[[ВП:КОИ|]]}}!!{{vh|[[ВП:ИСЛ|]]}}!!{{vh|[[ВП:ЗКП|]][[ВП:ЗКПАУ|(АУ)]]}}!!{{vh|[[ВП:КИС|]]}}!!{{vh|[[ВП:КИСЛ|]]}}!!{{vh|[[ВП:КХС|]]}}!!{{vh|[[ВП:КЛСХС|]]}}!!" +
         "{{vh|[[ВП:КДС|]]}}!!{{vh|[[ВП:КЛСДС|]]}}!!{{vh|[[ВП:КИСП|]]}}!!{{vh|[[ВП:КЛСИСП|]]}}!!{{vh|[[ВП:РДБ|]]}}!!{{vh|[[ВП:ФТ|]]+[[ВП:ТЗ|]]}}!!{{vh|[[ВП:Ф-АП|АП]]}}"; static int ss_position_number;
@@ -1240,13 +1243,13 @@ class Program
             { "Заявки на снятие флагов" },{ "Запросы к администраторам" },{ "Хорошие статьи/Кандидаты" },{ "Избранные статьи/Кандидаты" }, { "Добротные статьи/Кандидаты" },{ "Избранные списки и порталы" +
             "/Кандидаты" },{ "Заявки на статус патрулирующего" },{ "Заявки на статус подводящего итоги" },{ "Заявки на статус автопатрулируемого" },{ "Избранные статьи/Кандидаты в устаревшие"},{ "Хорошие " +
             "статьи/К лишению статуса" },{ "Добротные статьи/К лишению статуса" }, { "Избранные списки и порталы/К лишению статуса" }, {"Запросы на переименование учётных записей"},{ "Форум/Архив/Авторское " +
-            "право" }, { "Форум администраторов" }, { "Форум/Архив/Правила" }
-        };
+            "право" }, { "Форум администраторов" }, { "Форум/Архив/Правила" }, { "Коллективные итоги на КУ/Архив" } };
         var monthnumbers = new Dictionary<string, int>{{ "января", 1 },{ "февраля", 2 },{ "марта", 3 },{ "апреля", 4 },{ "мая", 5 },{ "июня", 6 },{ "июля", 7 },{ "августа", 8 },
             { "сентября", 9 },{ "октября", 10 },{ "ноября", 11 },{ "декабря", 12 }};//НЕ ПЕРЕНОСИТЬ СТРОКИ НИЖЕ, ОНИ ЛОМАЮТСЯ
-        var summary_rgx = new Regex(@"={1,}\s*(Итог)[^=\n]*={1,}\n{1,}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        var rdb_zkp_summary_rgx = new Regex(@"(done|сделано|отпатрулировано|отклонено)\s*\}\}((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-        var yearrgx = new Regex(@"\d{4}");
+        string signature_rgx = @"((?!\(UTC\)).)*\[\[\s*(u|у|user|участник|участница|оу|ut|обсуждение участника|обсуждение участницы|user talk)\s*:\s*([^\]|#]*)\s*[]|#]((?!\(UTC\)).)*(января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря) (\d{4}) \(UTC\)";
+        var summary_rgx = new Regex(@"={1,}\s*(Ит)(ог)[^=\n]*={1,}\n" + signature_rgx, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var rdb_zkp_summary_rgx = new Regex(@"(done|сделано|отпатрулировано|отклонено)(|\|[^{}|]*)\s*\}\}" + signature_rgx, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var cheka_rgx = new Regex(@"\|(ост|удал)(\d)=" + signature_rgx, RegexOptions.IgnoreCase | RegexOptions.Singleline); var yearrgx = new Regex(@"\d{4}");
         foreach (var pagetype in discussions) {
             int ns = (pagetype.Contains("статьи") || pagetype.Contains("списки")) ? 104 : 4;
             string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&list=allpages&apprefix=" + pagetype + "&apnamespace=" + ns + "&aplimit=max";
@@ -1258,14 +1261,13 @@ class Program
                     if (pagetitle.Contains("Избранные") || yearrgx.IsMatch(pagetitle) || pagetitle.IndexOf('/') == -1) {
                         string pagetext = readpage(pagetitle);
                         var summaries = (pagetype == "Запросы к ботоводам" || pagetype == "Запросы к патрулирующим от автоподтверждённых участников" || pagetype == "Запросы к патрулирующим") ?
-                            rdb_zkp_summary_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
+                            rdb_zkp_summary_rgx.Matches(pagetext) : pagetype == "Коллективные итоги на КУ/Архив" ? cheka_rgx.Matches(pagetext) : summary_rgx.Matches(pagetext);
                         foreach (Match summary in summaries) {
-                            int signature_year = i(summary.Groups[7].Value); int signature_month = monthnumbers[summary.Groups[6].Value];
-                            ss_user = summary.Groups[4].ToString().Replace('_', ' ');
+                            int signature_year = i(summary.Groups[8].Value); int signature_month = monthnumbers[summary.Groups[7].Value];
+                            ss_user = summary.Groups[5].ToString().Replace('_', ' ');
                             if (ss_user.Contains("/"))
                                 ss_user = ss_user.Substring(0, ss_user.IndexOf("/"));
-                            if (ss_user == "TextworkerBot")
-                                continue;
+                            if (ss_user == "TextworkerBot") continue; //закрывает зкп(ау)
                             initialize_summstats("alltime", pagetype);
                             if (signature_year == lastmonthdate.Year && signature_month == lastmonthdate.Month)
                                 initialize_summstats("month", pagetype);
@@ -1303,21 +1305,21 @@ class Program
                 { "Оспаривание административных действий",0}, { "Хорошие статьи/Кандидаты",0 },{ "Добротные статьи/Кандидаты",0},{ "Избранные списки и порталы/Кандидаты",0},{ "Форум/Архив/Технический",0},
                 { "Избранные статьи/Кандидаты", 0 }, { "Запросы к ботоводам", 0 }, { "Запросы к патрулирующим", 0 },{ "Технические запросы",0},{ "Запросы к патрулирующим от автоподтверждённых участников",0},
                 { "Избранные статьи/Кандидаты в устаревшие", 0 },{ "Добротные статьи/К лишению статуса", 0 }, { "Хорошие статьи/К лишению статуса", 0 },{ "Избранные списки и порталы/К лишению статуса", 0 },
-                { "Запросы на переименование учётных записей", 0},{ "Форум/Архив/Авторское право", 0 },{ "Форум администраторов", 0 },{ "Форум/Архив/Правила", 0 } });
+                { "Запросы на переименование учётных записей", 0},{ "Форум/Архив/Авторское право", 0 },{ "Форум администраторов", 0 },{ "Форум/Архив/Правила", 0 },{ "Коллективные итоги на КУ/Архив", 0 } });
         stats[type][ss_user]["sum"]++; stats[type][ss_user][pagetype]++;
     }
     static void writerow_summstats(KeyValuePair<string, Dictionary<string, int>> s)
     {
-        summstats_result += "\n|-\n|" + ++ss_position_number + "||{{u|" + s.Key + "}}||" + cell(s.Value["sum"]) + "||" + cell(s.Value["К удалению"]) + "||" + cell(s.Value["К восстановлению"]) + "||" +
-            cell(s.Value["К переименованию"]) + "||" + cell(s.Value["Запросы на переименование учётных записей"]) + "||" + cell(s.Value["К объединению"] + s.Value["К разделению"]) + "||" + cell(s.Value
-            ["Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value["Форум администраторов"]) + "||" + cell(s.Value
-            ["Оспаривание итогов"] + s.Value["Оспаривание административных действий"]) + "||" + cell(s.Value["Форум/Архив/Правила"]) + "||" + cell(s.Value["Установка защиты"]) + "||" + cell(s.Value["Снятие " +
-            "защиты"]) + "||" + cell(s.Value["Заявки на статус автопатрулируемого"] + s.Value["Заявки на статус патрулирующего"]) + "||" + cell(s.Value["Заявки на статус подводящего итоги"]) + "||" + cell(
-                s.Value["Заявки на снятие флагов"]) + "||" + cell(s.Value["К оценке источников"]) + "||" + cell(s.Value["Изменение спам-листа"]) + "||" + cell(s.Value["Запросы к патрулирующим от " +
-                "автоподтверждённых участников"] + s.Value["Запросы к патрулирующим"]) + "||" + cell(s.Value["Избранные статьи/Кандидаты"]) + "||" + cell(s.Value["Избранные статьи/Кандидаты в устаревшие"]) +
-                "||" + cell(s.Value["Хорошие статьи/Кандидаты"]) + "||" + cell(s.Value["Хорошие статьи/К лишению статуса"]) + "||" + cell(s.Value["Добротные статьи/Кандидаты"]) + "||" + cell(s.Value["Добротные " +
-                "статьи/К лишению статуса"]) + "||" + cell(s.Value["Избранные списки и порталы/Кандидаты"]) + "||" + cell(s.Value["Избранные списки и порталы/К лишению статуса"]) + "||" + cell(s.Value["Запросы " +
-                "к ботоводам"]) + "||" + cell(s.Value["Форум/Архив/Технический"] + s.Value["Технические запросы"]) + "||" + cell(s.Value["Форум/Архив/Авторское право"]);
+        summstats_result += "\n|-\n|" + ++ss_position_number + "||{{u|" + s.Key + "}}||" + cell(s.Value["sum"]) + "||" + cell(s.Value["К удалению"]) + "||" + cell(s.Value["Коллективные итоги на КУ/Архив"]) +
+            "||" + cell(s.Value["К восстановлению"]) + "||" + cell(s.Value["К переименованию"]) + "||" + cell(s.Value["Запросы на переименование учётных записей"]) + "||" + cell(s.Value["К объединению"] +
+            s.Value["К разделению"]) + "||" + cell(s.Value["Обсуждение категорий"]) + "||" + cell(s.Value["К улучшению"]) + "||" + cell(s.Value["Запросы к администраторам"]) + "||" + cell(s.Value
+            ["Форум администраторов"]) + "||" + cell(s.Value["Оспаривание итогов"] + s.Value["Оспаривание административных действий"]) + "||" + cell(s.Value["Форум/Архив/Правила"]) + "||" + cell(s.Value
+            ["Установка защиты"]) + "||" + cell(s.Value["Снятие защиты"]) + "||" + cell(s.Value["Заявки на статус автопатрулируемого"] + s.Value["Заявки на статус патрулирующего"]) + "||" + cell(s.Value
+            ["Заявки на статус подводящего итоги"]) + "||" + cell(s.Value["Заявки на снятие флагов"]) + "||" + cell(s.Value["К оценке источников"]) + "||" + cell(s.Value["Изменение спам-листа"]) + "||" +
+            cell(s.Value["Запросы к патрулирующим от автоподтверждённых участников"] + s.Value["Запросы к патрулирующим"]) + "||" + cell(s.Value["Избранные статьи/Кандидаты"]) + "||" + cell(s.Value
+            ["Избранные статьи/Кандидаты в устаревшие"]) + "||" + cell(s.Value["Хорошие статьи/Кандидаты"]) + "||" + cell(s.Value["Хорошие статьи/К лишению статуса"]) + "||" + cell(s.Value["Добротные статьи/" +
+            "Кандидаты"]) + "||" + cell(s.Value["Добротные статьи/К лишению статуса"]) + "||" + cell(s.Value["Избранные списки и порталы/Кандидаты"]) + "||" + cell(s.Value["Избранные списки и порталы/К лишению " +
+            "статуса"]) + "||" + cell(s.Value["Запросы к ботоводам"]) + "||" + cell(s.Value["Форум/Архив/Технический"] + s.Value["Технические запросы"]) + "||" + cell(s.Value["Форум/Архив/Авторское право"]);
     }
     static Regex is_rgx = new Regex(@"importscript\s*\(\s*['""]([^h/].*?)\s*['""]\s*\)", RegexOptions.IgnoreCase),
     is2_rgx = new Regex(@"importscript\s*\(\s*['""]/wiki/(.*?)\s*['""]\s*\)", RegexOptions.IgnoreCase), multiline_comment = new Regex(@"/\*.*?\*/", RegexOptions.Singleline),
