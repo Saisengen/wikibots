@@ -194,13 +194,13 @@ class Program
         rsave("ВП:Администраторы/Активность", result + "\n|}");
     }
     static Dictionary<string, Dictionary<string, int>> statstable = new Dictionary<string, Dictionary<string, int>>();
-    static void initialize_admtotal(string user)
+    static void initialize_action_stats(string user)
     {
         statstable.Add(user, new Dictionary<string, int>() { { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0},
             { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0},
             { "import", 0 }, { "checkuser", 0}, { "suppress", 0 }, { "massmessage", 0 }, { "move", 0 }, { "nuke", 0 }, { "patrol", 0 }, { "review", 0 }, { "upload", 0 } });
     }
-    static void adminstats_total()
+    static void action_stats()
     {
         var bots = new HashSet<string>(); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki")); connect.Open(); MySqlCommand command; MySqlDataReader r;
         command = new MySqlCommand("select distinct cast(log_title as char) title from logging where log_type='rights' and log_params like '%bot%';", connect)
@@ -215,7 +215,7 @@ class Program
         while (r.Read()) {
             string user = r.GetString("user");
             if (!statstable.ContainsKey(user))
-                initialize_admtotal(user);
+                initialize_action_stats(user);
             statstable[user]["totalactions"] += r.GetInt32("count");
             switch (r.GetString("log_action")) {
                 case "delete":
@@ -237,18 +237,19 @@ class Program
         while (r.Read()) {
             string user = r.GetString("user");
             if (!statstable.ContainsKey(user))
-                initialize_admtotal(user);
+                initialize_action_stats(user);
             statstable[user]["nuke"] += r.GetInt32("count");
             statstable[user]["delete"] -= r.GetInt32("count");
         } r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <> 'spamblacklist' " +
-            "and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>'autopromote' " +
-            "GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <>" +
+            "'spamblacklist' and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>" +
+            "'autopromote' and log_action<>'move_prot' and log_action<>'move_stable' and log_action<>'failure' and log_action not like 'skip%' GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
             if (!statstable.ContainsKey(user))
-                initialize_admtotal(user);
+                initialize_action_stats(user);
+
             statstable[user]["totalactions"] += r.GetInt32("count");
             if (statstable[user].ContainsKey(r.GetString("log_type")))
                 statstable[user][r.GetString("log_type")] += r.GetInt32("count");
@@ -260,7 +261,7 @@ class Program
         while (r.Read()) {
             string user = r.GetString("user");
             if (!statstable.ContainsKey(user))
-                initialize_admtotal(user);
+                initialize_action_stats(user);
             statstable[user]["totalactions"] += r.GetInt32("count");
             statstable[user]["mediawiki"] += r.GetInt32("count");
         } r.Close();
@@ -277,7 +278,7 @@ class Program
             "страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|📢|массовые рассылки|0}}!!" +
             "{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"])) {
-            if (u.Value["totalactions"] <= 100) break;
+            if (u.Value["totalactions"] <= 200) break;
             string color = bots.Contains(u.Key) ? "style=\"background-color:#ccf\"" : "";
             result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + u.Value["totalactions"] + "||" + cell(u.Value["patrol"] + 
                 u.Value["review"]) + "||" + cell(u.Value["move"]) + "||" + cell(u.Value["upload"]) + "||" + cell(u.Value["delete"]) + "||" + cell(u.Value["nuke"]) + "||" + cell(u.Value["restore"]) + "||" +
@@ -431,7 +432,7 @@ class Program
     static void cheka_update()
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
-        string starlist = "пропущены "; string new_nominated = "вынесены ";
+        string excluded_pages = "пропущены "; string new_nominated = "вынесены ";
         var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"^([A-Z]{1,3} ?[\dА-Я]|Файл:Герб)"); int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
@@ -449,7 +450,7 @@ class Program
                             string nominated_page = r.GetAttribute("title");
                             if (!nominated_before.Contains(nominated_page))
                                 if (articles_for_skip.IsMatch(nominated_page))
-                                    starlist += "[[" + nominated_page + "]], ";
+                                    excluded_pages += "[[" + nominated_page + "]], ";
                                 else {
                                     string pagetext = readpage(nominated_page);
                                     string date = afd_template.Match(pagetext).Groups[2].Value;
@@ -471,7 +472,7 @@ class Program
                                 }
                         }
             }
-        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated /*+ (starlist.Length > 10 ? starlist : "")*/);
+        end: save("ru", "ВП:Коллективные итоги на КУ", cheka_current_text, new_nominated + (excluded_pages.Length > 10 ? excluded_pages : ""));
         }
     }
     static string iso_to_ru_date(string date)
@@ -1837,7 +1838,8 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //action_stats();
+
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1855,6 +1857,7 @@ class Program
         try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
             try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1863,7 +1866,7 @@ class Program
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { adminstats_total(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { action_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
