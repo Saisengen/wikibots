@@ -196,9 +196,9 @@ class Program
     static Dictionary<string, Dictionary<string, int>> statstable = new Dictionary<string, Dictionary<string, int>>();
     static void initialize_action_stats(string user)
     {
-        statstable.Add(user, new Dictionary<string, int>() { { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0},
-            { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "tag", 0},
-            { "import", 0 }, { "checkuser", 0}, { "suppress", 0 }, { "massmessage", 0 }, { "move", 0 }, { "nuke", 0 }, { "patrol", 0 }, { "review", 0 }, { "upload", 0 } });
+        statstable.Add(user, new Dictionary<string, int>() { { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "tag", 0},
+            { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0}, { "restore", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "import", 0 },
+            { "checkuser", 0}, { "suppress", 0 }, { "massmessage", 0 }, { "move", 0 }, { "nuke", 0 }, { "review", 0 }, { "upload", 0 }, { "unblock", 0 }, { "unstable", 0 }, { "unprotect", 0 }, { "unreview", 0 } });
     }
     static void action_stats()
     {
@@ -209,30 +209,49 @@ class Program
             bots.Add(r.GetString(0));
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type = 'delete'" +
-            " and log_action <> 'delete_redir' GROUP BY actor_name, log_action;";
-        r = command.ExecuteReader();
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <>" +
+            "'spamblacklist' and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>'autopromote' and " +
+            "log_action<>'failure' and log_action not like 'skip%' and log_action not like 'delete_redir%' GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
         while (r.Read()) {
-            string user = r.GetString("user");
+            string user = r.GetString("user"); string type = r.GetString("log_type"); string action = r.GetString("log_action");
             if (!statstable.ContainsKey(user))
                 initialize_action_stats(user);
             statstable[user]["totalactions"] += r.GetInt32("count");
-            switch (r.GetString("log_action")) {
-                case "delete":
+            if (type == "delete") {
+                if (action == "delete")
                     statstable[user]["delete"] += r.GetInt32("count");
-                    break;
-                case "restore":
+                else if (action == "restore")
                     statstable[user]["restore"] += r.GetInt32("count");
-                    break;
-                case "revision":
-                case "event":
+                else if (action == "revision" || action == "event")
                     statstable[user]["del_rev_log"] += r.GetInt32("count");
-                    break;
             }
+            else if (type == "block") {
+                if (action == "block" || action == "reblock")
+                    statstable[user]["block"] += r.GetInt32("count");
+                else if (action == "unblock")
+                    statstable[user]["unblock"] += r.GetInt32("count");
+            }
+            else if (type == "stable") {
+                if (action == "config")
+                    statstable[user]["stable"] += r.GetInt32("count");
+                else if (action == "reset" || action == "modify")
+                    statstable[user]["unstable"] += r.GetInt32("count");
+            }
+            else if (type == "protect") {
+                if (action == "protect")
+                    statstable[user]["protect"] += r.GetInt32("count");
+                else if (action == "unprotect" || action == "modify")
+                    statstable[user]["unprotect"] += r.GetInt32("count");
+            }
+            else if (type == "patrol")
+                statstable[user]["review"] += r.GetInt32("count");
+            else if (statstable[user].ContainsKey(type))
+                statstable[user][type] += r.GetInt32("count");
+
         } r.Close();
 
         command.CommandText = "SELECT cast(actor_name as char) user, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor join comment on log_comment_id=comment_id " +
-            "WHERE log_action <> 'delete' and (comment_text like 'Множественное%' or comment_text like 'Массовое%' or comment_text like '[[ВП:Вандализм|вандализм]] (%') GROUP BY actor_name, log_action;";
+            "WHERE log_action = 'delete' and (comment_text like 'Множественное%' or comment_text like 'Массовое%' or comment_text like '[[ВП:Вандализм|вандализм]] (%') GROUP BY actor_name, log_action;";
         r = command.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
@@ -240,21 +259,8 @@ class Program
                 initialize_action_stats(user);
             statstable[user]["nuke"] += r.GetInt32("count");
             statstable[user]["delete"] -= r.GetInt32("count");
-        } r.Close();
-
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <>" +
-            "'spamblacklist' and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>" +
-            "'autopromote' and log_action<>'move_prot' and log_action<>'move_stable' and log_action<>'failure' and log_action not like 'skip%' GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
-        while (r.Read()) {
-            string user = r.GetString("user");
-            if (!statstable.ContainsKey(user))
-                initialize_action_stats(user);
-
-            statstable[user]["totalactions"] += r.GetInt32("count");
-            if (statstable[user].ContainsKey(r.GetString("log_type")))
-                statstable[user][r.GetString("log_type")] += r.GetInt32("count");
-
-        } r.Close();
+        }
+        r.Close();
 
         command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
             "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE page_namespace=8 GROUP BY actor_name, page_namespace;"; r = command.ExecuteReader();
@@ -272,19 +278,20 @@ class Program
             if (s.Contains('=')) { var data = s.Split('='); statstable[data[0]]["suppress"] += i(data[1]); statstable[data[0]]["totalactions"] += i(data[1]); }
 
         string result = "{{sticky header}}{{Самые активные участники}}<center>\nСтатистика участников рувики по логируемым действиям за всё время.\n{|class=\"standard sortable ts-stickytableheader\"\n!Участник" +
-            "!!{{abbr|Σ|все действия|0}}!!{{abbr|✔|патрулирование, включая старое|0}}!!{{abbr|<big>⇨</big>|переименования|0}}!!{{abbr|🖼️|загрузка файлов|0}}!!{{abbr|<big>🗑</big>|удаление страниц|0}}!!{{abbr|" +
-            "💥|нюк вклада|0}}!!{{abbr|<big>🗑⇧</big>|восстановление|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|∅|ревизорское скрытие|0}}!!{{abbr|🔨|(раз)блокировки|0}}!!{{abbr|" +
-            "🔒|защита и её снятие|0}}!!{{abbr|1=<big>⚖</big>|2=(де)стабилизация|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели " +
-            "страниц|0}}!!{{abbr|<big>🕸</big>|изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|📢|массовые рассылки|0}}!!" +
-            "{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
+            "!!{{abbr|Σ|все действия|0}}!!{{abbr|✔|патрулирование, включая старое|0}}!!{{abbr|🚫✔|распатрулирование|0}}!!{{abbr|<big>⇨</big>|переименования|0}}!!{{abbr|🖼️|загрузка файлов|0}}!!{{abbr|<big>🗑</big>|" +
+            "удаление страниц|0}}!!{{abbr|💥|нюк вклада|0}}!!{{abbr|<big>🗑⇧</big>|восстановление|0}}!!{{abbr|<big>≡🗑</big>|удаление правок и записей журналов|0}}!!{{abbr|∅|ревизорское скрытие|0}}!!{{abbr|🔨|" +
+            "блокировка участников|0}}!!{{abbr|🚫🔨|разблокировка|0}}!!{{abbr|🔒|защита страниц|0}}!!{{abbr|🚫🔒|понижение и снятие защиты|0}}!!{{abbr|1=<big>⚖</big>|2=стабилизация страниц|3=0}}!!{{abbr|1=🚫" +
+            "<big>⚖</big>|2=понижение и снятие стабилизации|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸" +
+            "</big>|изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|📢|массовые рассылки|0}}!!{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"])) {
             if (u.Value["totalactions"] <= 200) break;
             string color = bots.Contains(u.Key) ? "style=\"background-color:#ccf\"" : "";
-            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + u.Value["totalactions"] + "||" + cell(u.Value["patrol"] + 
-                u.Value["review"]) + "||" + cell(u.Value["move"]) + "||" + cell(u.Value["upload"]) + "||" + cell(u.Value["delete"]) + "||" + cell(u.Value["nuke"]) + "||" + cell(u.Value["restore"]) + "||" +
-                cell(u.Value["del_rev_log"]) + "||" + cell(u.Value["suppress"]) + "||" + cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["protect"]) + "||" + cell(u.Value["stable"]) + "||" +
-                cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] + u.Value["contentmodel"] + u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value
-                ["renameuser"]) + "||" + cell(u.Value["import"]) + "||" + cell(u.Value["massmessage"]) + "||" + cell(u.Value["checkuser"]);
+            result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + u.Value["totalactions"] + "||" + cell(u.Value["review"]) +
+                "||" + cell(u.Value["unreview"]) + "||" + cell(u.Value["move"]) + "||" + cell(u.Value["upload"]) + "||" + cell(u.Value["delete"]) + "||" + cell(u.Value["nuke"]) + "||" + cell(u.Value["restore"]) +
+                "||" + cell(u.Value["del_rev_log"]) + "||" + cell(u.Value["suppress"]) + "||" + cell(u.Value["block"] + u.Value["gblblock"]) + "||" + cell(u.Value["unblock"]) + "||" + cell(u.Value["protect"]) +
+                "||" + cell(u.Value["unprotect"]) + "||" + cell(u.Value["stable"]) + "||" + cell(u.Value["unstable"]) + "||" + cell(u.Value["rights"]) + "||" + cell(u.Value["managetags"] + u.Value["contentmodel"] +
+                u.Value["mediawiki"] + u.Value["tag"]) + "||" + cell(u.Value["abusefilter"]) + "||" + cell(u.Value["renameuser"]) + "||" + cell(u.Value["import"]) + "||" + cell(u.Value["massmessage"]) + "||" +
+                cell(u.Value["checkuser"]);
         }
         rsave("ВП:Статистика действий", result + "\n|}");
     }
@@ -612,7 +619,7 @@ class Program
             "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
             "||" + cats["Википедия:Незакрытые обсуждения разделения страниц"] + "||" + non_summaried_vus.Matches(vus_text).Count + "||" + cats["Википедия:" + "Незакрытые обсуждения восстановления страниц"] +
             "||" + cats["Инкубатор:Все статьи"] + "||" + cats["Инкубатор:Запросы помощи/проверки"] + "||" + cats["Википедия:Статьи со спам-ссылками"];
-        rsave("u:MBH/Завалы", stat_text + result);
+        rsave("ВП:Статистика/Завалы", stat_text + result);
     }
     public class flagsRoot { public Dictionary<string, HashSet<string>> userSet; public List<string> users_talkLinkOnly; }
     static flagsRoot bigResult = new flagsRoot() {
@@ -1838,43 +1845,43 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        //action_stats();
+        action_stats();
 
-        try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        if (now.Day == 1)
-        {
-            try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { action_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-            try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        }
+        //try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //if (now.Day == 1)
+        //{
+        //    try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { action_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //    try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        //}
     }
 }
