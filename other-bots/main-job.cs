@@ -74,7 +74,7 @@ class Program
         while (r.Read())
             bots.Add(r.GetString(0));
         r.Close();
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(*) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN " +
             "logging_userindex ON actor_id = log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type = 'delete' " +
             "and log_action <> 'delete_redir' GROUP BY actor_name, log_type, log_action;";
         r = command.ExecuteReader();
@@ -95,7 +95,7 @@ class Program
         }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(log_title) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON actor_id=" +
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, COUNT(*) count FROM user_groups INNER JOIN actor_logging ON actor_user = ug_user INNER JOIN logging_userindex ON actor_id=" +
             "log_actor WHERE ug_group IN ('sysop', 'closer') AND log_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym + "01000000 and log_type <> 'thanks' and log_type <> 'upload' and " +
             "log_type <> 'create' and log_type <> 'move' and log_type <> 'delete' and log_type <> 'newusers' and log_type <> 'spamblacklist' GROUP BY actor_name, log_type;";
         r = command.ExecuteReader();
@@ -109,7 +109,7 @@ class Program
             }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
+        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(*) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
             "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE ug_group IN ('sysop', 'closer') AND rev_timestamp BETWEEN " + sixmonths_earlier_ym + "01000000 AND " + now_ym +
             "01000000 GROUP BY actor_name, page_namespace;";
         r = command.ExecuteReader();
@@ -209,9 +209,9 @@ class Program
             bots.Add(r.GetString(0));
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <>" +
-            "'spamblacklist' and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'review' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>'autopromote' and " +
-            "log_action<>'failure' and log_action not like 'skip%' and log_action not like 'delete_redir%' GROUP BY actor_name, log_type;"; r = command.ExecuteReader();
+        command.CommandText = "SELECT cast(actor_name as char) user, log_type, log_action, COUNT(*) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor WHERE log_type <>" +
+            "'spamblacklist' and log_type <> 'thanks' and log_type <> 'create' and log_type <> 'newusers' and log_type <> 'timedmediahandler' and log_action<>'autopromote' and " +
+            "log_action<>'failure' and log_action not like 'skip%' and log_action not like 'delete_redir%' GROUP BY actor_name, log_type, log_action;"; r = command.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user"); string type = r.GetString("log_type"); string action = r.GetString("log_action");
             if (!statstable.ContainsKey(user))
@@ -245,12 +245,17 @@ class Program
             }
             else if (type == "patrol")
                 statstable[user]["review"] += r.GetInt32("count");
+            else if (type == "review") {
+                if (action == "unapprove")
+                    statstable[user]["unreview"] += r.GetInt32("count");
+                else statstable[user]["review"] += r.GetInt32("count");
+            }
             else if (statstable[user].ContainsKey(type))
                 statstable[user][type] += r.GetInt32("count");
 
         } r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, COUNT(log_title) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor join comment on log_comment_id=comment_id " +
+        command.CommandText = "SELECT cast(actor_name as char) user, COUNT(*) count FROM actor_logging INNER JOIN logging_userindex ON actor_id = log_actor join comment on log_comment_id=comment_id " +
             "WHERE log_action = 'delete' and (comment_text like 'Множественное%' or comment_text like 'Массовое%' or comment_text like '[[ВП:Вандализм|вандализм]] (%') GROUP BY actor_name, log_action;";
         r = command.ExecuteReader();
         while (r.Read()) {
@@ -262,7 +267,7 @@ class Program
         }
         r.Close();
 
-        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(rev_page) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
+        command.CommandText = "SELECT cast(actor_name as char) user, page_namespace, COUNT(*) count FROM revision_userindex INNER JOIN page ON rev_page = page_id INNER JOIN actor_revision ON " +
             "rev_actor = actor_id INNER JOIN user_groups ON ug_user = actor_user WHERE page_namespace=8 GROUP BY actor_name, page_namespace;"; r = command.ExecuteReader();
         while (r.Read()) {
             string user = r.GetString("user");
@@ -284,7 +289,7 @@ class Program
             "<big>⚖</big>|2=понижение и снятие стабилизации|3=0}}!!{{abbr|👮|изменение прав участников|0}}!!{{abbr|<big>⚙</big>|правка MediaWiki, изменение тегов и контентной модели страниц|0}}!!{{abbr|<big>🕸" +
             "</big>|изменение фильтров правок|0}}!!{{abbr|<big>⇨</big>👤|переименование участников|0}}!!{{abbr|<big>⇨</big>📜|импорт страниц|0}}!!{{abbr|📢|массовые рассылки|0}}!!{{abbr|<big>🔍</big>|ЧЮ-проверки|0}}";
         foreach (var u in statstable.OrderByDescending(t => t.Value["totalactions"])) {
-            if (u.Value["totalactions"] <= 200) break;
+            if (u.Value["totalactions"] <= 1000) break;
             string color = bots.Contains(u.Key) ? "style=\"background-color:#ccf\"" : "";
             result += "\n|-" + color + "\n|{{u|" + u.Key + "}} ([[special:contribs/" + u.Key + "|вклад]] | [[special:log/" + u.Key + "|журн]])||" + u.Value["totalactions"] + "||" + cell(u.Value["review"]) +
                 "||" + cell(u.Value["unreview"]) + "||" + cell(u.Value["move"]) + "||" + cell(u.Value["upload"]) + "||" + cell(u.Value["delete"]) + "||" + cell(u.Value["nuke"]) + "||" + cell(u.Value["restore"]) +
@@ -1845,43 +1850,42 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        action_stats();
-
-        //try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //if (now.Day == 1)
-        //{
-        //    try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { action_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //    try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        //}
+        //action_stats();
+        try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { user_activity_stats_edits(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { flag_lists(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { astro_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { exclude_deleted_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { main_inc_bot(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { redirs_deletion(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { orphan_nonfree_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { unlicensed_files(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { outdated_templates(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { nonfree_files_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        if (now.Day == 1)
+        {
+            try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { likes_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { adminstats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { action_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { popular_userscripts(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { summary_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { apat_for_filemovers(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { popular_wd_items_without_ru(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { most_watched_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { most_active_users(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { page_creators(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        }
     }
 }
