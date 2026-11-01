@@ -140,7 +140,7 @@ class Program
                 while (xr.Read())
                     if (xr.Name == "p") {
                         string page = xr.GetAttribute("title"); int year; try { year = i(page.Substring(page.Length - 4)); } catch { continue; }
-                        if (year >= 2018) {
+                        if (year >= 2019) {
                             string pagetext;
                             try { pagetext = readpage(page); } catch { continue; }
                             var results = summaryrgx.Matches(pagetext);
@@ -382,49 +382,28 @@ class Program
             }
         }
     }
-    static void catmoves()
+    static void deleted_and_moved_cats_containing_pages()
     {
-        string result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
+        string result = "{{Плавающая шапка таблицы}}<center>См. также [[/За всё время]].\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
         var r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&letype=move&lenamespace=14&lelimit=max").Result));
         while (r.Read())
-            if (r.NodeType == XmlNodeType.Element && r.Name == "item") {
+            if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
                 string oldtitle = r.GetAttribute("title");
                 var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(oldtitle)).Result));
                 while (rr.Read())
-                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
-                        string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
-                        r.Read(); string newtitle = r.GetAttribute("target_title");
-                        result += "\n|-\n|" + timestamp + "||[[:" + oldtitle + "]] ({{PAGESINCATEGORY:" + oldtitle.Substring(10) + "}})||[[:" + newtitle + "]] ({{PAGESINCATEGORY:" +
-                            newtitle.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null) {
+                        rr.Read();
+                        if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
+                            string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
+                            r.Read(); string newtitle = r.GetAttribute("target_title");
+                            result += "\n|-\n|" + timestamp + "||[[:" + oldtitle + "]] ({{PAGESINCATEGORY:" + oldtitle.Substring(10) + "}})||[[:" + newtitle + "]] ({{PAGESINCATEGORY:" +
+                                newtitle.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+                        }
                     }
             }
         rsave("u:MBH/Переименованные категории с недоперенесёнными страницами", result + "\n|}");
-        result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
 
-        //string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max";
-        //while (cont != null) {
-        //    string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + e(cont)).Result);
-        //    var rrr = new XmlTextReader(new StringReader(apiout));
-        //    rrr.Read(); rrr.Read(); rrr.Read(); cont = rrr.GetAttribute("lecontinue"); Console.WriteLine(cont);
-        //    while (rrr.Read())
-        //        if (rrr.NodeType == XmlNodeType.Element && rrr.Name == "item" && rrr.GetAttribute("title") != null) {
-        //            string title = rrr.GetAttribute("title");
-        //            try {
-        //                var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
-        //                while (rr.Read())
-        //                    if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null)
-        //                    {
-        //                        rr.Read();
-        //                        if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0")
-        //                        {
-        //                            string user = rrr.GetAttribute("user"); string timestamp = rrr.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(rrr.GetAttribute("comment"));
-        //                            result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
-        //                        }
-        //                    }
-        //            } catch { }
-        //        }
-        //}
-
+        result = "{{Плавающая шапка таблицы}}<center>См. также [[/За всё время]].\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
         r = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max").Result));
         while (r.Read())
             if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
@@ -440,12 +419,64 @@ class Program
                     }
             }
         rsave("u:MBH/Удалённые категории со страницами", result += "\n|}");
+
+        if (now.Day == 1) {
+            result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Откуда (страниц в категории)!!Куда (страниц в категории)!!Юзер!!Коммент";
+            string cont = "", query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&letype=move&lenamespace=14&lelimit=max";
+            while (cont != null) {
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + e(cont)).Result);
+                r = new XmlTextReader(new StringReader(apiout));
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue");
+                while (r.Read())
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
+                        string oldtitle = r.GetAttribute("title");
+                        try {
+                            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(oldtitle)).Result));
+                            while (rr.Read())
+                                if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null) {
+                                    rr.Read();
+                                    if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
+                                        string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
+                                        r.Read(); string newtitle = r.GetAttribute("target_title");
+                                        result += "\n|-\n|" + timestamp + "||[[:" + oldtitle + "]] ({{PAGESINCATEGORY:" + oldtitle.Substring(10) + "}})||[[:" + newtitle + "]] ({{PAGESINCATEGORY:" +
+                                            newtitle.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+                                    }
+                                }
+                        } catch { }
+                    }
+            }
+            rsave("u:MBH/Переименованные категории с недоперенесёнными страницами/За всё время", result += "\n|}");
+
+            result = "{{Плавающая шапка таблицы}}<center>\n{|class=\"standard sortable ts-stickytableheader\"\n!Таймстамп!!Имя (страниц в категории)!!Юзер!!Коммент";
+            cont = ""; query = "https://ru.wikipedia.org/w/api.php?action=query&list=logevents&format=xml&leprop=title|user|timestamp|comment|details&leaction=delete/delete&lenamespace=14&lelimit=max";
+            while (cont != null) {
+                string apiout = (cont == "" ? site.GetStringAsync(query).Result : site.GetStringAsync(query + "&lecontinue=" + e(cont)).Result);
+                r = new XmlTextReader(new StringReader(apiout));
+                r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("lecontinue");
+                while (r.Read())
+                    if (r.NodeType == XmlNodeType.Element && r.Name == "item" && r.GetAttribute("title") != null) {
+                        string title = r.GetAttribute("title");
+                        try {
+                            var rr = new XmlTextReader(new StringReader(site.GetStringAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&prop=categoryinfo&titles=" + e(title)).Result));
+                            while (rr.Read())
+                                if (rr.NodeType == XmlNodeType.Element && rr.Name == "page" && rr.GetAttribute("missing") != null) {
+                                    rr.Read();
+                                    if (rr.Name == "categoryinfo" && rr.GetAttribute("size") != "0") {
+                                        string user = r.GetAttribute("user"); string timestamp = r.GetAttribute("timestamp").Substring(0, 10); string comment = escape_comment(r.GetAttribute("comment"));
+                                        result += "\n|-\n|" + timestamp + "||[[:" + title + "]] ({{PAGESINCATEGORY:" + title.Substring(10) + "}})||[[u:" + user + "]]||" + comment;
+                                    }
+                                }
+                        } catch { }
+                    }
+            }
+            rsave("u:MBH/Удалённые категории со страницами/За всё время", result += "\n|}");
+        }
     }
     static void cheka_update()
     {
         string cheka_current_text = readpage("ВП:Коллективные итоги на КУ"); var header_rgx = new Regex(@"== *\[\[:([^=]*)\]\] *=="); int number_of_nominations = header_rgx.Matches(cheka_current_text).Count;
         string excluded_pages = "пропущены "; string new_nominated = "вынесены ";
-        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"^([A-Z]{1,3} ?[\dА-Я]|Файл:Герб)"); int limit = 60;
+        var afd_template = new Regex(@"\{\{ *(КУ|К удалению|afdd?) *\| *([^}|]+) *[|}]", RegexOptions.IgnoreCase); var articles_for_skip = new Regex(@"(^[A-Z]{1,3} ?[\dА-Я]|^Файл:Герб|\(число\))"); int limit = 60;
         if (number_of_nominations <= limit - 5) {
             var nominated_before = new List<string>();
             foreach (Match h in header_rgx.Matches(cheka_current_text))
@@ -618,7 +649,7 @@ class Program
         string vus_text = readpage("Википедия:К восстановлению");
         var non_summaried_vus = new Regex(@"[^>]\[\[([^\]]*)\]\][^<]");
 
-        string stat_text = readpage("u:MBH/Завалы");
+        string stat_text = readpage("ВП:Статистика/Завалы");
         string result = "\n|-\n|{{subst:#time:j.m.Y}}||" + cats["Википедия:Статьи для срочного улучшения"] + "||" + cats["Википедия:Незакрытые обсуждения статей для улучшения"] + "||" + cats["Википедия:" +
             "Кандидаты на удаление"] + "||" + cats["Википедия:Незакрытые обсуждения удаления страниц"] + "||" + cats["Википедия:Статьи для переименования"] + "||" + cats["Википедия:Незакрытые обсуждения " +
             "переименования страниц"] + "||" + cats["Википедия:Кандидаты на объединение"] + "||" + cats["Википедия:Незакрытые обсуждения объединения страниц"] + "||" + cats["Википедия:Статьи для разделения"] +
@@ -1095,7 +1126,7 @@ class Program
         }
     }
     static bool legit_link_found; static string orphan_article;
-    static void orphan_articles()
+    static void removing_orphan_article_tag()
     {
         var nonlegit_link_pages = new List<string>();
         foreach (string templatename in "Координационный список|Неоднозначность|Навигация для года|Шапка календарной даты|Навигация по году|Годы в кино|Годы в телевидении".Split('|')) {
@@ -1850,7 +1881,6 @@ class Program
     {
         creds = new StreamReader((Environment.OSVersion.ToString().Contains("Windows") ? @"..\..\..\..\" : "") + "p").ReadToEnd().Split('\n'); creds[2] = creds[2].Replace("Disabled", "none");
         site = login("ru", creds[0], creds[1], creds[3]); site.DefaultRequestHeaders.Add("Accept", "text/csv"); now = DateTime.Now;
-        //action_stats();
         try { cheka_update(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { new_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { user_activity_stats_days(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
@@ -1868,10 +1898,10 @@ class Program
         try { unreviewed_in_nonmain_ns(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { trans_namespace_moves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         try { zsf_archiving(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
-        try { catmoves(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+        try { deleted_and_moved_cats_containing_pages(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
         if (now.Day == 1)
         {
-            try { orphan_articles(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
+            try { removing_orphan_article_tag(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { dm89_stats(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { incorrect_redirects(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
             try { pats_awarding(); } catch (Exception e) { Console.WriteLine(e.ToString()); }
