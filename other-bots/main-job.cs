@@ -371,7 +371,7 @@ class Program
                         var result = site.PostAsync("https://query.wikidata.org/sparql", new FormUrlEncodedContent(new Dictionary<string, string> { { "query", string.Format(query,
                             r2.GetAttribute("wikibase_item")) } })).Result;
                         var newtext = result.Content.ReadAsStringAsync().Result.Replace("\r", "").Replace("line\n", "").Replace("\"", "");
-                        if (!newtext.StartsWith("<") && (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям")) {
+                        if (!newtext.StartsWith("<") && newtext.Length > 0 && (title.StartsWith("Список") && newtext.StartsWith("'''{{subst") || title.StartsWith("Шаблон:") && title != "Шаблон:Звёзды по созвездиям")) {
                             var oldtext = readpage(title); if (!newtext.StartsWith("upstream") && !newtext.StartsWith("SPARQL") && Math.Abs(oldtext.Length - newtext.Length) > 2) {
                                 if (oldtext.Length - newtext.Length < 2048)
                                     rsave(title, newtext);
@@ -1656,17 +1656,16 @@ class Program
             allitems.Add(r.GetString("ips_item_id"), r.GetInt16("cnt"));
         r.Close();
         foreach (var i in allitems) {
-            query = new MySqlCommand("select ips_site_page from wb_items_per_site where ips_site_id=\"ruwiki\" and ips_item_id=" + i.Key + ";", connect);
+            query = new MySqlCommand("select ips_site_page from wb_items_per_site where ips_site_id='ruwiki' and ips_item_id=" + i.Key + ";", connect);
             r = query.ExecuteReader();
             if (!r.Read())
                 nonruitems.Add(i.Key, i.Value);
             r.Close();
         }
         foreach (var n in nonruitems) {
-            query = new MySqlCommand("select cast(ips_site_page as char) title from wb_items_per_site where ips_site_id=\"enwiki\" and ips_item_id=" + n.Key + ";", connect);
+            query = new MySqlCommand("select cast(ips_site_page as char) title from wb_items_per_site where ips_site_id='enwiki' and ips_item_id=" + n.Key + ";", connect);
             r = query.ExecuteReader();
-            if (r.Read())
-            {
+            if (r.Read()) {
                 string title = r.GetString(0);
                 if (!title.StartsWith("Template:") && !title.StartsWith("Category:") && !title.StartsWith("Module:") && !title.StartsWith("Wikipedia:") && !title.StartsWith("Help:") && !title.StartsWith("Portal:"))
                     result += "\n|-\n|[[:en:" + title + "]]||" + n.Value;
