@@ -56,20 +56,20 @@ class Program
         var discussiontypes = new string[] { "К удалению", "К восстановлению" }; var bots = new HashSet<string>(); var statstable = new Dictionary<string, Dictionary<string, int>>(); var sixmonths_earlier =
             now.AddMonths(-6); var now_ym = now.ToString("yyyyMM"); var sixmonths_earlier_ym = sixmonths_earlier.ToString("yyyyMM"); var connect = new MySqlConnection(creds[2].Replace("%project%", "ruwiki"));
         connect.Open(); MySqlCommand command; MySqlDataReader r;
-        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"sysop\";", connect) { CommandTimeout = 99999 }; r = command.ExecuteReader();
+        command = new MySqlCommand("select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = 'sysop';", connect) { CommandTimeout = 99999 }; r = command.ExecuteReader();
         while (r.Read())
             statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 0 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
                 { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
                 { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0}, { "suppress", 0} });
         r.Close();
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"closer\";";
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = 'closer';";
         r = command.ExecuteReader();
         while (r.Read())
             statstable.Add(r.GetString(0), new Dictionary<string, int>() { { "closer", 1 }, { "totalactions", 0}, { "delsum", 0 }, { "restoresum", 0 }, { "contentedits", 0 }, { "totaledits", 0 },
                 { "del_rev_log", 0 }, { "abusefilter", 0}, { "block", 0}, { "contentmodel", 0}, { "delete", 0}, { "gblblock", 0}, { "managetags", 0}, { "merge", 0}, { "protect", 0}, { "renameuser", 0},
                 { "restore", 0}, { "review", 0}, { "rights", 0}, { "stable", 0}, { "mediawiki", 0}, { "checkuser", 0}, { "tag", 0}, { "suppress", 0} });
         r.Close();
-        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = \"bot\";";
+        command.CommandText = "select cast(user_name as char) user from user_groups join user on user_id = ug_user where ug_group = 'bot';";
         r = command.ExecuteReader();
         while (r.Read())
             bots.Add(r.GetString(0));
@@ -812,10 +812,9 @@ class Program
                     r.Read(); r.Read(); r.Read(); cont = r.GetAttribute("eicontinue"); while (r.Read()) if (r.Name == "ei") try { processPage(r.GetAttribute("title")); } catch (Exception e) { Console.WriteLine(e); }
                 }
             }
-        foreach (string page_for_processing in new StreamReader("iw0.txt").ReadToEnd().Replace("\r", "").Split('\n'))
+        foreach (string page_for_processing in new StreamReader("IW0-10-14.txt").ReadToEnd().Replace("\r", "").Split('\n'))
             try { processPage(page_for_processing); } catch (Exception e) { Console.WriteLine(e); }
-        foreach (var type in needed_articles.Keys)
-        {
+        foreach (var type in needed_articles.Keys) {
             string result = "[[К:Википедия:Списки недостающих статей]]<center>\n{|class=standard\n!Статья!!Ссылок на неё";
             foreach (var article_data in needed_articles.OrderByDescending(t => t.Value)) {
                 if (article_data.Value == 7)
