@@ -12,9 +12,10 @@ public class json { public string country, regionName; } public class slicedata 
 class Program
 {
     static string cell(int number) { if (number == 0) return ""; else return number.ToString(); } static double round(double input) { return Math.Round(input, 1); }
-    static Dictionary<string, string> ranges2regions = new Dictionary<string, string>(); static HttpClient client = new HttpClient(); static HttpClient site;
+    static Dictionary<string, int> ranges2region_ids = new Dictionary<string, int>(); static HttpClient client = new HttpClient(); static HttpClient site;
+    static Dictionary<string, int> region2id = new Dictionary<string, int>(); static Dictionary<int, string> id2region = new Dictionary<int, string>(); static int c = 0;
     static Dictionary<int, slicedata> total = new Dictionary<int, slicedata>() { { 0, new slicedata { reg = 0, ip4 = 0, ip6 = 0 } } }; static Regex iprgx = new Regex(@"^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$");
-    static Dictionary<string, Dictionary<int, int>> resulttable = new Dictionary<string, Dictionary<int, int>>(); static string lang; static int startyear = 2002; static bool fastmode = true;
+    static Dictionary<string, Dictionary<int, int>> resulttable = new Dictionary<string, Dictionary<int, int>>(); static string lang; static int startyear = 2002;
     static void save(HttpClient site, string title, string text)
     {
         var doc = new XmlDocument(); var result = site.GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf").Result; if (!result.IsSuccessStatusCode) return;
@@ -29,19 +30,16 @@ class Program
             result.Content.ReadAsStringAsync().Result); var logintoken = doc.SelectSingleNode("//tokens/@logintoken").Value; result = client.PostAsync("https://ru.wikipedia.org/w/api.php", new 
                 FormUrlEncodedContent(new Dictionary<string, string> { { "action", "login" }, { "lgname", login }, { "lgpassword", password }, { "lgtoken", logintoken } })).Result; return client;
     }
-    static string range2region(string range)
+    static int range2region_id(string range)
     {
-        if (ranges2regions.ContainsKey(range))
-            return ranges2regions[range];
+        if (ranges2region_ids.ContainsKey(range))
+            return ranges2region_ids[range];
         else try {
-                json data = JsonConvert.DeserializeObject<json>(client.GetStringAsync("http://ip-api.com/json/" + range).Result); Thread.Sleep(1470);
-                string result = data.country + "!" + data.regionName;
-                ranges2regions.Add(range, result); return result;
+                json data = JsonConvert.DeserializeObject<json>(client.GetStringAsync("http://ip-api.com/json/" + range).Result); Thread.Sleep(1470); string region = data.country + "!" + data.regionName;
+                region2id.Add(region, ++c); id2region.Add(c, region); ranges2region_ids.Add(range, c); return c;
             }
             catch (Exception e) {
-                ranges2regions.Add(range, "null");
-                Console.WriteLine("http://ip-api.com/json/" + range + "\n" + e.ToString());
-                return "null";
+                Console.WriteLine("http://ip-api.com/json/" + range + "\n" + e.ToString()); return 0;
             }
     }
     static void initialize_resulttable_row(string region)
@@ -56,7 +54,7 @@ class Program
     {
         for (int y = 2002; y <= 2024; y = y + 2)
             total.Add(y, new slicedata { reg = 0, ip4 = 0, ip6 = 0 });
-        foreach (int part in new int[] { 2024 }) {
+        foreach (int part in new int[] { 2012, 2024 }) {
             var temp_table = JsonConvert.DeserializeObject<Dictionary<string, Dictionary<int, int>>>(new StreamReader(lang + part + ".txt").ReadToEnd());
             foreach (var region in temp_table.Keys) {
                 initialize_resulttable_row(region);
@@ -112,10 +110,8 @@ class Program
                                 else if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6) {
                                     byte[] bytes = address.GetAddressBytes(); for (int i = 4; i < 16; i++) bytes[i] = 0; range = new IPAddress(bytes).ToString(); total[year].ip6++; total[0].ip6++;
                                 }
-                                if (range != null && range != "") {
-                                    string region = range2region(range);
-                                    initialize_resulttable_row(region);
-                                    resulttable[region][year]++; resulttable[region][0]++;
+                                if (range != null && range != "" && range2region_id(range) != 0) {
+                                    string region = id2region[range2region_id(range)]; initialize_resulttable_row(region); resulttable[region][year]++; resulttable[region][0]++;
                                 }
                             }
                         }
@@ -124,8 +120,7 @@ class Program
             try { var w = new StreamWriter(lang + year + ".txt"); w.Write(JsonConvert.SerializeObject(resulttable)); w.Close(); } catch { }
             try { var w = new StreamWriter(lang + year + "total.txt"); w.Write(JsonConvert.SerializeObject(total)); w.Close(); } catch { }
         }
-        if (fastmode)
-        {
+        if (startyear == 2002) {
             string result = "{{шапка геотаблиц}}\n|- class=\"sorttop\"\n|Всего правок, тыс.";
             for (int year = 2002; year <= 2024; year = year + 2)
                 result += "||" + (total[year].reg + total[year].ip4 + total[year].ip6 == 0 ? "" : ((total[year].reg + total[year].ip4 + total[year].ip6) / 1000).ToString());
