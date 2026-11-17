@@ -27,6 +27,7 @@ public class langdata_element { public string last_checked_edit_time, notifying_
 public class pattern_info { public Regex regex, whitelist; public bool only_content, not_uk; public int line; }
 class Program
 {
+    enum edit_type { zkab_report, talkpage_warning, suspicious_edit, rollback }
     static string user, title, comment, liftwing_token, discord_token, swviewer_token, authors_token, diff_text, wiki_diff, discord_diff, lw_raw, diff, edit_id_of_first_another_author,
         all_ins, all_del, reason, default_time = DateTime.UtcNow.AddMinutes(-2).ToString("yyyy-MM-ddTHH:mm:ss.000Z"); static string[] settings; static lang lang;
     static Dictionary<lang, HttpClient> site = new Dictionary<lang, HttpClient>(); static HttpClient client = new HttpClient(); static double ores_value, lw_value, ores_limit = 1;
@@ -89,6 +90,32 @@ class Program
             doc.LoadXml(result.Content.ReadAsStringAsync().Result); var request = new MultipartFormDataContent{{ new StringContent("edit"),"action" },{ new StringContent(title),"title" },
             { new StringContent(comment), "summary" },{ new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token" }, { new StringContent(appendtext), "appendtext" } };
             return site[lang].PostAsync("https://" + langdata[lang].domain + ".org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
+    }
+    static string Save1(string action, string title, string customparam, string comment, edit_type type)
+    {
+        var doc = new XmlDocument();
+        var result = site[lang.ru].GetAsync("https://ru.wikipedia.org/w/api.php?action=query&format=xml&meta=tokens&type=csrf|rollback").Result;
+        if (!result.IsSuccessStatusCode)
+            return "";
+        doc.LoadXml(result.Content.ReadAsStringAsync().Result);
+        var request = new MultipartFormDataContent { { new StringContent(action), "action" }, { new StringContent(title), "title" }, { new StringContent(comment), "summary" } };
+        if (type == edit_type.rollback)
+            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@rollbacktoken").Value), "token");
+        else
+            request.Add(new StringContent(doc.SelectSingleNode("//tokens/@csrftoken").Value), "token");
+        request.Add(new StringContent("xml"), "format");
+        if (type == edit_type.zkab_report)
+            request.Add(new StringContent(customparam), "appendtext");
+        else if (type == edit_type.talkpage_warning)
+        {
+            request.Add(new StringContent(customparam), "text");
+            request.Add(new StringContent("new"), "section");
+        }
+        else if (type == edit_type.suspicious_edit)
+            request.Add(new StringContent(customparam), "text");
+        else if (type == edit_type.rollback)
+            request.Add(new StringContent(customparam), "user");
+        return site[lang.ru].PostAsync("https://ru.wikipedia.org/w/api.php", request).Result.Content.ReadAsStringAsync().Result;
     }
     static void read_config()
     {
@@ -175,7 +202,14 @@ class Program
         if (lang == lang.d) return false;
         ores_value = 0;
         try /*даже при проверках на формат строки вылетает*/ { ores_value = Convert.ToDouble(damage_rgx.Match(edit.oresscores.ToString()).Groups[1].Value); } catch { return false; }
-        if (ores_value >= ores_limit) { post_suspicious_edit("ores:" + ores_value.ToString(), type.ores); return true; }
+        if (ores_value >= ores_limit) { /*post_suspicious_edit("ores:" + ores_value.ToString(), type.ores);*/
+
+            string answer = Save1("rollback", title, user, "[[u:Рейму Хакурей|автоматическая отмена]] правки участника [[special:contribs/" + user + "|" + user + "]] (" + ores_value + ")", edit_type.rollback);
+            if (answer.Contains("<rollback title="))
+                Save1("edit", "ut:" + user, "{{subst:u:Рейму_Хакурей/Уведомление|" + newid + "|" + title + "|" + ores_value + "|}}", "Ваша правка в статье [[" + title + "]] " + "автоматически отменена", edit_type.talkpage_warning);
+
+            return true;
+        }
         else return false;
     }
     static bool lw_is_triggered(Recentchange edit)
